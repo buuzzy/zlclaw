@@ -121,7 +121,7 @@ Some components are built with [ShipAny.ai](https://shipany.ai) - AI-powered ful
 - [Join Discord](https://discord.gg/rDSmZ8HS39)
 - [Follow on X](https://x.com/workanyai)
 
-# ❤️ Contributors
+## ❤️ Contributors
 
 <a href="https://github.com/workany-ai/workany/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=workany-ai/workany" />

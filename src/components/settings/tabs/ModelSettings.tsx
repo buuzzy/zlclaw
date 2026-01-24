@@ -355,19 +355,16 @@ export function ModelSettings({
             {/* Header */}
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <h3 className="text-foreground text-base font-medium">
-                  {selectedProvider.name}
-                </h3>
-                {providerApiKeyUrls[selectedProvider.id] && (
-                  <button
-                    onClick={() =>
-                      openExternalUrl(providerApiKeyUrls[selectedProvider.id])
-                    }
-                    className="text-muted-foreground hover:text-foreground cursor-pointer"
-                  >
-                    <ExternalLink className="size-4" />
-                  </button>
-                )}
+                <input
+                  type="text"
+                  value={selectedProvider.name}
+                  onChange={(e) =>
+                    handleProviderUpdate(selectedProvider.id, {
+                      name: e.target.value,
+                    })
+                  }
+                  className="text-foreground bg-transparent text-base font-medium outline-none border-b border-transparent hover:border-input focus:border-primary transition-colors w-40"
+                />
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
@@ -585,38 +582,42 @@ export function ModelSettings({
                   )}
 
                   {/* Suggested Models */}
-                  {!showAddModel && (
-                    <div className="space-y-2">
-                      <p className="text-muted-foreground text-xs">
-                        {t.settings.suggestedModels || '推荐模型'}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {getSuggestedModels(selectedProvider)
-                          .filter(
-                            (model) =>
-                              !(selectedProvider.models || []).includes(model)
-                          )
-                          .slice(0, 4)
-                          .map((model) => (
-                            <button
-                              key={model}
-                              onClick={() => {
-                                const currentModels =
-                                  selectedProvider.models || [];
-                                if (!currentModels.includes(model)) {
-                                  handleProviderUpdate(selectedProvider.id, {
-                                    models: [...currentModels, model],
-                                  });
-                                }
-                              }}
-                              className="bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-full px-3 py-1 text-xs transition-colors"
-                            >
-                              + {model}
-                            </button>
-                          ))}
+                  {!showAddModel &&
+                    getSuggestedModels(selectedProvider).filter(
+                      (model) =>
+                        !(selectedProvider.models || []).includes(model)
+                    ).length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-muted-foreground text-xs">
+                          {t.settings.suggestedModels || '推荐模型'}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {getSuggestedModels(selectedProvider)
+                            .filter(
+                              (model) =>
+                                !(selectedProvider.models || []).includes(model)
+                            )
+                            .slice(0, 4)
+                            .map((model) => (
+                              <button
+                                key={model}
+                                onClick={() => {
+                                  const currentModels =
+                                    selectedProvider.models || [];
+                                  if (!currentModels.includes(model)) {
+                                    handleProviderUpdate(selectedProvider.id, {
+                                      models: [...currentModels, model],
+                                    });
+                                  }
+                                }}
+                                className="bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-full px-3 py-1 text-xs transition-colors"
+                              >
+                                + {model}
+                              </button>
+                            ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
                 </div>
               </div>
             </div>

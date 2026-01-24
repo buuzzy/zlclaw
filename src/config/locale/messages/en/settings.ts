@@ -186,8 +186,15 @@ export default {
   dataClearConfirmDescription: 'Choose what data you want to clear:',
   dataClearTasksOnly: 'Clear Tasks Only',
   dataClearTasksOnlyDescription: 'Delete all tasks and messages, keep settings',
+  dataClearSettingsOnly: 'Clear Settings Only',
+  dataClearSettingsOnlyDescription: 'Reset all settings to defaults, keep tasks',
   dataClearAll: 'Clear All Data',
   dataClearAllDescription: 'Delete all tasks, messages, and settings',
+  dataClearTasksConfirm: 'Are you sure you want to delete all tasks and messages? This action cannot be undone.',
+  dataClearSettingsConfirm: 'Are you sure you want to reset all settings to defaults? This action cannot be undone.',
+  dataClearAllConfirm: 'Are you sure you want to delete ALL data including tasks, messages, and settings? This action cannot be undone.',
+  dataConfirmTitle: 'Confirm',
+  dataConfirmClear: 'Yes, Clear',
   dataCancel: 'Cancel',
 
   // About

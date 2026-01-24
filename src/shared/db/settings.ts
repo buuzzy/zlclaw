@@ -15,6 +15,10 @@ export interface AIProvider {
   baseUrl: string;
   enabled: boolean;
   models: string[];
+  // Extended fields for UI
+  icon?: string;
+  apiKeyUrl?: string;
+  canDelete?: boolean;
 }
 
 export interface MCPServer {
@@ -224,7 +228,11 @@ export interface Settings {
   language: string;
 }
 
-// Default providers
+// ============================================================================
+// AI Provider Configuration
+// ============================================================================
+
+// Default providers with full configuration
 export const defaultProviders: AIProvider[] = [
   {
     id: 'openrouter',
@@ -232,10 +240,33 @@ export const defaultProviders: AIProvider[] = [
     apiKey: '',
     baseUrl: 'https://openrouter.ai/api',
     enabled: true,
-    models: [
-      'anthropic/claude-sonnet-4-5-20250514',
-      'anthropic/claude-opus-4-5-20250514',
-    ],
+    models: ['anthropic/claude-sonnet-4.5', 'anthropic/claude-opus-4.5'],
+    icon: 'O',
+    apiKeyUrl: 'https://openrouter.ai/keys',
+    canDelete: true,
+  },
+  {
+    id: 'minimax',
+    name: 'MiniMax',
+    apiKey: '',
+    baseUrl: 'https://api.minimax.io/anthropic',
+    enabled: true,
+    models: ['MiniMax-M2.1'],
+    icon: 'M',
+    apiKeyUrl:
+      'https://platform.minimax.io/subscribe/coding-plan?code=9hgHKlPO3G&source=link',
+    canDelete: true,
+  },
+  {
+    id: 'zai',
+    name: 'Z.ai',
+    apiKey: '',
+    baseUrl: 'https://api.z.ai/api/anthropic',
+    enabled: true,
+    models: ['glm-4.7'],
+    icon: 'Z',
+    apiKeyUrl: 'https://z.ai/subscribe?ic=7YS469UOXD',
+    canDelete: true,
   },
   {
     id: 'volcengine',
@@ -244,8 +275,45 @@ export const defaultProviders: AIProvider[] = [
     baseUrl: 'https://ark.cn-beijing.volces.com/api/coding',
     enabled: true,
     models: ['ark-code-latest'],
+    icon: 'V',
+    apiKeyUrl: 'https://volcengine.com/L/Sq5rSgyFu_E',
+    canDelete: true,
   },
 ];
+
+// Default provider IDs that cannot be deleted (derived from defaultProviders)
+export const defaultProviderIds = defaultProviders
+  .filter((p) => p.canDelete === false)
+  .map((p) => p.id);
+
+// Popular models for each provider (derived from defaultProviders + extra providers)
+export const providerDefaultModels: Record<string, string[]> = {
+  // Auto-generate from defaultProviders
+  ...Object.fromEntries(defaultProviders.map((p) => [p.id, p.models])),
+  // Extra providers not in defaultProviders
+  anthropic: ['claude-sonnet-4-5-20250514', 'claude-opus-4-5-20250514'],
+  openai: ['gpt-4o', 'gpt-4o-mini', 'o1-preview'],
+  // Fallback for unknown providers
+  default: [],
+};
+
+// Model suggestions for custom providers (matched by name pattern)
+export const customProviderModels: Record<string, string[]> = {
+  火山: [
+    'doubao-1-5-pro-256k-250115',
+    'doubao-1-5-lite-32k-250115',
+    'deepseek-v3-250324',
+  ],
+  volcengine: [
+    'doubao-1-5-pro-256k-250115',
+    'doubao-1-5-lite-32k-250115',
+    'deepseek-v3-250324',
+  ],
+  deepseek: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'],
+  moonshot: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+  zhipu: ['glm-4-plus', 'glm-4-flash', 'glm-4-long'],
+  qwen: ['qwen-max', 'qwen-plus', 'qwen-turbo'],
+};
 
 // Default settings
 // Note: Path values are placeholders that get resolved at initialization
@@ -327,7 +395,10 @@ export async function getSettingsAsync(): Promise<Settings> {
   console.log('[Settings] getSettingsAsync - isTauri:', isTauri);
 
   const database = await getDatabase();
-  console.log('[Settings] getSettingsAsync - database:', database ? 'connected' : 'null');
+  console.log(
+    '[Settings] getSettingsAsync - database:',
+    database ? 'connected' : 'null'
+  );
 
   if (database) {
     try {
@@ -364,7 +435,9 @@ export async function getSettingsAsync(): Promise<Settings> {
         settingsCache = settings;
         return settings;
       } else {
-        console.log('[Settings] Database has no settings rows, falling back to localStorage');
+        console.log(
+          '[Settings] Database has no settings rows, falling back to localStorage'
+        );
       }
     } catch (error) {
       console.error('[Settings] Failed to load from database:', error);

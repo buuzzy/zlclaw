@@ -46,6 +46,7 @@ interface ExportData {
 }
 
 type OperationStatus = 'idle' | 'loading' | 'success' | 'error';
+type ClearType = 'tasks' | 'settings' | 'all' | null;
 
 export function DataSettings() {
   const { t } = useLanguage();
@@ -53,6 +54,7 @@ export function DataSettings() {
   const [importStatus, setImportStatus] = useState<OperationStatus>('idle');
   const [clearStatus, setClearStatus] = useState<OperationStatus>('idle');
   const [showClearDialog, setShowClearDialog] = useState(false);
+  const [confirmClearType, setConfirmClearType] = useState<ClearType>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   // Export all data
@@ -186,24 +188,40 @@ export function DataSettings() {
   };
 
   // Clear data
-  const handleClear = async (clearSettings: boolean) => {
+  const handleClear = async (type: ClearType) => {
+    if (!type) return;
+
     setClearStatus('loading');
     setErrorMessage('');
     setShowClearDialog(false);
+    setConfirmClearType(null);
 
     try {
-      // Clear workspace files first
-      await clearWorkspaceFiles();
+      if (type === 'settings') {
+        // Clear settings only
+        await clearAllSettings();
+      } else if (type === 'tasks') {
+        // Clear workspace files first
+        await clearWorkspaceFiles();
 
-      // Get all tasks and delete them with their messages
-      const tasks = await getAllTasks();
-      for (const task of tasks) {
-        await deleteMessagesByTaskId(task.id);
-        await deleteTask(task.id);
-      }
+        // Get all tasks and delete them with their messages
+        const tasks = await getAllTasks();
+        for (const task of tasks) {
+          await deleteMessagesByTaskId(task.id);
+          await deleteTask(task.id);
+        }
+      } else if (type === 'all') {
+        // Clear workspace files first
+        await clearWorkspaceFiles();
 
-      // Clear settings if requested
-      if (clearSettings) {
+        // Get all tasks and delete them with their messages
+        const tasks = await getAllTasks();
+        for (const task of tasks) {
+          await deleteMessagesByTaskId(task.id);
+          await deleteTask(task.id);
+        }
+
+        // Clear settings
         await clearAllSettings();
       }
 
@@ -218,6 +236,25 @@ export function DataSettings() {
       setErrorMessage(error instanceof Error ? error.message : 'Clear failed');
       setClearStatus('error');
       setTimeout(() => setClearStatus('idle'), 3000);
+    }
+  };
+
+  // Handle clear option click - show confirmation
+  const handleClearOptionClick = (type: ClearType) => {
+    setConfirmClearType(type);
+  };
+
+  // Get confirmation message based on clear type
+  const getConfirmMessage = (type: ClearType): string => {
+    switch (type) {
+      case 'tasks':
+        return t.settings.dataClearTasksConfirm || 'Are you sure you want to delete all tasks and messages? This action cannot be undone.';
+      case 'settings':
+        return t.settings.dataClearSettingsConfirm || 'Are you sure you want to reset all settings to defaults? This action cannot be undone.';
+      case 'all':
+        return t.settings.dataClearAllConfirm || 'Are you sure you want to delete ALL data including tasks, messages, and settings? This action cannot be undone.';
+      default:
+        return '';
     }
   };
 
@@ -380,7 +417,7 @@ export function DataSettings() {
 
             <div className="space-y-3">
               <button
-                onClick={() => handleClear(false)}
+                onClick={() => handleClearOptionClick('tasks')}
                 className={cn(
                   'flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors',
                   'border-border hover:bg-accent border'
@@ -398,7 +435,25 @@ export function DataSettings() {
               </button>
 
               <button
-                onClick={() => handleClear(true)}
+                onClick={() => handleClearOptionClick('settings')}
+                className={cn(
+                  'flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors',
+                  'border-border hover:bg-accent border'
+                )}
+              >
+                <div>
+                  <div className="text-foreground font-medium">
+                    {t.settings.dataClearSettingsOnly || 'Clear Settings Only'}
+                  </div>
+                  <div className="text-muted-foreground text-sm">
+                    {t.settings.dataClearSettingsOnlyDescription ||
+                      'Reset all settings to defaults, keep tasks'}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleClearOptionClick('all')}
                 className={cn(
                   'flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors',
                   'border border-red-500/30 bg-red-500/5 hover:bg-red-500/10'
@@ -422,6 +477,47 @@ export function DataSettings() {
             >
               {t.settings.dataCancel || 'Cancel'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog */}
+      {confirmClearType && (
+        <div className="bg-background/80 fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-sm">
+          <div className="border-border bg-background mx-4 w-full max-w-md rounded-xl border p-6 shadow-lg">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-full bg-red-500/10 text-red-500">
+                <AlertTriangle className="size-5" />
+              </div>
+              <h3 className="text-foreground text-lg font-semibold">
+                {t.settings.dataConfirmTitle || 'Confirm'}
+              </h3>
+            </div>
+
+            <p className="text-muted-foreground mb-6 text-sm">
+              {getConfirmMessage(confirmClearType)}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmClearType(null)}
+                className={cn(
+                  'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
+                  'border-border text-foreground hover:bg-accent border'
+                )}
+              >
+                {t.settings.dataCancel || 'Cancel'}
+              </button>
+              <button
+                onClick={() => handleClear(confirmClearType)}
+                className={cn(
+                  'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
+                  'bg-red-500 text-white hover:bg-red-600'
+                )}
+              >
+                {t.settings.dataConfirmClear || 'Yes, Clear'}
+              </button>
+            </div>
           </div>
         </div>
       )}

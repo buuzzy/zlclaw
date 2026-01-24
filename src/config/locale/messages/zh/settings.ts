@@ -178,8 +178,15 @@ export default {
   dataClearConfirmDescription: '选择您要清空的数据：',
   dataClearTasksOnly: '仅清空任务',
   dataClearTasksOnlyDescription: '删除所有任务和消息，保留设置',
+  dataClearSettingsOnly: '仅清空配置',
+  dataClearSettingsOnlyDescription: '重置所有配置为默认值，保留任务',
   dataClearAll: '清空所有数据',
   dataClearAllDescription: '删除所有任务、消息和设置',
+  dataClearTasksConfirm: '确定要删除所有任务和消息吗？此操作无法撤销。',
+  dataClearSettingsConfirm: '确定要将所有配置重置为默认值吗？此操作无法撤销。',
+  dataClearAllConfirm: '确定要删除所有数据（包括任务、消息和设置）吗？此操作无法撤销。',
+  dataConfirmTitle: '确认',
+  dataConfirmClear: '确定清空',
   dataCancel: '取消',
 
   // About
