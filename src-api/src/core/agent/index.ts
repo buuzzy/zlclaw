@@ -201,7 +201,8 @@ export function createAgentFromEnv(overrides?: Partial<AgentConfig>): IAgent {
   return createAgent({
     provider,
     apiKey: process.env.ANTHROPIC_API_KEY,
-    model: process.env.AGENT_MODEL,
+    baseUrl: process.env.ANTHROPIC_BASE_URL,
+    model: process.env.ANTHROPIC_MODEL || process.env.AGENT_MODEL,
     workDir: process.env.AGENT_WORK_DIR || DEFAULT_WORK_DIR,
     ...overrides,
   });
