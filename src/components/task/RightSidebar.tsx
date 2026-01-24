@@ -698,7 +698,16 @@ function CollapsibleSection({
           )}
         </span>
       </button>
-      {isExpanded && <div className="px-4 pb-3">{children}</div>}
+      <div
+        className={cn(
+          'grid transition-[grid-template-rows] duration-300',
+          isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="px-4 pb-3">{children}</div>
+        </div>
+      </div>
     </div>
   );
 }
