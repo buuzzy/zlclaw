@@ -7,6 +7,7 @@
     "ver": "./scripts/version.sh",
     "dev": "vite",
     "dev:api": "pnpm --filter workany-api dev",
+    "predev:app": "node scripts/check-rust.js",
     "dev:app": "pnpm tauri dev",
     "dev:web": "pnpm dev",
     "dev:all": "concurrently \"pnpm dev:api\" \"pnpm dev:app\"",
