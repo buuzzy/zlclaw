@@ -1124,30 +1124,42 @@ function MessageList({
 
   type MessageGroup = TaskMessageGroup | OtherMessageGroup;
 
-  // Pre-process: find the last text message index before result (the final answer)
-  let lastTextBeforeResultIndex = -1;
-  let resultIndex = messages.findIndex((m) => m.type === 'result');
-  if (resultIndex === -1) resultIndex = messages.length;
+  // Pre-process: find the last text message index in each segment between user messages
+  // This ensures we keep the agent's response to each user question
+  const lastTextIndicesInSegments = new Set<number>();
 
-  for (let i = resultIndex - 1; i >= 0; i--) {
-    if (messages[i].type === 'text' && messages[i].content) {
-      lastTextBeforeResultIndex = i;
-      break;
+  // Find segment boundaries (user messages and result)
+  const segmentBoundaries: number[] = [];
+  messages.forEach((msg, idx) => {
+    if (msg.type === 'user' || msg.type === 'result') {
+      segmentBoundaries.push(idx);
     }
+  });
+  segmentBoundaries.push(messages.length); // End boundary
+
+  // For each segment, find the last text message
+  let segmentStart = 0;
+  for (const boundary of segmentBoundaries) {
+    // Find last text message in this segment (from segmentStart to boundary)
+    for (let i = boundary - 1; i >= segmentStart; i--) {
+      if (messages[i].type === 'text' && messages[i].content) {
+        lastTextIndicesInSegments.add(i);
+        break;
+      }
+    }
+    segmentStart = boundary + 1;
   }
 
-  // Filter messages: only keep the last text message before result, skip others
+  // Filter messages: only keep the last text message in each segment
   const mergedMessages: AgentMessage[] = [];
-  let textCountBeforeResult = 0;
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
-    if (msg.type === 'text' && msg.content && i < resultIndex) {
-      textCountBeforeResult++;
-      // Only keep the last text message before result
-      if (i === lastTextBeforeResultIndex) {
+    if (msg.type === 'text' && msg.content) {
+      // Only keep text messages that are the last in their segment
+      if (lastTextIndicesInSegments.has(i)) {
         mergedMessages.push(msg);
       }
-      // Skip other text messages
+      // Skip other text messages (intermediate thinking)
     } else {
       mergedMessages.push(msg);
     }
