@@ -11,7 +11,7 @@
     "dev:app": "pnpm tauri dev",
     "dev:web": "pnpm dev",
     "dev:all": "concurrently \"pnpm dev:api\" \"pnpm dev:app\"",
-    "build": "tsc --noEmit --skipLibCheck || true && vite build",
+    "build": "vite build",
     "build:api": "pnpm --filter workany-api build",
     "build:api:binary": "pnpm --filter workany-api build:binary",
     "build:api:binary:mac-arm": "pnpm --filter workany-api build:binary:mac-arm",
