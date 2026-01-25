@@ -347,6 +347,15 @@ export function ModelSettings({
                   </p>
                 )}
               </div>
+
+              {/* Add Custom Model Button */}
+              <button
+                onClick={() => setShowAddProvider(true)}
+                className="text-primary hover:text-primary/80 inline-flex items-center gap-1.5 text-sm"
+              >
+                <Plus className="size-4" />
+                {t.settings.addCustomModel}
+              </button>
             </div>
           </div>
         ) : selectedProvider ? (
@@ -363,7 +372,7 @@ export function ModelSettings({
                       name: e.target.value,
                     })
                   }
-                  className="text-foreground bg-transparent text-base font-medium outline-none border-b border-transparent hover:border-input focus:border-primary transition-colors w-40"
+                  className="text-foreground hover:border-input focus:border-primary w-40 border-b border-transparent bg-transparent text-base font-medium transition-colors outline-none"
                 />
               </div>
               <div className="flex items-center gap-3">

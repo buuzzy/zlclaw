@@ -83,36 +83,29 @@ export function AgentMessages({ messages, isRunning }: AgentMessagesProps) {
               <div className="bg-card text-card-foreground prose prose-sm dark:prose-invert max-w-none rounded-lg p-4">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
-                  components={
-                    {
-                      a: ({
-                        children,
-                        href,
-                      }: {
-                        children?: React.ReactNode;
-                        href?: string;
-                      }) => (
-                        <a
-                          href={href}
-                          onClick={async (e) => {
-                            e.preventDefault();
-                            if (href) {
-                              try {
-                                const { openUrl } =
-                                  await import('@tauri-apps/plugin-opener');
-                                await openUrl(href);
-                              } catch {
-                                window.open(href, '_blank');
-                              }
+                  components={{
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    a: ({ children, href }: any) => (
+                      <a
+                        href={href}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          if (href) {
+                            try {
+                              const { openUrl } =
+                                await import('@tauri-apps/plugin-opener');
+                              await openUrl(href);
+                            } catch {
+                              window.open(href, '_blank');
                             }
-                          }}
-                          className="text-primary cursor-pointer hover:underline"
-                        >
-                          {children}
-                        </a>
-                      ),
-                    }
-                  }
+                          }
+                        }}
+                        className="text-primary cursor-pointer hover:underline"
+                      >
+                        {children}
+                      </a>
+                    ),
+                  }}
                 >
                   {message.content}
                 </ReactMarkdown>

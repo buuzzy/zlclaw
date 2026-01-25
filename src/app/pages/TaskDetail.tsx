@@ -24,7 +24,13 @@ import {
 import { useVitePreview } from '@/shared/hooks/useVitePreview';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { CheckCircle2, ChevronDown, FileText, PanelLeft } from 'lucide-react';
+import {
+  ArrowDown,
+  CheckCircle2,
+  ChevronDown,
+  FileText,
+  PanelLeft,
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -33,6 +39,7 @@ import { Logo } from '@/components/common/logo';
 import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
 import { SettingsModal } from '@/components/settings';
 import { ChatInput } from '@/components/shared/ChatInput';
+import { LazyImage } from '@/components/shared/LazyImage';
 import { PlanApproval } from '@/components/task/PlanApproval';
 import { QuestionInput } from '@/components/task/QuestionInput';
 import { RightSidebar } from '@/components/task/RightSidebar';
@@ -110,11 +117,19 @@ function TaskDetailContent() {
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const prevTaskIdRef = useRef<string | undefined>(undefined);
 
   // Panel visibility state - default to collapsed, auto-expand when content is available
   const [isRightSidebarVisible, setIsRightSidebarVisible] = useState(false);
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+
+  // Scroll to bottom button state
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  // Track if user has manually scrolled up (to disable auto-scroll)
+  const userScrolledUpRef = useRef(false);
+  // Track last scroll position to detect scroll direction
+  const lastScrollTopRef = useRef(0);
 
   // Auto-collapse left sidebar only when preview panel opens
   useEffect(() => {
@@ -154,9 +169,29 @@ function TaskDetailContent() {
   // Track if sidebar has been auto-expanded (to avoid re-opening after manual close)
   const hasAutoExpandedRef = useRef(false);
 
+  // Reset right sidebar state when switching tasks
+  useEffect(() => {
+    if (taskId !== prevTaskIdRef.current) {
+      // Reset auto-expand flag for new task
+      hasAutoExpandedRef.current = false;
+      // Close right sidebar when switching to a new task
+      setIsRightSidebarVisible(false);
+      // Set loading to true immediately to prevent auto-expand effect
+      // from using stale data from the previous task
+      setIsLoading(true);
+    }
+  }, [taskId]);
+
   // Auto-expand right sidebar when there is actual content (only once)
   // Content includes: artifacts, working files, MCP tools, or skills
   useEffect(() => {
+    // Skip if still loading - wait for task data to be ready
+    if (isLoading) return;
+
+    // Skip if task data not loaded yet or task doesn't match current taskId
+    // This prevents using stale data from the previous task during task switching
+    if (!task || task.id !== taskId) return;
+
     // Skip if already auto-expanded
     if (hasAutoExpandedRef.current) return;
 
@@ -183,7 +218,9 @@ function TaskDetailContent() {
       setIsRightSidebarVisible(true);
       hasAutoExpandedRef.current = true;
     }
-  }, [artifacts.length, messages, workingDir]);
+    // If no content, ensure sidebar stays collapsed (don't auto-expand)
+    // The sidebar starts collapsed by default and should stay that way for empty sessions
+  }, [artifacts.length, messages, workingDir, isLoading, task, taskId]);
 
   // Live preview state
   const {
@@ -483,10 +520,77 @@ function TaskDetailContent() {
     loadArtifacts();
   }, [messages, taskId]);
 
-  // Auto scroll to bottom when messages change
+  // Auto scroll to bottom only when task is running AND user hasn't scrolled up
   useEffect(() => {
+    if (isRunning && !userScrolledUpRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isRunning]);
+
+  // Reset userScrolledUp when task stops running
+  useEffect(() => {
+    if (!isRunning) {
+      userScrolledUpRef.current = false;
+    }
+  }, [isRunning]);
+
+  // Check scroll position to show/hide scroll button and detect manual scroll
+  const checkScrollPosition = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+    // Detect if user scrolled up (scroll position decreased)
+    if (
+      isRunning &&
+      scrollTop < lastScrollTopRef.current &&
+      distanceFromBottom > 100
+    ) {
+      userScrolledUpRef.current = true;
+    }
+
+    // If user scrolled to near bottom, re-enable auto-scroll
+    if (distanceFromBottom < 50) {
+      userScrolledUpRef.current = false;
+    }
+
+    lastScrollTopRef.current = scrollTop;
+
+    // Show button if more than 200px from bottom
+    setShowScrollButton(distanceFromBottom > 200);
+  }, [isRunning]);
+
+  // Add scroll listener to messages container
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    container.addEventListener('scroll', checkScrollPosition);
+    // Initial check
+    checkScrollPosition();
+
+    return () => {
+      container.removeEventListener('scroll', checkScrollPosition);
+    };
+  }, [checkScrollPosition]);
+
+  // Re-check scroll position when messages load or loading state changes
+  useEffect(() => {
+    if (!isLoading && messages.length > 0) {
+      // Use requestAnimationFrame to ensure DOM has updated
+      requestAnimationFrame(() => {
+        checkScrollPosition();
+      });
+    }
+  }, [isLoading, messages.length, checkScrollPosition]);
+
+  // Scroll to bottom handler - also re-enables auto-scroll
+  const scrollToBottom = useCallback(() => {
+    userScrolledUpRef.current = false;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, []);
 
   // Load all tasks for sidebar
   useEffect(() => {
@@ -776,8 +880,9 @@ function TaskDetailContent() {
 
             {/* Messages Area - Centered content when sidebar hidden */}
             <div
+              ref={messagesContainerRef}
               className={cn(
-                'flex-1 overflow-x-hidden overflow-y-auto',
+                'relative flex-1 overflow-x-hidden overflow-y-auto',
                 !isPreviewVisible &&
                   !isRightSidebarVisible &&
                   'flex justify-center'
@@ -833,12 +938,22 @@ function TaskDetailContent() {
             {/* Reply Input - Centered when sidebar hidden */}
             <div
               className={cn(
-                'border-border/50 bg-background shrink-0 border-none',
+                'border-border/50 bg-background relative shrink-0 border-none',
                 !isPreviewVisible &&
                   !isRightSidebarVisible &&
                   'flex justify-center'
               )}
             >
+              {/* Scroll to bottom button - fixed above input */}
+              {showScrollButton && (
+                <button
+                  onClick={scrollToBottom}
+                  className="bg-background hover:bg-accent border-border absolute -top-12 left-1/2 z-10 flex -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border p-2 shadow-lg transition-all"
+                  title={t.common.scrollToBottom || 'Scroll to bottom'}
+                >
+                  <ArrowDown className="size-4" />
+                </button>
+              )}
               <div
                 className={cn(
                   'w-full px-4 py-3',
@@ -935,12 +1050,13 @@ function UserMessage({
         {attachments && attachments.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
             {attachments.map((attachment) =>
-              attachment.type === 'image' && attachment.data ? (
-                <img
+              attachment.type === 'image' ? (
+                <LazyImage
                   key={attachment.id}
                   src={attachment.data}
                   alt={attachment.name}
-                  className="max-h-48 max-w-full rounded-lg object-contain"
+                  className="max-h-48 max-w-full"
+                  isDataLoading={attachment.isLoading}
                 />
               ) : (
                 <div
@@ -1358,81 +1474,72 @@ function MessageItem({
         <div className="prose prose-sm text-foreground max-w-none min-w-0 flex-1 overflow-hidden">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
-            components={
-              {
-                pre: ({ children }: { children?: React.ReactNode }) => (
-                  <pre className="bg-muted max-w-full overflow-x-auto rounded-lg p-4">
-                    {children}
-                  </pre>
-                ),
-                code: ({
-                  className,
-                  children,
-                  ...props
-                }: {
-                  className?: string;
-                  children?: React.ReactNode;
-                }) => {
-                  const isInline = !className;
-                  if (isInline) {
-                    return (
-                      <code
-                        className="bg-muted rounded px-1.5 py-0.5 text-sm"
-                        {...props}
-                      >
-                        {children}
-                      </code>
-                    );
-                  }
+            components={{
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              pre: ({ children }: any) => (
+                <pre className="bg-muted max-w-full overflow-x-auto rounded-lg p-4">
+                  {children}
+                </pre>
+              ),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              code: ({ className, children, ...props }: any) => {
+                const isInline = !className;
+                if (isInline) {
                   return (
-                    <code className={className} {...props}>
+                    <code
+                      className="bg-muted rounded px-1.5 py-0.5 text-sm"
+                      {...props}
+                    >
                       {children}
                     </code>
                   );
-                },
-                a: ({
-                  children,
-                  href,
-                }: {
-                  children?: React.ReactNode;
-                  href?: string;
-                }) => (
-                  <a
-                    href={href}
-                    onClick={async (e) => {
-                      e.preventDefault();
-                      if (href) {
-                        try {
-                          const { openUrl } =
-                            await import('@tauri-apps/plugin-opener');
-                          await openUrl(href);
-                        } catch {
-                          window.open(href, '_blank');
-                        }
+                }
+                return (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                );
+              },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              a: ({ children, href }: any) => (
+                <a
+                  href={href}
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    if (href) {
+                      try {
+                        const { openUrl } =
+                          await import('@tauri-apps/plugin-opener');
+                        await openUrl(href);
+                      } catch {
+                        window.open(href, '_blank');
                       }
-                    }}
-                    className="text-primary cursor-pointer hover:underline"
-                  >
+                    }
+                  }}
+                  className="text-primary cursor-pointer hover:underline"
+                >
+                  {children}
+                </a>
+              ),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              table: ({ children }: any) => (
+                <div className="overflow-x-auto">
+                  <table className="border-border border-collapse border">
                     {children}
-                  </a>
-                ),
-                table: ({ children }: { children?: React.ReactNode }) => (
-                  <div className="overflow-x-auto">
-                    <table className="border-border border-collapse border">
-                      {children}
-                    </table>
-                  </div>
-                ),
-                th: ({ children }: { children?: React.ReactNode }) => (
-                  <th className="border-border bg-muted border px-3 py-2 text-left">
-                    {children}
-                  </th>
-                ),
-                td: ({ children }: { children?: React.ReactNode }) => (
-                  <td className="border-border border px-3 py-2">{children}</td>
-                ),
-              }
-            }
+                  </table>
+                </div>
+              ),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              th: ({ children }: any) => (
+                <th className="border-border bg-muted border px-3 py-2 text-left">
+                  {children}
+                </th>
+              ),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              td: ({ children }: any) => (
+                <td className="border-border border px-3 py-2">{children}</td>
+              ),
+            }}
           >
             {message.content || ''}
           </ReactMarkdown>
@@ -1456,6 +1563,31 @@ function MessageItem({
 function ErrorMessage({ message }: { message: string }) {
   const { t } = useLanguage();
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Check if this is an internal error (format: __INTERNAL_ERROR__|logPath)
+  const isInternalError = message.startsWith('__INTERNAL_ERROR__|');
+  if (isInternalError) {
+    const logPath = message.split('|')[1] || '~/.workany/logs/workany.log';
+    const errorMessage = (
+      t.common.errors.internalError ||
+      'Internal server error. Please check log file: {logPath}'
+    ).replace('{logPath}', logPath);
+
+    return (
+      <div className="flex items-start gap-3 py-2">
+        <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center">
+          <svg
+            viewBox="0 0 16 16"
+            className="text-destructive size-4"
+            fill="currentColor"
+          >
+            <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7 4.5a1 1 0 112 0v3a1 1 0 11-2 0v-3zm1 7a1 1 0 100-2 1 1 0 000 2z" />
+          </svg>
+        </div>
+        <p className="text-muted-foreground text-sm">{errorMessage}</p>
+      </div>
+    );
+  }
 
   // Check if error is related to API key configuration
   const isApiKeyError =

@@ -64,14 +64,45 @@ function base64ToUint8Array(base64Data: string): Uint8Array {
 }
 
 /**
- * Convert Uint8Array to base64 data URL
+ * Convert Uint8Array to base64 string efficiently using chunked processing
+ * to avoid blocking the main thread for large files
  */
-function uint8ArrayToBase64(bytes: Uint8Array, mimeType: string): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+async function uint8ArrayToBase64Async(
+  bytes: Uint8Array,
+  mimeType: string
+): Promise<string> {
+  // For small files (< 100KB), use direct conversion
+  if (bytes.length < 100 * 1024) {
+    // Use Blob + FileReader for efficient conversion
+    const blob = new Blob([bytes], { type: mimeType });
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
   }
-  const base64 = btoa(binary);
+
+  // For larger files, process in chunks with yielding to main thread
+  const CHUNK_SIZE = 64 * 1024; // 64KB chunks
+  const chunks: string[] = [];
+
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.slice(i, i + CHUNK_SIZE);
+    // Convert chunk to binary string
+    let binary = '';
+    for (let j = 0; j < chunk.length; j++) {
+      binary += String.fromCharCode(chunk[j]);
+    }
+    chunks.push(binary);
+
+    // Yield to main thread every chunk to prevent blocking
+    if (i + CHUNK_SIZE < bytes.length) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+
+  const base64 = btoa(chunks.join(''));
   return `data:${mimeType};base64,${base64}`;
 }
 
@@ -142,7 +173,7 @@ export async function loadAttachmentFromFile(
 
     const bytes = await readFile(filePath);
     const mime = mimeType || guessMimeType(filePath);
-    const dataUrl = uint8ArrayToBase64(bytes, mime);
+    const dataUrl = await uint8ArrayToBase64Async(bytes, mime);
 
     return dataUrl;
   } catch (error) {
@@ -237,16 +268,35 @@ export async function saveAttachments(
 
 /**
  * Load multiple attachments from references
+ * Uses controlled concurrency to avoid overwhelming the system
  */
 export async function loadAttachments(
-  references: AttachmentReference[]
+  references: AttachmentReference[],
+  concurrencyLimit: number = 3
 ): Promise<MessageAttachment[]> {
-  const attachments: MessageAttachment[] = [];
+  if (references.length === 0) return [];
 
-  for (const ref of references) {
-    const attachment = await referenceToAttachment(ref);
-    attachments.push(attachment);
+  // For small number of attachments, load in parallel
+  if (references.length <= concurrencyLimit) {
+    return Promise.all(references.map((ref) => referenceToAttachment(ref)));
   }
 
-  return attachments;
+  // For larger numbers, use controlled concurrency
+  const results: MessageAttachment[] = new Array(references.length);
+  let currentIndex = 0;
+
+  async function worker() {
+    while (currentIndex < references.length) {
+      const index = currentIndex++;
+      results[index] = await referenceToAttachment(references[index]);
+    }
+  }
+
+  // Start workers
+  const workers = Array(concurrencyLimit)
+    .fill(null)
+    .map(() => worker());
+  await Promise.all(workers);
+
+  return results;
 }

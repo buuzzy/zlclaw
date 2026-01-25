@@ -6,12 +6,11 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '@/config';
 import { saveSettingItem } from '@/shared/db/settings';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { clearDependencyCache } from '@/components/setup-guard';
 import {
   AlertCircle,
   ArrowRight,
@@ -25,6 +24,8 @@ import {
   RefreshCw,
   Terminal,
 } from 'lucide-react';
+
+import { clearDependencyCache } from '@/components/setup-guard';
 
 // Helper function to copy text to clipboard
 const copyToClipboard = async (text: string): Promise<boolean> => {
@@ -248,180 +249,186 @@ export function SetupPage({ onSkip }: SetupPageProps = {}) {
         {/* Content */}
         <div className="py-6">
           <div className="space-y-4">
-          {/* API Error */}
-          {apiError && (
-            <div className="border-border rounded-xl border bg-red-500/5 p-6">
-              <div className="flex items-start gap-4">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-500">
-                  <AlertCircle className="size-5" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-foreground font-medium">
-                    {t.setup?.apiError || 'Unable to check dependencies'}
-                  </h3>
-                  <p className="text-muted-foreground mt-1 text-sm">
-                    {apiError}
-                  </p>
-                  <button
-                    onClick={checkDependencies}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90 mt-4 flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-                  >
-                    <RefreshCw className="size-4" />
-                    {t.setup?.retry || 'Retry'}
-                  </button>
+            {/* API Error */}
+            {apiError && (
+              <div className="border-border rounded-xl border bg-red-500/5 p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-500">
+                    <AlertCircle className="size-5" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-foreground font-medium">
+                      {t.setup?.apiError || 'Unable to check dependencies'}
+                    </h3>
+                    <p className="text-muted-foreground mt-1 text-sm">
+                      {apiError}
+                    </p>
+                    <button
+                      onClick={checkDependencies}
+                      className="bg-primary text-primary-foreground hover:bg-primary/90 mt-4 flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                    >
+                      <RefreshCw className="size-4" />
+                      {t.setup?.retry || 'Retry'}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* No dependencies loaded yet */}
-          {!apiError && dependencies.length === 0 && (
-            <div className="border-border rounded-xl border p-6 text-center">
-              <p className="text-muted-foreground">
-                {t.setup?.noDeps || 'No dependencies to check'}
-              </p>
-            </div>
-          )}
+            {/* No dependencies loaded yet */}
+            {!apiError && dependencies.length === 0 && (
+              <div className="border-border rounded-xl border p-6 text-center">
+                <p className="text-muted-foreground">
+                  {t.setup?.noDeps || 'No dependencies to check'}
+                </p>
+              </div>
+            )}
 
-          {dependencies.map((dep) => {
-            const isExpanded = expandedDep === dep.id;
-            const commands = installCommands[dep.id];
+            {dependencies.map((dep) => {
+              const isExpanded = expandedDep === dep.id;
+              const commands = installCommands[dep.id];
 
-            return (
-              <div
-                key={dep.id}
-                className={cn(
-                  'border-border rounded-xl border transition-all',
-                  dep.installed ? 'bg-muted/30' : 'bg-background'
-                )}
-              >
-                {/* Dependency Header */}
-                <div className="flex items-center gap-4 p-4">
-                  {/* Status Icon */}
-                  <div
-                    className={cn(
-                      'flex size-10 shrink-0 items-center justify-center rounded-full',
-                      dep.installed
-                        ? 'bg-green-500/10 text-green-500'
-                        : dep.required
-                          ? 'bg-orange-500/10 text-orange-500'
-                          : 'bg-muted text-muted-foreground'
-                    )}
-                  >
-                    {dep.installed ? (
-                      <CheckCircle2 className="size-5" />
-                    ) : (
-                      <Terminal className="size-5" />
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-foreground font-medium">
-                        {dep.name}
-                      </span>
-                      {dep.required && !dep.installed && (
-                        <span className="rounded bg-orange-500/10 px-1.5 py-0.5 text-[10px] font-medium text-orange-500">
-                          {t.setup?.required || 'Required'}
-                        </span>
+              return (
+                <div
+                  key={dep.id}
+                  className={cn(
+                    'border-border rounded-xl border transition-all',
+                    dep.installed ? 'bg-muted/30' : 'bg-background'
+                  )}
+                >
+                  {/* Dependency Header */}
+                  <div className="flex items-center gap-4 p-4">
+                    {/* Status Icon */}
+                    <div
+                      className={cn(
+                        'flex size-10 shrink-0 items-center justify-center rounded-full',
+                        dep.installed
+                          ? 'bg-green-500/10 text-green-500'
+                          : dep.required
+                            ? 'bg-orange-500/10 text-orange-500'
+                            : 'bg-muted text-muted-foreground'
                       )}
-                      {!dep.required && (
-                        <span className="text-muted-foreground rounded bg-gray-500/10 px-1.5 py-0.5 text-[10px] font-medium">
-                          {t.setup?.optional || 'Optional'}
-                        </span>
+                    >
+                      {dep.installed ? (
+                        <CheckCircle2 className="size-5" />
+                      ) : (
+                        <Terminal className="size-5" />
                       )}
                     </div>
-                    <p className="text-muted-foreground mt-0.5 text-sm">
-                      {dep.description}
-                    </p>
-                    {dep.installed && dep.version && (
-                      <p className="text-muted-foreground mt-1 text-xs">
-                        {t.setup?.version || 'Version'}: {dep.version}
-                      </p>
-                    )}
-                  </div>
 
-                  {/* Action */}
-                  {dep.installed ? (
-                    <Check className="size-5 shrink-0 text-green-500" />
-                  ) : (
-                    <button
-                      onClick={() => setExpandedDep(isExpanded ? null : dep.id)}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className="size-5" />
-                      ) : (
-                        <ChevronRight className="size-5" />
-                      )}
-                    </button>
-                  )}
-                </div>
-
-                {/* Install Options (Expanded) */}
-                {!dep.installed && isExpanded && (
-                  <div className="border-border border-t px-4 py-4">
-                    {/* Install Commands */}
-                    {commands && (
-                      <div className="space-y-2">
-                        {commands.npm && (
-                          <div className="bg-muted flex items-center gap-2 rounded-lg px-3 py-2">
-                            <code className="flex-1 font-mono text-sm">
-                              {commands.npm}
-                            </code>
-                            <button
-                              onClick={() => handleRunInTerminal(commands.npm!)}
-                              className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 text-xs transition-colors"
-                            >
-                              <Play className="size-3" />
-                              {t.setup?.run || 'Run'}
-                            </button>
-                            <button
-                              onClick={() => handleCopy(commands.npm!)}
-                              className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 text-xs transition-colors"
-                            >
-                              {copiedCmd === commands.npm ? (
-                                <Check className="size-3 text-green-500" />
-                              ) : (
-                                <Copy className="size-3" />
-                              )}
-                              {t.setup?.copy || 'Copy'}
-                            </button>
-                          </div>
+                    {/* Info */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-foreground font-medium">
+                          {dep.name}
+                        </span>
+                        {dep.required && !dep.installed && (
+                          <span className="rounded bg-orange-500/10 px-1.5 py-0.5 text-[10px] font-medium text-orange-500">
+                            {t.setup?.required || 'Required'}
+                          </span>
                         )}
-                        {commands.brew && (
-                          <div className="bg-muted flex items-center gap-2 rounded-lg px-3 py-2">
-                            <code className="flex-1 font-mono text-sm">
-                              {commands.brew}
-                            </code>
-                            <button
-                              onClick={() => handleRunInTerminal(commands.brew!)}
-                              className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 text-xs transition-colors"
-                            >
-                              <Play className="size-3" />
-                              {t.setup?.run || 'Run'}
-                            </button>
-                            <button
-                              onClick={() => handleCopy(commands.brew!)}
-                              className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 text-xs transition-colors"
-                            >
-                              {copiedCmd === commands.brew ? (
-                                <Check className="size-3 text-green-500" />
-                              ) : (
-                                <Copy className="size-3" />
-                              )}
-                              {t.setup?.copy || 'Copy'}
-                            </button>
-                          </div>
+                        {!dep.required && (
+                          <span className="text-muted-foreground rounded bg-gray-500/10 px-1.5 py-0.5 text-[10px] font-medium">
+                            {t.setup?.optional || 'Optional'}
+                          </span>
                         )}
                       </div>
+                      <p className="text-muted-foreground mt-0.5 text-sm">
+                        {dep.description}
+                      </p>
+                      {dep.installed && dep.version && (
+                        <p className="text-muted-foreground mt-1 text-xs">
+                          {t.setup?.version || 'Version'}: {dep.version}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Action */}
+                    {dep.installed ? (
+                      <Check className="size-5 shrink-0 text-green-500" />
+                    ) : (
+                      <button
+                        onClick={() =>
+                          setExpandedDep(isExpanded ? null : dep.id)
+                        }
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="size-5" />
+                        ) : (
+                          <ChevronRight className="size-5" />
+                        )}
+                      </button>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+
+                  {/* Install Options (Expanded) */}
+                  {!dep.installed && isExpanded && (
+                    <div className="border-border border-t px-4 py-4">
+                      {/* Install Commands */}
+                      {commands && (
+                        <div className="space-y-2">
+                          {commands.npm && (
+                            <div className="bg-muted flex items-center gap-2 rounded-lg px-3 py-2">
+                              <code className="flex-1 font-mono text-sm">
+                                {commands.npm}
+                              </code>
+                              <button
+                                onClick={() =>
+                                  handleRunInTerminal(commands.npm!)
+                                }
+                                className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 text-xs transition-colors"
+                              >
+                                <Play className="size-3" />
+                                {t.setup?.run || 'Run'}
+                              </button>
+                              <button
+                                onClick={() => handleCopy(commands.npm!)}
+                                className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 text-xs transition-colors"
+                              >
+                                {copiedCmd === commands.npm ? (
+                                  <Check className="size-3 text-green-500" />
+                                ) : (
+                                  <Copy className="size-3" />
+                                )}
+                                {t.setup?.copy || 'Copy'}
+                              </button>
+                            </div>
+                          )}
+                          {commands.brew && (
+                            <div className="bg-muted flex items-center gap-2 rounded-lg px-3 py-2">
+                              <code className="flex-1 font-mono text-sm">
+                                {commands.brew}
+                              </code>
+                              <button
+                                onClick={() =>
+                                  handleRunInTerminal(commands.brew!)
+                                }
+                                className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 text-xs transition-colors"
+                              >
+                                <Play className="size-3" />
+                                {t.setup?.run || 'Run'}
+                              </button>
+                              <button
+                                onClick={() => handleCopy(commands.brew!)}
+                                className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 text-xs transition-colors"
+                              >
+                                {copiedCmd === commands.brew ? (
+                                  <Check className="size-3 text-green-500" />
+                                ) : (
+                                  <Copy className="size-3" />
+                                )}
+                                {t.setup?.copy || 'Copy'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 

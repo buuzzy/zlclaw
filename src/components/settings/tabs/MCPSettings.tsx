@@ -76,7 +76,10 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
           name: string;
           path: string;
           exists: boolean;
-          servers: Record<string, MCPServerStdio | { url: string; headers?: Record<string, string> }>;
+          servers: Record<
+            string,
+            MCPServerStdio | { url: string; headers?: Record<string, string> }
+          >;
         }[]) {
           if (!configInfo.exists) continue;
 
@@ -309,7 +312,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
                   <span className="flex min-w-0 flex-1 items-center gap-1.5">
                     <span className="truncate text-left">{server.name}</span>
                     {server.source === 'claude' && (
-                      <span className="bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0 rounded px-1 py-0.5 text-[10px] font-medium">
+                      <span className="shrink-0 rounded bg-blue-500/10 px-1 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
                         claude
                       </span>
                     )}
@@ -526,7 +529,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
                   {selectedServer.name}
                 </h3>
                 {selectedServer.source === 'claude' && (
-                  <span className="bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded px-1.5 py-0.5 text-xs font-medium">
+                  <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
                     claude
                   </span>
                 )}

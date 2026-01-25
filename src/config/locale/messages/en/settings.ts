@@ -95,6 +95,7 @@ export default {
   configured: 'Configured',
   notConfigured: 'Not Configured',
   addProvider: 'Add Provider',
+  addCustomModel: 'Add Custom Model',
   deleteProvider: 'Delete Provider',
   providerName: 'Name',
   models: 'Models',
@@ -187,12 +188,16 @@ export default {
   dataClearTasksOnly: 'Clear Tasks Only',
   dataClearTasksOnlyDescription: 'Delete all tasks and messages, keep settings',
   dataClearSettingsOnly: 'Clear Settings Only',
-  dataClearSettingsOnlyDescription: 'Reset all settings to defaults, keep tasks',
+  dataClearSettingsOnlyDescription:
+    'Reset all settings to defaults, keep tasks',
   dataClearAll: 'Clear All Data',
   dataClearAllDescription: 'Delete all tasks, messages, and settings',
-  dataClearTasksConfirm: 'Are you sure you want to delete all tasks and messages? This action cannot be undone.',
-  dataClearSettingsConfirm: 'Are you sure you want to reset all settings to defaults? This action cannot be undone.',
-  dataClearAllConfirm: 'Are you sure you want to delete ALL data including tasks, messages, and settings? This action cannot be undone.',
+  dataClearTasksConfirm:
+    'Are you sure you want to delete all tasks and messages? This action cannot be undone.',
+  dataClearSettingsConfirm:
+    'Are you sure you want to reset all settings to defaults? This action cannot be undone.',
+  dataClearAllConfirm:
+    'Are you sure you want to delete ALL data including tasks, messages, and settings? This action cannot be undone.',
   dataConfirmTitle: 'Confirm',
   dataConfirmClear: 'Yes, Clear',
   dataCancel: 'Cancel',

@@ -23,6 +23,9 @@ export default {
   warning: 'Warning',
   info: 'Info',
 
+  // Scroll
+  scrollToBottom: 'Scroll to bottom',
+
   // Task actions
   favorite: 'Add to favorites',
   unfavorite: 'Remove from favorites',
@@ -41,5 +44,6 @@ export default {
     serverNotRunning: 'Service not running. Please start the app first',
     requestFailed: 'Request failed: {message}',
     retrying: 'Retrying ({attempt}/{max})...',
+    internalError: 'Internal server error. Please check log file: {logPath}',
   },
 };

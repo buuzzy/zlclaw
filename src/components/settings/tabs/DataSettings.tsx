@@ -248,11 +248,20 @@ export function DataSettings() {
   const getConfirmMessage = (type: ClearType): string => {
     switch (type) {
       case 'tasks':
-        return t.settings.dataClearTasksConfirm || 'Are you sure you want to delete all tasks and messages? This action cannot be undone.';
+        return (
+          t.settings.dataClearTasksConfirm ||
+          'Are you sure you want to delete all tasks and messages? This action cannot be undone.'
+        );
       case 'settings':
-        return t.settings.dataClearSettingsConfirm || 'Are you sure you want to reset all settings to defaults? This action cannot be undone.';
+        return (
+          t.settings.dataClearSettingsConfirm ||
+          'Are you sure you want to reset all settings to defaults? This action cannot be undone.'
+        );
       case 'all':
-        return t.settings.dataClearAllConfirm || 'Are you sure you want to delete ALL data including tasks, messages, and settings? This action cannot be undone.';
+        return (
+          t.settings.dataClearAllConfirm ||
+          'Are you sure you want to delete ALL data including tasks, messages, and settings? This action cannot be undone.'
+        );
       default:
         return '';
     }

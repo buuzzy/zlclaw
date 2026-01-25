@@ -290,6 +290,7 @@ export interface MessageAttachment {
   data: string; // Base64 data for images
   mimeType?: string;
   path?: string; // File path when loaded from disk
+  isLoading?: boolean; // True when attachment is being loaded
 }
 
 export interface AgentMessage {
@@ -1047,27 +1048,60 @@ export function useAgent(): UseAgentReturn {
 
     try {
       const dbMessages = await getMessagesByTaskId(id);
-      const agentMessages: AgentMessage[] = [];
 
-      for (const msg of dbMessages) {
+      // First pass: identify user messages with attachments that need loading
+      const attachmentLoadTasks: {
+        index: number;
+        refs: AttachmentReference[];
+      }[] = [];
+
+      for (let i = 0; i < dbMessages.length; i++) {
+        const msg = dbMessages[i];
+        if (msg.type === 'user' && msg.attachments) {
+          try {
+            const refs = JSON.parse(msg.attachments) as AttachmentReference[];
+            // Check if it's the new format (has path)
+            if (refs.length > 0 && 'path' in refs[0]) {
+              attachmentLoadTasks.push({ index: i, refs });
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        }
+      }
+
+      // Build agent messages immediately with placeholder attachments
+      const agentMessages: AgentMessage[] = [];
+      for (let i = 0; i < dbMessages.length; i++) {
+        const msg = dbMessages[i];
         if (msg.type === 'user') {
-          // Parse and load attachments if present
+          // Check if this message has attachments to load
+          const loadTask = attachmentLoadTasks.find((t) => t.index === i);
           let attachments: MessageAttachment[] | undefined;
-          if (msg.attachments) {
+
+          if (loadTask) {
+            // Create placeholder attachments (loading state)
+            attachments = loadTask.refs.map((ref) => ({
+              id: ref.id,
+              type: ref.type,
+              name: ref.name,
+              data: '', // Empty data, will be loaded later
+              mimeType: ref.mimeType,
+              path: ref.path,
+              isLoading: true,
+            }));
+          } else if (msg.attachments) {
+            // Try old format
             try {
               const refs = JSON.parse(msg.attachments) as AttachmentReference[];
-              // Check if it's the new format (has path) or old format (has data)
-              if (refs.length > 0 && 'path' in refs[0]) {
-                // New format: load from file system
-                attachments = await loadAttachments(refs);
-              } else {
-                // Old format: use directly (backwards compatibility)
+              if (refs.length > 0 && !('path' in refs[0])) {
                 attachments = refs as unknown as MessageAttachment[];
               }
             } catch {
               // Ignore parse errors
             }
           }
+
           agentMessages.push({
             type: 'user' as const,
             content: msg.content || undefined,
@@ -1131,8 +1165,72 @@ export function useAgent(): UseAgentReturn {
         }
       }
 
+      // Set messages immediately (with loading placeholders for attachments)
       setMessages(agentMessages);
       setTaskId(id);
+
+      // Load attachments asynchronously in background
+      if (attachmentLoadTasks.length > 0) {
+        // Use setTimeout to ensure this runs after the initial render
+        setTimeout(async () => {
+          // Check if we're still on the same task
+          if (activeTaskIdRef.current !== id) return;
+
+          const MESSAGE_CONCURRENCY = 2;
+
+          for (
+            let i = 0;
+            i < attachmentLoadTasks.length;
+            i += MESSAGE_CONCURRENCY
+          ) {
+            // Check again if task changed
+            if (activeTaskIdRef.current !== id) return;
+
+            const batch = attachmentLoadTasks.slice(i, i + MESSAGE_CONCURRENCY);
+            const results = await Promise.all(
+              batch.map(async ({ index, refs }) => {
+                const attachments = await loadAttachments(refs);
+                return { index, attachments };
+              })
+            );
+
+            // Update messages with loaded attachments
+            setMessages((prevMessages) => {
+              // Check if still on same task
+              if (activeTaskIdRef.current !== id) return prevMessages;
+
+              const newMessages = [...prevMessages];
+              for (const { index, attachments } of results) {
+                // Find user message with loading attachments that matches this index
+                const task = attachmentLoadTasks.find((t) => t.index === index);
+                if (!task) continue;
+
+                for (let j = 0; j < newMessages.length; j++) {
+                  const msg = newMessages[j];
+                  if (
+                    msg.type === 'user' &&
+                    msg.attachments?.some((a) => a.isLoading) &&
+                    msg.attachments?.length === task.refs.length &&
+                    // Match by first attachment id
+                    msg.attachments[0]?.id === task.refs[0]?.id
+                  ) {
+                    // Match found, update attachments
+                    newMessages[j] = {
+                      ...msg,
+                      attachments: attachments.map((a) => ({
+                        ...a,
+                        isLoading: false,
+                      })),
+                    };
+                    break;
+                  }
+                }
+              }
+              return newMessages;
+            });
+          }
+        }, 0);
+      }
     } catch (error) {
       console.error('Failed to load messages:', error);
     }

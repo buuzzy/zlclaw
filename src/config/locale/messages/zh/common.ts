@@ -23,6 +23,9 @@ export default {
   warning: '警告',
   info: '提示',
 
+  // 滚动
+  scrollToBottom: '滚动到底部',
+
   // 任务操作
   favorite: '收藏',
   unfavorite: '取消收藏',
@@ -39,5 +42,6 @@ export default {
     serverNotRunning: '服务未启动，请先启动应用',
     requestFailed: '请求失败：{message}',
     retrying: '正在重试 ({attempt}/{max})...',
+    internalError: '服务内部错误，详情请查看日志文件：{logPath}',
   },
 };

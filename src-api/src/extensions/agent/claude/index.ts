@@ -524,12 +524,13 @@ function generateFallbackSlug(prompt: string, taskId: string): string {
  * Get or create session working directory
  * If workDir already contains a valid session path (from frontend), use it directly
  * Otherwise, generate a new session folder
+ * NOTE: This function only computes the path, it does NOT create the directory
  */
-async function getSessionWorkDir(
+function getSessionWorkDir(
   workDir: string = DEFAULT_WORK_DIR,
   prompt?: string,
   taskId?: string
-): Promise<string> {
+): string {
   console.log('[Claude] getSessionWorkDir called with:', {
     workDir,
     prompt: prompt?.slice(0, 50),
@@ -548,11 +549,6 @@ async function getSessionWorkDir(
   ) {
     // Frontend already provided a proper session path, use it directly
     console.log('[Claude] Using frontend-provided session path:', expandedPath);
-    try {
-      await mkdir(expandedPath, { recursive: true });
-    } catch (error) {
-      console.error('Failed to create working directory:', error);
-    }
     return expandedPath;
   }
 
@@ -570,14 +566,19 @@ async function getSessionWorkDir(
   }
 
   const targetDir = join(sessionsDir, folderName);
-
-  try {
-    await mkdir(targetDir, { recursive: true });
-  } catch (error) {
-    console.error('Failed to create working directory:', error);
-  }
-
   return targetDir;
+}
+
+/**
+ * Ensure a directory exists, creating it if necessary
+ * This should be called only when actually writing files
+ */
+async function ensureDir(dirPath: string): Promise<void> {
+  try {
+    await mkdir(dirPath, { recursive: true });
+  } catch (error) {
+    console.error('Failed to create directory:', error);
+  }
 }
 
 /**
@@ -588,6 +589,13 @@ async function saveImagesToDisk(
   workDir: string
 ): Promise<string[]> {
   const savedPaths: string[] = [];
+
+  if (images.length === 0) {
+    return savedPaths;
+  }
+
+  // Only create directory when we actually have images to save
+  await ensureDir(workDir);
 
   for (let i = 0; i < images.length; i++) {
     const image = images[i];
@@ -1006,11 +1014,13 @@ ${formattedMessages}
     const session = this.createSession('executing');
     yield { type: 'session', sessionId: session.id };
 
-    const sessionCwd = await getSessionWorkDir(
+    const sessionCwd = getSessionWorkDir(
       options?.cwd || this.config.workDir,
       prompt,
       options?.taskId
     );
+    // Ensure the working directory exists before calling SDK
+    await ensureDir(sessionCwd);
     logger.info(`[Claude ${session.id}] Working directory: ${sessionCwd}`);
     logger.info(`[Claude ${session.id}] Direct execution started`);
     if (options?.conversation && options.conversation.length > 0) {
@@ -1215,48 +1225,12 @@ User's request (answer this AFTER reading the images):
         },
       });
 
-      // Build detailed error message for UI display
-      const errorParts: string[] = [];
-
-      if (error instanceof Error) {
-        errorParts.push(error.message);
-
-        // Add stderr if available (from subprocess errors)
-        const errWithStderr = error as Error & {
-          stderr?: string;
-          stdout?: string;
-          code?: number;
-        };
-        if (errWithStderr.stderr) {
-          errorParts.push(`\nStderr: ${errWithStderr.stderr}`);
-        }
-        if (errWithStderr.stdout) {
-          errorParts.push(`\nStdout: ${errWithStderr.stdout}`);
-        }
-        if (errWithStderr.code !== undefined) {
-          errorParts.push(`\nExit code: ${errWithStderr.code}`);
-        }
-
-        // Add cause if available
-        if ('cause' in error && error.cause) {
-          const cause = error.cause;
-          if (cause instanceof Error) {
-            errorParts.push(`\nCause: ${cause.message}`);
-          } else {
-            errorParts.push(`\nCause: ${String(cause)}`);
-          }
-        }
-      } else {
-        errorParts.push(String(error));
-      }
-
-      // Add environment config info for debugging
-      const envDebug = `\n\nAPI Config:\n- BASE_URL: ${this.config.baseUrl || '(default)'}\n- API_KEY: ${this.config.apiKey ? 'configured' : 'not set'}\n- MODEL: ${this.config.model || '(default)'}\n\n日志文件: ~/.workany/logs/workany.log`;
-      errorParts.push(envDebug);
-
+      // Show simple user-friendly error message
+      // Detailed error info is already logged to file
+      const logPath = '~/.workany/logs/workany.log';
       yield {
         type: 'error',
-        message: errorParts.join(''),
+        message: `__INTERNAL_ERROR__|${logPath}`,
       };
     } finally {
       this.sessions.delete(session.id);
@@ -1274,12 +1248,14 @@ User's request (answer this AFTER reading the images):
     const session = this.createSession('planning');
     yield { type: 'session', sessionId: session.id };
 
-    // Create session working directory even in planning phase
-    const sessionCwd = await getSessionWorkDir(
+    // Get session working directory
+    const sessionCwd = getSessionWorkDir(
       options?.cwd || this.config.workDir,
       prompt,
       options?.taskId
     );
+    // Ensure the working directory exists before calling SDK
+    await ensureDir(sessionCwd);
     console.log(`[Claude ${session.id}] Working directory: ${sessionCwd}`);
     console.log(`[Claude ${session.id}] Planning phase started`);
 
@@ -1403,11 +1379,13 @@ If you need to create any files during planning, use this directory.
 
     console.log(`[Claude ${session.id}] Using plan: ${plan.id} (${plan.goal})`);
 
-    const sessionCwd = await getSessionWorkDir(
+    const sessionCwd = getSessionWorkDir(
       options.cwd || this.config.workDir,
       options.originalPrompt,
       options.taskId
     );
+    // Ensure the working directory exists before calling SDK
+    await ensureDir(sessionCwd);
     logger.info(`[Claude ${session.id}] Working directory: ${sessionCwd}`);
     // Log sandbox config for debugging
     logger.info(`[Claude ${session.id}] Execute sandbox config:`, {

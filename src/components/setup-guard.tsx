@@ -6,10 +6,10 @@
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { Loader2 } from 'lucide-react';
+import { SetupPage } from '@/app/pages/Setup';
 import { API_BASE_URL } from '@/config';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { SetupPage } from '@/app/pages/Setup';
+import { Loader2 } from 'lucide-react';
 
 interface SetupGuardProps {
   children: ReactNode;

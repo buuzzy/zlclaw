@@ -229,7 +229,10 @@ export function SkillsSettings({
               }
             }
           } catch (err) {
-            console.error('[Skills] Failed to load skills from custom path:', err);
+            console.error(
+              '[Skills] Failed to load skills from custom path:',
+              err
+            );
           }
         }
       }
@@ -396,7 +399,7 @@ export function SkillsSettings({
                   <span className="flex min-w-0 flex-1 items-center gap-1.5">
                     <span className="truncate text-left">{skill.name}</span>
                     {skill.source === 'claude' && (
-                      <span className="bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0 rounded px-1 py-0.5 text-[10px] font-medium">
+                      <span className="shrink-0 rounded bg-blue-500/10 px-1 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
                         claude
                       </span>
                     )}
@@ -567,7 +570,7 @@ export function SkillsSettings({
                   {selectedSkill.name}
                 </h3>
                 {selectedSkill.source === 'claude' && (
-                  <span className="bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded px-1.5 py-0.5 text-xs font-medium">
+                  <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
                     claude
                   </span>
                 )}

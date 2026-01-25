@@ -92,6 +92,7 @@ export default {
   configured: '已配置',
   notConfigured: '未配置',
   addProvider: '添加供应商',
+  addCustomModel: '添加自定义模型',
   deleteProvider: '删除供应商',
   providerName: '名称',
   models: '模型',
@@ -184,7 +185,8 @@ export default {
   dataClearAllDescription: '删除所有任务、消息和设置',
   dataClearTasksConfirm: '确定要删除所有任务和消息吗？此操作无法撤销。',
   dataClearSettingsConfirm: '确定要将所有配置重置为默认值吗？此操作无法撤销。',
-  dataClearAllConfirm: '确定要删除所有数据（包括任务、消息和设置）吗？此操作无法撤销。',
+  dataClearAllConfirm:
+    '确定要删除所有数据（包括任务、消息和设置）吗？此操作无法撤销。',
   dataConfirmTitle: '确认',
   dataConfirmClear: '确定清空',
   dataCancel: '取消',

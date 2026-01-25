@@ -1,6 +1,6 @@
 // Override react-markdown types to fix compatibility with React 19
 declare module 'react-markdown' {
-  import { ReactNode, ComponentType } from 'react';
+  import { ComponentType } from 'react';
 
   interface ReactMarkdownProps {
     children: string;

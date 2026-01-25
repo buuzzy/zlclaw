@@ -279,6 +279,28 @@ export const defaultProviders: AIProvider[] = [
     apiKeyUrl: 'https://volcengine.com/L/Sq5rSgyFu_E',
     canDelete: true,
   },
+  {
+    id: '302ai',
+    name: '302.AI',
+    apiKey: '',
+    baseUrl: 'https://api.302.ai/cc',
+    enabled: true,
+    models: ['claude-sonnet-4-5-20250929'],
+    icon: '3',
+    apiKeyUrl: 'https://302.ai/?utm_source=workany_desktop',
+    canDelete: true,
+  },
+  {
+    id: 'ollama',
+    name: 'Ollama',
+    apiKey: '',
+    baseUrl: 'http://localhost:11434',
+    enabled: true,
+    models: ['glm-4.7-flash'],
+    icon: 'O',
+    apiKeyUrl: 'https://docs.ollama.com/integrations/claude-code',
+    canDelete: true,
+  },
 ];
 
 // Default provider IDs that cannot be deleted (derived from defaultProviders)
