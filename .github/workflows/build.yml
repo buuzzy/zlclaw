@@ -154,12 +154,17 @@ jobs:
           mkdir -p dist
           bun build src/index.ts --compile --target=${{ matrix.bun_target }} --outfile dist/workany-api-${{ matrix.rust_target }}.exe
 
+      - name: Build frontend
+        if: steps.check.outputs.skip != 'true'
+        run: pnpm build
+
       - name: Build Tauri app (Linux - skip AppImage)
         if: steps.check.outputs.skip != 'true' && matrix.platform == 'linux'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          tauriScript: pnpm tauri
           args: --target ${{ matrix.tauri_target }} --bundles deb,rpm
 
       - name: Build Tauri app (Windows/macOS)
@@ -175,6 +180,7 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
+          tauriScript: pnpm tauri
           args: --target ${{ matrix.tauri_target }}
 
       - name: Upload artifacts (Linux)
