@@ -34,7 +34,11 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-import { ArtifactPreview, type Artifact } from '@/components/artifacts';
+import {
+  ArtifactPreview,
+  hasValidSearchResults,
+  type Artifact,
+} from '@/components/artifacts';
 import { Logo } from '@/components/common/logo';
 import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
 import { SettingsModal } from '@/components/settings';
@@ -364,6 +368,8 @@ function TaskDetailContent() {
         return 'code';
       case 'website':
         return 'html';
+      case 'websearch':
+        return 'websearch';
       default:
         return 'text';
     }
@@ -443,8 +449,49 @@ function TaskDetailContent() {
           }
         }
 
-        // WebSearch artifacts temporarily disabled
-        // TODO: Re-enable when WebSearchPreview parsing is fixed
+        // Extract WebSearch results as artifacts
+        if (msg.type === 'tool_use' && msg.name === 'WebSearch') {
+          const input = msg.input as Record<string, unknown> | undefined;
+          const query = input?.query as string | undefined;
+          const toolUseId = msg.id;
+          if (query) {
+            // Find the corresponding tool_result by toolUseId or by position
+            let output = '';
+            if (toolUseId) {
+              const resultMsg = messages.find(
+                (m) => m.type === 'tool_result' && m.toolUseId === toolUseId
+              );
+              output = resultMsg?.output || '';
+            }
+            // Fallback: find the next tool_result after this tool_use
+            if (!output) {
+              const msgIndex = messages.indexOf(msg);
+              for (let i = msgIndex + 1; i < messages.length; i++) {
+                if (messages[i].type === 'tool_result') {
+                  output = messages[i].output || '';
+                  break;
+                }
+                if (messages[i].type === 'tool_use') break; // Stop at next tool_use
+              }
+            }
+
+            const artifactId = `websearch-${query}`;
+            // Only add websearch artifact if it has valid search results
+            if (
+              !seenPaths.has(artifactId) &&
+              output &&
+              hasValidSearchResults(output)
+            ) {
+              seenPaths.add(artifactId);
+              extractedArtifacts.push({
+                id: artifactId,
+                name: `Search: ${query.slice(0, 50)}${query.length > 50 ? '...' : ''}`,
+                type: 'websearch',
+                content: output,
+              });
+            }
+          }
+        }
       });
 
       // 1.5. Extract files mentioned in tool_result messages and text messages
@@ -493,6 +540,13 @@ function TaskDetailContent() {
         try {
           const dbFiles = await getFilesByTaskId(taskId);
           dbFiles.forEach((file: LibraryFile) => {
+            // Skip websearch - we extract these from messages with full output content
+            // Check both type and path pattern (search:// is used for WebSearch results)
+            if (
+              file.type === 'websearch' ||
+              file.path?.startsWith('search://')
+            )
+              return;
             // Skip if we already have this file from Write tool
             if (file.path && !seenPaths.has(file.path)) {
               seenPaths.add(file.path);

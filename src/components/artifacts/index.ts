@@ -12,6 +12,11 @@ export { ImagePreview } from './ImagePreview';
 export { PdfPreview } from './PdfPreview';
 export { PptxPreview } from './PptxPreview';
 export { VideoPreview } from './VideoPreview';
+export {
+  WebSearchPreview,
+  parseSearchResults,
+  hasValidSearchResults,
+} from './WebSearchPreview';
 
 // Types
 export type {

@@ -63,7 +63,7 @@ function extractJsonArray(content: string, startIndex: number): string | null {
 }
 
 // Parse search results from artifact content
-function parseSearchResults(content: string): SearchGroup[] {
+export function parseSearchResults(content: string): SearchGroup[] {
   const groups: SearchGroup[] = [];
 
   if (!content || content.trim() === '') {
@@ -174,6 +174,12 @@ function parseSearchResults(content: string): SearchGroup[] {
   return groups;
 }
 
+// Check if content has valid search results
+export function hasValidSearchResults(content: string): boolean {
+  const groups = parseSearchResults(content);
+  return groups.length > 0 && groups.some((g) => g.results.length > 0);
+}
+
 // Get favicon URL for a domain
 function getFaviconUrl(url: string): string {
   try {
@@ -214,14 +220,14 @@ function SearchResultItem({ result }: SearchResultItemProps) {
   return (
     <button
       onClick={() => openUrl(result.url)}
-      className="hover:bg-muted/50 flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors"
+      className="hover:bg-muted/30 flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors"
     >
-      <div className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-lg">
+      <div className="flex size-6 shrink-0 items-center justify-center">
         {faviconUrl ? (
           <img
             src={faviconUrl}
             alt=""
-            className="size-4"
+            className="size-4 rounded-sm"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
               e.currentTarget.nextElementSibling?.classList.remove('hidden');
@@ -233,12 +239,14 @@ function SearchResultItem({ result }: SearchResultItemProps) {
         />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-foreground truncate text-sm font-medium">
+        <div className="text-foreground truncate text-xs font-medium">
           {result.title || domain}
         </div>
-        <div className="text-muted-foreground truncate text-xs">{domain}</div>
+        <div className="text-muted-foreground truncate text-[11px]">
+          {domain}
+        </div>
       </div>
-      <ExternalLink className="text-muted-foreground size-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+      <ExternalLink className="text-muted-foreground size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
     </button>
   );
 }
@@ -277,7 +285,7 @@ function SearchGroupCard({
       </button>
 
       {isExpanded && (
-        <div className="divide-border divide-y">
+        <div className="divide-y divide-none py-2">
           {group.results.map((result, index) => (
             <SearchResultItem key={index} result={result} />
           ))}
