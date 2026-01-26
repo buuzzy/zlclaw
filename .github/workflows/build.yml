@@ -230,41 +230,13 @@ jobs:
 
           cd ..
 
-          # Create claude launcher script (no indentation in heredoc)
-          cat > claude << 'EOF'
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-for DIR in "$SCRIPT_DIR/cli-bundle" "$SCRIPT_DIR/../Resources/_up_/src-api/dist/cli-bundle" "$SCRIPT_DIR/../Resources/cli-bundle"; do
-    if [ -f "$DIR/node" ] && [ -d "$DIR/node_modules" ]; then
-        BUNDLE_DIR="$DIR"
-        break
-    fi
-done
-if [ -z "$BUNDLE_DIR" ]; then
-    echo "Error: cli-bundle not found" >&2
-    exit 1
-fi
-exec "$BUNDLE_DIR/node" "$BUNDLE_DIR/node_modules/@anthropic-ai/claude-code/cli.js" "$@"
-EOF
+          # Create claude launcher script using base64 decode (avoids escape issues)
+          echo "IyEvYmluL2Jhc2gKU0NSSVBUX0RJUj0iJChjZCAiJChkaXJuYW1lICIkMCIpIiAmJiBwd2QpIgpmb3IgRElSIGluICIkU0NSSVBUX0RJUi9jbGktYnVuZGxlIiAiJFNDUklQVF9ESVIvLi4vUmVzb3VyY2VzL191cF8vc3JjLWFwaS9kaXN0L2NsaS1idW5kbGUiICIkU0NSSVBUX0RJUi8uLi9SZXNvdXJjZXMvY2xpLWJ1bmRsZSI7IGRvCiAgICBpZiBbIC1mICIkRElSL25vZGUiIF0gJiYgWyAtZCAiJERJUi9ub2RlX21vZHVsZXMiIF07IHRoZW4KICAgICAgICBCVU5ETEVfRElSPSIkRElSIgogICAgICAgIGJyZWFrCiAgICBmaQpkb25lCmlmIFsgLXogIiRCVU5ETEVfRElSIiBdOyB0aGVuCiAgICBlY2hvICJFcnJvcjogY2xpLWJ1bmRsZSBub3QgZm91bmQiID4mMgogICAgZXhpdCAxCmZpCmV4ZWMgIiRCVU5ETEVfRElSL25vZGUiICIkQlVORExFX0RJUi9ub2RlX21vZHVsZXMvQGFudGhyb3BpYy1haS9jbGF1ZGUtY29kZS9jbGkuanMiICIkQCIK" | base64 -d > claude
           chmod +x claude
           cp claude "claude-${{ matrix.rust_target }}"
 
-          # Create codex launcher script
-          cat > codex << 'EOF'
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-for DIR in "$SCRIPT_DIR/cli-bundle" "$SCRIPT_DIR/../Resources/_up_/src-api/dist/cli-bundle" "$SCRIPT_DIR/../Resources/cli-bundle"; do
-    if [ -f "$DIR/node" ] && [ -d "$DIR/node_modules" ]; then
-        BUNDLE_DIR="$DIR"
-        break
-    fi
-done
-if [ -z "$BUNDLE_DIR" ]; then
-    echo "Error: cli-bundle not found" >&2
-    exit 1
-fi
-exec "$BUNDLE_DIR/node" "$BUNDLE_DIR/node_modules/@openai/codex/bin/codex.js" "$@"
-EOF
+          # Create codex launcher script using base64 decode
+          echo "IyEvYmluL2Jhc2gKU0NSSVBUX0RJUj0iJChjZCAiJChkaXJuYW1lICIkMCIpIiAmJiBwd2QpIgpmb3IgRElSIGluICIkU0NSSVBUX0RJUi9jbGktYnVuZGxlIiAiJFNDUklQVF9ESVIvLi4vUmVzb3VyY2VzL191cF8vc3JjLWFwaS9kaXN0L2NsaS1idW5kbGUiICIkU0NSSVBUX0RJUi8uLi9SZXNvdXJjZXMvY2xpLWJ1bmRsZSI7IGRvCiAgICBpZiBbIC1mICIkRElSL25vZGUiIF0gJiYgWyAtZCAiJERJUi9ub2RlX21vZHVsZXMiIF07IHRoZW4KICAgICAgICBCVU5ETEVfRElSPSIkRElSIgogICAgICAgIGJyZWFrCiAgICBmaQpkb25lCmlmIFsgLXogIiRCVU5ETEVfRElSIiBdOyB0aGVuCiAgICBlY2hvICJFcnJvcjogY2xpLWJ1bmRsZSBub3QgZm91bmQiID4mMgogICAgZXhpdCAxCmZpCmV4ZWMgIiRCVU5ETEVfRElSL25vZGUiICIkQlVORExFX0RJUi9ub2RlX21vZHVsZXMvQG9wZW5haS9jb2RleC9iaW4vY29kZXguanMiICIkQCIK" | base64 -d > codex
           chmod +x codex
           cp codex "codex-${{ matrix.rust_target }}"
 
@@ -317,25 +289,11 @@ EOF
 
           cd ..
 
-          # Create Windows batch launchers (no indentation in heredoc)
-          cat > claude.cmd << 'EOF'
-@echo off
-setlocal
-set "SCRIPT_DIR=%~dp0"
-set "BUNDLE_DIR=%SCRIPT_DIR%cli-bundle"
-if not exist "%BUNDLE_DIR%\node.exe" set "BUNDLE_DIR=%SCRIPT_DIR%..\Resources\cli-bundle"
-"%BUNDLE_DIR%\node.exe" "%BUNDLE_DIR%\node_modules\@anthropic-ai\claude-code\cli.js" %*
-EOF
+          # Create Windows batch launchers using base64 decode (avoids escape issues)
+          echo "QGVjaG8gb2ZmDQpzZXRsb2NhbA0Kc2V0ICJTQ1JJUFRfRElSPSV+ZHAwIg0Kc2V0ICJCVU5ETEVfRElSPSVTQ1JJUFRfRElSJWNsaS1idW5kbGUiDQppZiBub3QgZXhpc3QgIiVCVU5ETEVfRElSJVxub2RlLmV4ZSIgc2V0ICJCVU5ETEVfRElSPSVTQ1JJUFRfRElSJS4uXFJlc291cmNlc1xjbGktYnVuZGxlIg0KIiVCVU5ETEVfRElSJVxub2RlLmV4ZSIgIiVCVU5ETEVfRElSJVxub2RlX21vZHVsZXNcQGFudGhyb3BpYy1haVxjbGF1ZGUtY29kZVxjbGkuanMiICUqDQo=" | base64 -d > claude.cmd
           cp claude.cmd "claude-${{ matrix.rust_target }}.cmd"
 
-          cat > codex.cmd << 'EOF'
-@echo off
-setlocal
-set "SCRIPT_DIR=%~dp0"
-set "BUNDLE_DIR=%SCRIPT_DIR%cli-bundle"
-if not exist "%BUNDLE_DIR%\node.exe" set "BUNDLE_DIR=%SCRIPT_DIR%..\Resources\cli-bundle"
-"%BUNDLE_DIR%\node.exe" "%BUNDLE_DIR%\node_modules\@openai\codex\bin\codex.js" %*
-EOF
+          echo "QGVjaG8gb2ZmDQpzZXRsb2NhbA0Kc2V0ICJTQ1JJUFRfRElSPSV+ZHAwIg0Kc2V0ICJCVU5ETEVfRElSPSVTQ1JJUFRfRElSJWNsaS1idW5kbGUiDQppZiBub3QgZXhpc3QgIiVCVU5ETEVfRElSJVxub2RlLmV4ZSIgc2V0ICJCVU5ETEVfRElSPSVTQ1JJUFRfRElSJS4uXFJlc291cmNlc1xjbGktYnVuZGxlIg0KIiVCVU5ETEVfRElSJVxub2RlLmV4ZSIgIiVCVU5ETEVfRElSJVxub2RlX21vZHVsZXNcQG9wZW5haVxjb2RleFxiaW5cY29kZXguanMiICUqDQo=" | base64 -d > codex.cmd
           cp codex.cmd "codex-${{ matrix.rust_target }}.cmd"
 
           echo "CLI bundle created successfully"
