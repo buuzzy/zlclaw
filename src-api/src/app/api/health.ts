@@ -190,6 +190,8 @@ function checkSidecarClaudeCode(): boolean {
     join(execDir, 'cli-bundle'),
     join(execDir, '..', 'Resources', 'cli-bundle'),
     join(execDir, '..', 'Resources', '_up_', 'src-api', 'dist', 'cli-bundle'),
+    // Windows: Tauri places resources relative to exe with preserved path structure
+    join(execDir, '_up_', 'src-api', 'dist', 'cli-bundle'),
   ];
 
   for (const bundleDir of bundleLocations) {

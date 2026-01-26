@@ -198,26 +198,29 @@ function getSidecarClaudeCodePath(): string | undefined {
     // Get the directory containing the launcher
     const launcherDir = dirname(launcherPath);
 
-    // Check if claude-bundle directory exists alongside the launcher
-    const bundleDir = join(launcherDir, 'claude-bundle');
-    const claudeCliPath = join(
-      bundleDir,
-      'node_modules',
-      '@anthropic-ai',
-      'claude-code',
-      'cli.js'
-    );
-    const nodeBinPath = join(bundleDir, os === 'win32' ? 'node.exe' : 'node');
+    // Check if cli-bundle or claude-bundle directory exists alongside the launcher
+    const bundleNames = ['cli-bundle', 'claude-bundle'];
+    for (const bundleName of bundleNames) {
+      const bundleDir = join(launcherDir, bundleName);
+      const claudeCliPath = join(
+        bundleDir,
+        'node_modules',
+        '@anthropic-ai',
+        'claude-code',
+        'cli.js'
+      );
+      const nodeBinPath = join(bundleDir, os === 'win32' ? 'node.exe' : 'node');
 
-    if (
-      existsSync(bundleDir) &&
-      existsSync(claudeCliPath) &&
-      existsSync(nodeBinPath)
-    ) {
-      console.log(`[Claude] Found bundled Claude Code at: ${launcherPath}`);
-      console.log(`[Claude] Bundle directory: ${bundleDir}`);
-      console.log(`[Claude] Node.js binary: ${nodeBinPath}`);
-      return launcherPath;
+      if (
+        existsSync(bundleDir) &&
+        existsSync(claudeCliPath) &&
+        existsSync(nodeBinPath)
+      ) {
+        console.log(`[Claude] Found bundled Claude Code at: ${launcherPath}`);
+        console.log(`[Claude] Bundle directory: ${bundleDir}`);
+        console.log(`[Claude] Node.js binary: ${nodeBinPath}`);
+        return launcherPath;
+      }
     }
 
     // If no bundle dir but launcher exists, it might be a standalone binary
@@ -227,8 +230,16 @@ function getSidecarClaudeCodePath(): string | undefined {
     }
   }
 
-  // Also try direct check for claude-bundle in common locations
+  // Also try direct check for cli-bundle/claude-bundle in common locations
   const bundleLocations = [
+    // New unified cli-bundle structure
+    join(execDir, 'cli-bundle'),
+    join(execDir, '..', 'Resources', 'cli-bundle'),
+    // macOS: Tauri places resources with preserved path structure
+    join(execDir, '..', 'Resources', '_up_', 'src-api', 'dist', 'cli-bundle'),
+    // Windows: Tauri places resources relative to exe with preserved path structure
+    join(execDir, '_up_', 'src-api', 'dist', 'cli-bundle'),
+    // Legacy claude-bundle for backward compatibility
     join(execDir, 'claude-bundle'),
     join(execDir, '..', 'Resources', 'claude-bundle'),
   ];
@@ -247,13 +258,20 @@ function getSidecarClaudeCodePath(): string | undefined {
 
     if (existsSync(claudeCliPath) && existsSync(nodeBinPath)) {
       // Create a path that points to using the bundled node to run claude
-      // The launcher script should be in the parent directory
-      const launcherPath = join(dirname(bundleDir), claudeName);
-      if (existsSync(launcherPath)) {
-        console.log(
-          `[Claude] Found bundled Claude Code launcher at: ${launcherPath}`
-        );
-        return launcherPath;
+      // The launcher script should be in the parent directory or a few levels up
+      const possibleLauncherDirs = [
+        dirname(bundleDir), // Direct parent
+        join(dirname(bundleDir), '..', '..', '..'), // For _up_/src-api/dist/cli-bundle structure
+      ];
+
+      for (const launcherDir of possibleLauncherDirs) {
+        const launcherPath = join(launcherDir, claudeName);
+        if (existsSync(launcherPath)) {
+          console.log(
+            `[Claude] Found bundled Claude Code launcher at: ${launcherPath}`
+          );
+          return launcherPath;
+        }
       }
 
       // If no launcher, we can still return the path to use bundled node directly

@@ -301,8 +301,91 @@ jobs:
           ls -la cli-bundle/
           du -sh cli-bundle/
 
-      - name: Update tauri.conf.json for CLI bundle
-        if: steps.check.outputs.skip != 'true'
+      - name: Sign CLI bundle binaries (macOS)
+        if: steps.check.outputs.skip != 'true' && startsWith(matrix.platform, 'macos')
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        shell: bash
+        run: |
+          # Import certificate
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          # Decode and save certificate
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o $CERTIFICATE_PATH
+
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificate to keychain
+          security import $CERTIFICATE_PATH -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Sign all executable binaries in cli-bundle
+          echo "Signing binaries in cli-bundle..."
+          cd src-api/dist/cli-bundle
+
+          # Sign node binary first
+          if [ -f "node" ]; then
+            echo "Signing node..."
+            codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp node
+          fi
+
+          # Sign ALL .dylib files (including @img/sharp-libvips-*)
+          echo "Signing all .dylib files..."
+          find . -name "*.dylib" -type f | while read -r file; do
+            echo "Signing $file..."
+            codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$file" || true
+          done
+
+          # Sign ALL .node files (including @img/sharp-*)
+          echo "Signing all .node files..."
+          find . -name "*.node" -type f | while read -r file; do
+            echo "Signing $file..."
+            codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$file" || true
+          done
+
+          # Sign ALL .so files
+          echo "Signing all .so files..."
+          find . -name "*.so" -type f | while read -r file; do
+            echo "Signing $file..."
+            codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$file" || true
+          done
+
+          # Sign ripgrep and other Mach-O executables
+          echo "Signing Mach-O executable binaries..."
+          find . -type f \( -name "rg" -o -name "node" -o -perm -u+x \) 2>/dev/null | while read -r file; do
+            # Skip non-binary files
+            case "$file" in
+              *.js|*.json|*.md|*.txt|*.ts|*.mjs|*.cjs|*.map|*.yml|*.yaml) continue ;;
+            esac
+            # Check if it's a Mach-O binary
+            if file "$file" 2>/dev/null | grep -q "Mach-O"; then
+              echo "Signing Mach-O: $file..."
+              codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$file" || true
+            fi
+          done
+
+          cd ../../..
+
+          # Also sign the launcher scripts (they are executables)
+          echo "Signing launcher scripts..."
+          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp src-api/dist/claude
+          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp src-api/dist/codex
+
+          echo "All binaries signed successfully"
+
+          # Cleanup
+          security delete-keychain $KEYCHAIN_PATH
+          rm -f $CERTIFICATE_PATH
+
+      - name: Update tauri.conf.json for CLI bundle (Unix)
+        if: steps.check.outputs.skip != 'true' && matrix.platform != 'windows'
         shell: bash
         run: |
           node -e "
@@ -312,7 +395,7 @@ jobs:
           if (!config.bundle.externalBin) config.bundle.externalBin = [];
           if (!config.bundle.resources) config.bundle.resources = [];
 
-          // Add CLI launchers
+          // Add CLI launchers (Unix only - they are shell scripts)
           if (!config.bundle.externalBin.includes('../src-api/dist/claude')) {
             config.bundle.externalBin.unshift('../src-api/dist/claude');
           }
@@ -330,7 +413,38 @@ jobs:
           }
 
           fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(config, null, 2));
-          console.log('Updated tauri.conf.json with CLI bundle config');
+          console.log('Updated tauri.conf.json with CLI bundle config (Unix)');
+          "
+
+      - name: Update tauri.conf.json for CLI bundle (Windows)
+        if: steps.check.outputs.skip != 'true' && matrix.platform == 'windows'
+        shell: bash
+        run: |
+          node -e "
+          const fs = require('fs');
+          const config = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+
+          if (!config.bundle.resources) config.bundle.resources = [];
+
+          // Windows: Don't add to externalBin (Tauri expects .exe files)
+          // Remove any existing claude/codex from externalBin
+          if (config.bundle.externalBin) {
+            config.bundle.externalBin = config.bundle.externalBin.filter(bin =>
+              !bin.includes('claude') && !bin.includes('codex')
+            );
+          }
+
+          // Add cli-bundle as resource (backend will call node directly)
+          const cliResource = '../src-api/dist/cli-bundle/**/*';
+          if (!config.bundle.resources.includes(cliResource)) {
+            config.bundle.resources = config.bundle.resources.filter(r =>
+              !r.includes('claude-bundle') && !r.includes('codex-bundle') && !r.includes('cli-bundle')
+            );
+            config.bundle.resources.push(cliResource);
+          }
+
+          fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(config, null, 2));
+          console.log('Updated tauri.conf.json with CLI bundle config (Windows - resources only)');
           "
 
       - name: Build frontend
