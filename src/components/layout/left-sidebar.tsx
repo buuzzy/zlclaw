@@ -440,7 +440,8 @@ export function LeftSidebar({
                 className="hover:bg-sidebar-accent relative flex size-9 cursor-pointer items-center justify-center rounded-xl transition-all duration-200"
               >
                 {logoHovered ? (
-                  <PanelLeftOpen className="text-sidebar-foreground size-5" />
+                  // <PanelLeftOpen className="text-sidebar-foreground size-5" />
+                  <img src={ImageLogo} alt="WorkAny" className="size-9" />
                 ) : (
                   <img src={ImageLogo} alt="WorkAny" className="size-9" />
                 )}

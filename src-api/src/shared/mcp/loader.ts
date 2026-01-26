@@ -107,19 +107,49 @@ async function loadMcpServersFromFile(
 }
 
 /**
+ * MCP configuration interface
+ */
+export interface McpConfig {
+  enabled: boolean;
+  userDirEnabled: boolean;
+  appDirEnabled: boolean;
+  mcpConfigPath?: string;
+}
+
+/**
  * Load MCP servers configuration from multiple sources:
- * - ~/.workany/mcp.json (WorkAny specific)
- * - ~/.claude/settings.json (Claude Code system config)
+ * - ~/.workany/mcp.json (WorkAny specific / App directory)
+ * - ~/.claude/settings.json (Claude Code system config / User directory)
  *
+ * @param mcpConfig Optional config to filter which sources to load
  * @returns Record of server name to config, merged from all sources
  */
-export async function loadMcpServers(): Promise<
-  Record<string, McpServerConfig>
-> {
+export async function loadMcpServers(
+  mcpConfig?: McpConfig
+): Promise<Record<string, McpServerConfig>> {
+  // If MCP is globally disabled, return empty
+  if (mcpConfig && !mcpConfig.enabled) {
+    console.log('[MCP] MCP disabled globally, skipping server load');
+    return {};
+  }
+
   const configPaths = getMcpConfigPaths();
   const allServers: Record<string, McpServerConfig> = {};
 
   for (const { name, path: configPath } of configPaths) {
+    // Filter based on mcpConfig settings
+    if (mcpConfig) {
+      // 'workany' = App directory, 'claude' = User directory
+      if (name === 'workany' && mcpConfig.appDirEnabled === false) {
+        console.log('[MCP] App directory MCP disabled, skipping workany config');
+        continue;
+      }
+      if (name === 'claude' && mcpConfig.userDirEnabled === false) {
+        console.log('[MCP] User directory MCP disabled, skipping claude config');
+        continue;
+      }
+    }
+
     const servers = await loadMcpServersFromFile(configPath, name);
     // Merge servers, workany config takes precedence over claude
     Object.assign(allServers, servers);

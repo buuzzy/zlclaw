@@ -1,8 +1,22 @@
 import { useEffect, useState } from 'react';
-import { getMcpConfigPath } from '@/shared/lib/paths';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { FolderOpen, Loader2, Plus, Settings, Trash2, X } from 'lucide-react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import {
+  ChevronDown,
+  FileJson,
+  FolderOpen,
+  Layers,
+  Loader2,
+  MoreHorizontal,
+  Package,
+  Plus,
+  Search,
+  Settings2,
+  Trash2,
+  User,
+  X,
+} from 'lucide-react';
 
 import { Switch } from '../components/Switch';
 import { API_BASE_URL } from '../constants';
@@ -10,52 +24,178 @@ import type {
   MCPConfig,
   MCPServerStdio,
   MCPServerUI,
-  MCPSubTab,
   SettingsTabProps,
 } from '../types';
 
+// MCP Card component
+function MCPCard({
+  server,
+  onConfigure,
+  onDelete,
+}: {
+  server: MCPServerUI;
+  onConfigure: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useLanguage();
+  const [showMenu, setShowMenu] = useState(false);
+
+  const isConfigured =
+    server.type === 'stdio' ? !!server.command : !!server.url;
+
+  return (
+    <div className="border-border bg-background hover:border-foreground/20 relative flex flex-col rounded-xl border p-4 transition-colors">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-foreground text-sm font-medium">
+          {server.name}
+        </span>
+        {isConfigured && (
+          <span className="size-2 rounded-full bg-emerald-500" />
+        )}
+      </div>
+
+      <p className="text-muted-foreground mb-4 flex-1 text-xs">
+        {server.type === 'stdio'
+          ? t.settings.mcpTypeStdio
+          : t.settings.mcpTypeHttp}
+      </p>
+
+      <div className="border-border flex items-center justify-between border-t pt-3">
+        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          {server.source === 'claude' ? (
+            <User className="size-3" />
+          ) : (
+            <Package className="size-3" />
+          )}
+          <span>
+            {server.source === 'claude'
+              ? t.settings.mcpSourceUser
+              : t.settings.mcpSourceApp}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onConfigure}
+            className="text-muted-foreground hover:bg-accent hover:text-foreground rounded p-1.5 transition-colors"
+            title={t.settings.mcpGoToConfigure}
+          >
+            <Settings2 className="size-4" />
+          </button>
+          {server.source !== 'claude' && (
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="text-muted-foreground hover:bg-accent hover:text-foreground rounded p-1.5 transition-colors"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+              {showMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowMenu(false)}
+                  />
+                  <div className="border-border bg-popover absolute right-0 bottom-full z-20 mb-1 min-w-max rounded-lg border py-1 shadow-lg">
+                    <button
+                      onClick={() => {
+                        onDelete();
+                        setShowMenu(false);
+                      }}
+                      className="hover:bg-destructive/10 text-destructive flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors"
+                    >
+                      <Trash2 className="size-3.5 shrink-0" />
+                      {t.settings.mcpDeleteServer}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type MainTab = 'installed' | 'settings';
+
+interface KeyValuePair {
+  id: string;
+  key: string;
+  value: string;
+}
+
+interface ConfigDialogState {
+  open: boolean;
+  mode: 'add' | 'edit';
+  serverName: string;
+  transportType: 'stdio' | 'http';
+  command: string;
+  args: string[];
+  env: KeyValuePair[];
+  url: string;
+  headers: KeyValuePair[];
+  editServerId?: string;
+}
+
+const initialConfigDialog: ConfigDialogState = {
+  open: false,
+  mode: 'add',
+  serverName: '',
+  transportType: 'stdio',
+  command: '',
+  args: [],
+  env: [],
+  url: '',
+  headers: [],
+};
+
 export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
   const [servers, setServers] = useState<MCPServerUI[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<MCPSubTab>('settings');
-  const [showAddServer, setShowAddServer] = useState(false);
+  const [mainTab, setMainTab] = useState<MainTab>('installed');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [newServer, setNewServer] = useState<MCPServerUI>({
-    id: '',
-    name: '',
-    type: 'stdio',
-    enabled: false,
-    command: '',
-    args: [],
-    url: '',
-    headers: {},
-    autoExecute: true,
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'user' | 'app'>('all');
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [mcpDirs, setMcpDirs] = useState<{ user: string; app: string }>({
+    user: '',
+    app: '',
   });
+
+  // Import by JSON dialog
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importJson, setImportJson] = useState('');
+
+  // Config dialog (for both add and edit)
+  const [configDialog, setConfigDialog] =
+    useState<ConfigDialogState>(initialConfigDialog);
+
   const { t } = useLanguage();
 
-  const selectedServer = servers.find((s) => s.id === activeSubTab);
+  // Filter and sort servers
+  const filteredServers = servers
+    .filter((server) => {
+      if (
+        searchQuery &&
+        !server.name.toLowerCase().includes(searchQuery.toLowerCase())
+      ) {
+        return false;
+      }
+      if (filterType === 'user' && server.source !== 'claude') return false;
+      if (filterType === 'app' && server.source !== 'workany') return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const aConfigured = a.type === 'stdio' ? !!a.command : !!a.url;
+      const bConfigured = b.type === 'stdio' ? !!b.command : !!b.url;
+      if (aConfigured && !bConfigured) return -1;
+      if (bConfigured && !aConfigured) return 1;
+      return 0;
+    });
 
-  // Check if server is configured
-  const isServerConfigured = (server: MCPServerUI) => {
-    if (server.type === 'stdio') {
-      return !!server.command;
-    } else {
-      return !!server.url;
-    }
-  };
-
-  // Sort servers
-  const sortedServers = [...servers].sort((a, b) => {
-    const aConfigured = isServerConfigured(a);
-    const bConfigured = isServerConfigured(b);
-    if (a.enabled && aConfigured && !(b.enabled && bConfigured)) return -1;
-    if (b.enabled && bConfigured && !(a.enabled && aConfigured)) return 1;
-    if (aConfigured && !bConfigured) return -1;
-    if (bConfigured && !aConfigured) return 1;
-    return 0;
-  });
-
-  // Load MCP config from all sources (workany and claude)
+  // Load MCP config from all sources
   useEffect(() => {
     async function loadMCPConfig() {
       setLoading(true);
@@ -70,8 +210,8 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
         }
 
         const serverList: MCPServerUI[] = [];
+        const dirs: { user: string; app: string } = { user: '', app: '' };
 
-        // Load servers from all config sources
         for (const configInfo of result.configs as {
           name: string;
           path: string;
@@ -81,6 +221,12 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
             MCPServerStdio | { url: string; headers?: Record<string, string> }
           >;
         }[]) {
+          if (configInfo.name === 'claude') {
+            dirs.user = configInfo.path;
+          } else if (configInfo.name === 'workany') {
+            dirs.app = configInfo.path;
+          }
+
           if (!configInfo.exists) continue;
 
           for (const [id, serverConfig] of Object.entries(configInfo.servers)) {
@@ -104,6 +250,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
           }
         }
 
+        setMcpDirs(dirs);
         setServers(serverList);
       } catch (err) {
         console.error('[MCP] Failed to load MCP config:', err);
@@ -117,24 +264,25 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
     loadMCPConfig();
   }, []);
 
-  // Save MCP config via API (only saves workany servers)
+  // Save MCP config via API
   const saveMCPConfig = async (serverList: MCPServerUI[]) => {
     try {
       const mcpServers: Record<string, unknown> = {};
       for (const server of serverList) {
-        // Only save workany servers, skip claude servers
         if (server.source === 'claude') continue;
-        if (!server.enabled) continue;
         if (server.type === 'http') {
           mcpServers[server.name] = {
             url: server.url || '',
             headers: server.headers,
           };
         } else {
-          mcpServers[server.name] = {
+          const serverConfig: Record<string, unknown> = {
             command: server.command || '',
-            args: server.args,
           };
+          if (server.args && server.args.length > 0) {
+            serverConfig.args = server.args;
+          }
+          mcpServers[server.name] = serverConfig;
         }
       }
 
@@ -157,552 +305,911 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
     }
   };
 
-  const handleServerUpdate = (
-    serverId: string,
-    updates: Partial<MCPServerUI>
-  ) => {
-    const newServers = servers.map((s) => {
-      if (s.id !== serverId) return s;
-      const updated = { ...s, ...updates };
-      if (!isServerConfigured(updated) && updated.enabled) {
-        updated.enabled = false;
+  // Open folder in system file manager
+  const openFolderInSystem = async (folderPath: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/files/open`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: folderPath, expandHome: true }),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        console.error('[MCP] Failed to open folder:', data.error);
       }
-      return updated;
-    });
-    setServers(newServers);
-    saveMCPConfig(newServers);
+    } catch (err) {
+      console.error('[MCP] Error opening folder:', err);
+    }
   };
 
-  const handleAddServer = () => {
-    if (!newServer.id) return;
-    const fullId = `workany-${newServer.id}`;
-    if (servers.some((s) => s.id === fullId || s.name === newServer.id)) return;
+  // Handle import by JSON
+  const handleImportJson = () => {
+    try {
+      const parsed = JSON.parse(importJson);
+      const mcpServers = parsed.mcpServers || parsed;
 
-    const serverToAdd: MCPServerUI = {
-      ...newServer,
-      id: fullId,
-      name: newServer.id,
-      enabled: false,
-      source: 'workany',
-    };
+      if (!mcpServers || typeof mcpServers !== 'object') {
+        console.error('[MCP] Invalid JSON format');
+        return;
+      }
 
-    const newServers = [...servers, serverToAdd];
-    setServers(newServers);
-    saveMCPConfig(newServers);
+      const newServers: MCPServerUI[] = [...servers];
 
-    setNewServer({
-      id: '',
-      name: '',
-      type: 'stdio',
-      enabled: false,
-      command: '',
-      args: [],
-      url: '',
-      headers: {},
-      autoExecute: true,
-    });
-    setShowAddServer(false);
-    setActiveSubTab(serverToAdd.id);
+      for (const [name, config] of Object.entries(mcpServers)) {
+        const cfg = config as Record<string, unknown>;
+        const existingIndex = newServers.findIndex(
+          (s) => s.name === name && s.source === 'workany'
+        );
+
+        const serverData: MCPServerUI = {
+          id: `workany-${name}`,
+          name,
+          type: cfg.url ? 'http' : 'stdio',
+          enabled: true,
+          command: cfg.command as string | undefined,
+          args: cfg.args as string[] | undefined,
+          url: cfg.url as string | undefined,
+          headers: cfg.headers as Record<string, string> | undefined,
+          autoExecute: true,
+          source: 'workany',
+        };
+
+        if (existingIndex >= 0) {
+          newServers[existingIndex] = serverData;
+        } else {
+          newServers.push(serverData);
+        }
+      }
+
+      setServers(newServers);
+      saveMCPConfig(newServers);
+      setShowImportDialog(false);
+      setImportJson('');
+    } catch (err) {
+      console.error('[MCP] Failed to parse JSON:', err);
+    }
   };
 
+  // Helper to convert object to KeyValuePair array
+  const objectToKeyValuePairs = (
+    obj: Record<string, string> | undefined
+  ): KeyValuePair[] => {
+    if (!obj) return [];
+    return Object.entries(obj).map(([key, value], index) => ({
+      id: `kv-${Date.now()}-${index}`,
+      key,
+      value,
+    }));
+  };
+
+  // Helper to convert KeyValuePair array to object
+  const keyValuePairsToObject = (
+    pairs: KeyValuePair[]
+  ): Record<string, string> => {
+    const obj: Record<string, string> = {};
+    for (const pair of pairs) {
+      if (pair.key.trim()) {
+        obj[pair.key] = pair.value;
+      }
+    }
+    return obj;
+  };
+
+  // Handle configure server (open config dialog for editing)
+  const handleConfigureServer = (server: MCPServerUI) => {
+    setConfigDialog({
+      open: true,
+      mode: 'edit',
+      serverName: server.name,
+      transportType: server.type,
+      command: server.command || '',
+      args: server.args || [],
+      env: [],
+      url: server.url || '',
+      headers: objectToKeyValuePairs(server.headers),
+      editServerId: server.id,
+    });
+  };
+
+  // Handle save config dialog
+  const handleSaveConfigDialog = () => {
+    if (!configDialog.serverName) return;
+
+    const newServers = [...servers];
+    const headersObj = keyValuePairsToObject(configDialog.headers);
+    const hasHeaders = Object.keys(headersObj).length > 0;
+
+    if (configDialog.mode === 'edit' && configDialog.editServerId) {
+      const index = newServers.findIndex(
+        (s) => s.id === configDialog.editServerId
+      );
+      if (index >= 0) {
+        newServers[index] = {
+          ...newServers[index],
+          name: configDialog.serverName,
+          type: configDialog.transportType,
+          command:
+            configDialog.transportType === 'stdio'
+              ? configDialog.command
+              : undefined,
+          args:
+            configDialog.transportType === 'stdio'
+              ? configDialog.args
+              : undefined,
+          url:
+            configDialog.transportType === 'http'
+              ? configDialog.url
+              : undefined,
+          headers:
+            configDialog.transportType === 'http' && hasHeaders
+              ? headersObj
+              : undefined,
+        };
+      }
+    } else {
+      const fullId = `workany-${configDialog.serverName}`;
+      if (
+        newServers.some(
+          (s) => s.id === fullId || s.name === configDialog.serverName
+        )
+      ) {
+        console.error('[MCP] Server name already exists');
+        return;
+      }
+
+      newServers.push({
+        id: fullId,
+        name: configDialog.serverName,
+        type: configDialog.transportType,
+        enabled: true,
+        command:
+          configDialog.transportType === 'stdio'
+            ? configDialog.command
+            : undefined,
+        args:
+          configDialog.transportType === 'stdio'
+            ? configDialog.args
+            : undefined,
+        url:
+          configDialog.transportType === 'http' ? configDialog.url : undefined,
+        headers:
+          configDialog.transportType === 'http' && hasHeaders
+            ? headersObj
+            : undefined,
+        autoExecute: true,
+        source: 'workany',
+      });
+    }
+
+    setServers(newServers);
+    saveMCPConfig(newServers);
+    setConfigDialog(initialConfigDialog);
+  };
+
+  // Handle delete server
   const handleDeleteServer = (serverId: string) => {
     const server = servers.find((s) => s.id === serverId);
-    // Only allow deleting workany servers
     if (!server || server.source === 'claude') return;
 
     const newServers = servers.filter((s) => s.id !== serverId);
     setServers(newServers);
     saveMCPConfig(newServers);
-    setActiveSubTab('settings');
   };
 
-  const handleHeaderChange = (
-    serverId: string,
-    key: string,
-    value: string,
-    oldKey?: string
-  ) => {
-    const server = servers.find((s) => s.id === serverId);
-    if (!server) return;
-    const newHeaders = { ...server.headers };
-    if (oldKey && oldKey !== key) delete newHeaders[oldKey];
-    if (key) newHeaders[key] = value;
-    handleServerUpdate(serverId, { headers: newHeaders });
+  // Argument handlers
+  const handleAddArg = () => {
+    setConfigDialog({
+      ...configDialog,
+      args: [...configDialog.args, ''],
+    });
   };
 
-  const handleRemoveHeader = (serverId: string, key: string) => {
-    const server = servers.find((s) => s.id === serverId);
-    if (!server) return;
-    const newHeaders = { ...server.headers };
-    delete newHeaders[key];
-    handleServerUpdate(serverId, { headers: newHeaders });
+  const handleUpdateArg = (index: number, value: string) => {
+    const newArgs = [...configDialog.args];
+    newArgs[index] = value;
+    setConfigDialog({ ...configDialog, args: newArgs });
   };
 
-  const handleAddHeader = (serverId: string) => {
-    const server = servers.find((s) => s.id === serverId);
-    if (!server) return;
-    const newHeaders = { ...server.headers, '': '' };
-    handleServerUpdate(serverId, { headers: newHeaders });
+  const handleRemoveArg = (index: number) => {
+    const newArgs = configDialog.args.filter((_, i) => i !== index);
+    setConfigDialog({ ...configDialog, args: newArgs });
+  };
+
+  // Env handlers
+  const handleAddEnv = () => {
+    setConfigDialog({
+      ...configDialog,
+      env: [
+        ...configDialog.env,
+        { id: `env-${Date.now()}`, key: '', value: '' },
+      ],
+    });
+  };
+
+  const handleUpdateEnv = (id: string, key: string, value: string) => {
+    setConfigDialog({
+      ...configDialog,
+      env: configDialog.env.map((item) =>
+        item.id === id ? { ...item, key, value } : item
+      ),
+    });
+  };
+
+  const handleRemoveEnv = (id: string) => {
+    setConfigDialog({
+      ...configDialog,
+      env: configDialog.env.filter((item) => item.id !== id),
+    });
+  };
+
+  // Header handlers
+  const handleAddHeader = () => {
+    setConfigDialog({
+      ...configDialog,
+      headers: [
+        ...configDialog.headers,
+        { id: `header-${Date.now()}`, key: '', value: '' },
+      ],
+    });
+  };
+
+  const handleUpdateHeader = (id: string, key: string, value: string) => {
+    setConfigDialog({
+      ...configDialog,
+      headers: configDialog.headers.map((item) =>
+        item.id === id ? { ...item, key, value } : item
+      ),
+    });
+  };
+
+  const handleRemoveHeader = (id: string) => {
+    setConfigDialog({
+      ...configDialog,
+      headers: configDialog.headers.filter((item) => item.id !== id),
+    });
   };
 
   if (loading) {
     return (
-      <div className="text-muted-foreground flex h-full items-center justify-center">
-        <Loader2 className="size-5 animate-spin" />
+      <div className="text-muted-foreground flex h-full items-center justify-center gap-2">
+        <Loader2 className="size-4 animate-spin" />
+        {t.common.loading}
       </div>
     );
   }
 
   return (
-    <div className="-m-6 flex h-[calc(100%+48px)]">
-      {/* Left Panel */}
-      <div className="border-border flex w-52 flex-col border-r">
-        <div className="space-y-0.5 p-2">
-          <button
-            onClick={() => {
-              setActiveSubTab('settings');
-              setShowAddServer(false);
-            }}
-            className={cn(
-              'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-200',
-              activeSubTab === 'settings' && !showAddServer
-                ? 'bg-accent text-accent-foreground font-medium'
-                : 'text-foreground/70 hover:bg-accent/50 hover:text-foreground'
-            )}
-          >
-            <Settings className="size-4" />
-            <span className="flex-1 text-left">{t.settings.mcpSettings}</span>
-          </button>
-        </div>
-
-        <div className="border-border flex min-h-0 flex-1 flex-col border-t">
-          <div className="text-muted-foreground flex shrink-0 items-center px-4 py-2 text-xs font-medium">
-            {t.settings.mcpServers}
-          </div>
-          <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
-            {error ? (
-              <div className="p-2 text-center text-xs text-red-500">
-                {error}
-              </div>
-            ) : sortedServers.length === 0 ? (
-              <div className="text-muted-foreground p-2 text-center text-xs">
-                {t.settings.mcpNoServers}
-              </div>
-            ) : (
-              sortedServers.map((server) => (
-                <button
-                  key={server.id}
-                  onClick={() => {
-                    setActiveSubTab(server.id);
-                    setShowAddServer(false);
-                  }}
-                  className={cn(
-                    'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-200',
-                    activeSubTab === server.id && !showAddServer
-                      ? 'bg-accent text-accent-foreground font-medium'
-                      : 'text-foreground/70 hover:bg-accent/50 hover:text-foreground'
-                  )}
-                >
-                  <span className="bg-muted text-muted-foreground relative flex size-6 items-center justify-center rounded text-xs font-medium">
-                    {server.type === 'http' ? 'H' : 'S'}
-                    {isServerConfigured(server) && (
-                      <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-500" />
-                    )}
-                  </span>
-                  <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                    <span className="truncate text-left">{server.name}</span>
-                    {server.source === 'claude' && (
-                      <span className="shrink-0 rounded bg-blue-500/10 px-1 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
-                        claude
-                      </span>
-                    )}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="border-border mt-auto flex items-center gap-1 border-t p-2">
-          <button
-            onClick={() => setShowAddServer(true)}
-            className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-7 items-center justify-center rounded transition-colors"
-            title={t.settings.mcpAddServer}
-          >
-            <Plus className="size-4" />
-          </button>
-          {selectedServer && selectedServer.source !== 'claude' && (
+    <>
+      <div className="-m-6 flex h-[calc(100%+48px)] flex-col">
+        {/* Tab Bar */}
+        <div className="border-border shrink-0 border-b px-6">
+          <div className="flex items-center gap-6">
             <button
-              onClick={() => handleDeleteServer(selectedServer.id)}
-              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive flex size-7 items-center justify-center rounded transition-colors"
-              title={t.settings.mcpDeleteServer}
+              onClick={() => setMainTab('installed')}
+              className={cn(
+                'relative py-4 text-sm font-medium transition-colors',
+                mainTab === 'installed'
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
             >
-              <Trash2 className="size-4" />
+              {t.settings.skillsInstalled}
+              {mainTab === 'installed' && (
+                <span className="bg-foreground absolute bottom-0 left-0 h-0.5 w-full" />
+              )}
             </button>
+            <button
+              onClick={() => setMainTab('settings')}
+              className={cn(
+                'relative py-4 text-sm font-medium transition-colors',
+                mainTab === 'settings'
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {t.settings.title}
+              {mainTab === 'settings' && (
+                <span className="bg-foreground absolute bottom-0 left-0 h-0.5 w-full" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {mainTab === 'installed' ? (
+            <div className="flex h-full flex-col">
+              {/* Filter Bar */}
+              <div className="flex shrink-0 items-center justify-between gap-4 px-6 pt-6 pb-0">
+                <div className="flex items-center gap-3">
+                  {/* Filter Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowFilterMenu(!showFilterMenu)}
+                      className="border-input bg-background hover:bg-accent flex h-9 items-center gap-2 rounded-lg border px-3 text-sm transition-colors"
+                    >
+                      {filterType === 'user' ? (
+                        <User className="size-4" />
+                      ) : filterType === 'app' ? (
+                        <Package className="size-4" />
+                      ) : (
+                        <Layers className="size-4" />
+                      )}
+                      <span>
+                        {filterType === 'all'
+                          ? t.settings.skillsFilterAll
+                          : filterType === 'user'
+                            ? t.settings.skillsFilterUser
+                            : t.settings.skillsFilterApp}
+                      </span>
+                      <ChevronDown className="size-3.5" />
+                    </button>
+                    {showFilterMenu && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setShowFilterMenu(false)}
+                        />
+                        <div className="border-border bg-popover absolute top-full left-0 z-20 mt-1 min-w-max rounded-lg border py-1 shadow-lg">
+                          {(['all', 'user', 'app'] as const).map((type) => (
+                            <button
+                              key={type}
+                              onClick={() => {
+                                setFilterType(type);
+                                setShowFilterMenu(false);
+                              }}
+                              className={cn(
+                                'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors',
+                                filterType === type
+                                  ? 'bg-accent text-accent-foreground'
+                                  : 'hover:bg-accent'
+                              )}
+                            >
+                              {type === 'user' ? (
+                                <User className="size-4" />
+                              ) : type === 'app' ? (
+                                <Package className="size-4" />
+                              ) : (
+                                <Layers className="size-4" />
+                              )}
+                              {type === 'all'
+                                ? t.settings.skillsFilterAll
+                                : type === 'user'
+                                  ? t.settings.skillsFilterUser
+                                  : t.settings.skillsFilterApp}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Search Input */}
+                  <div className="relative">
+                    <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={t.settings.mcpSearch}
+                      className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-9 w-64 rounded-lg border py-2 pr-3 pl-9 text-sm focus:ring-2 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Add Button with Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowAddMenu(!showAddMenu)}
+                    className="bg-foreground text-background hover:bg-foreground/90 flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
+                  >
+                    <Plus className="size-4" />
+                    {t.settings.add}
+                    <ChevronDown className="size-4" />
+                  </button>
+                  {showAddMenu && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setShowAddMenu(false)}
+                      />
+                      <div className="border-border bg-popover absolute top-full right-0 z-20 mt-1 min-w-[180px] rounded-xl border py-1 shadow-lg">
+                        <button
+                          onClick={() => {
+                            setShowImportDialog(true);
+                            setShowAddMenu(false);
+                          }}
+                          className="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
+                        >
+                          <FileJson className="text-muted-foreground size-4 shrink-0" />
+                          <span className="text-foreground text-sm">
+                            {t.settings.mcpImportByJson}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setConfigDialog({
+                              ...initialConfigDialog,
+                              open: true,
+                            });
+                            setShowAddMenu(false);
+                          }}
+                          className="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
+                        >
+                          <Settings2 className="text-muted-foreground size-4 shrink-0" />
+                          <span className="text-foreground text-sm">
+                            {t.settings.mcpDirectConfig}
+                          </span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Directory Info */}
+              {filterType !== 'all' && (
+                <div className="border-border flex shrink-0 items-center gap-3 border-b px-6 py-3">
+                  <span className="text-muted-foreground shrink-0 text-sm">
+                    {t.settings.mcpLoadFrom}
+                  </span>
+                  <code className="bg-muted text-foreground truncate rounded px-2 py-1 text-xs">
+                    {filterType === 'user' ? mcpDirs.user : mcpDirs.app}
+                  </code>
+                  <button
+                    onClick={() =>
+                      openFolderInSystem(
+                        filterType === 'user' ? mcpDirs.user : mcpDirs.app
+                      )
+                    }
+                    className="text-muted-foreground hover:text-foreground hover:bg-accent shrink-0 rounded p-1.5 transition-colors"
+                  >
+                    <FolderOpen className="size-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* MCP Grid */}
+              <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                {error ? (
+                  <div className="flex h-32 items-center justify-center text-sm text-red-500">
+                    {error}
+                  </div>
+                ) : filteredServers.length === 0 ? (
+                  <div className="text-muted-foreground flex h-32 items-center justify-center text-sm">
+                    {searchQuery
+                      ? t.settings.mcpNoResults
+                      : t.settings.mcpNoServers}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    {filteredServers.map((server) => (
+                      <MCPCard
+                        key={server.id}
+                        server={server}
+                        onConfigure={() => handleConfigureServer(server)}
+                        onDelete={() => handleDeleteServer(server.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Settings Tab Content */
+            <div className="space-y-4 p-6">
+              {/* Global Enable Switch */}
+              <div className="border-border bg-background rounded-xl border p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-foreground text-sm font-medium">
+                      {t.settings.mcpEnabled}
+                    </h3>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      {t.settings.mcpEnabledDescription}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.mcpEnabled !== false}
+                    onChange={(checked) =>
+                      onSettingsChange({ ...settings, mcpEnabled: checked })
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* User Directory */}
+              <div
+                className={cn(
+                  'border-border bg-background rounded-xl border p-4 transition-opacity',
+                  settings.mcpEnabled === false && 'opacity-50'
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-foreground text-sm font-medium">
+                      {t.settings.mcpLoadFromUser}
+                    </h3>
+                    <code className="bg-muted text-muted-foreground mt-2 block truncate rounded px-2 py-1 text-xs">
+                      {mcpDirs.user || '~/.claude/settings.json'}
+                    </code>
+                  </div>
+                  <div className="ml-4 flex shrink-0 items-center gap-2">
+                    <button
+                      onClick={() => openFolderInSystem(mcpDirs.user)}
+                      className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
+                    >
+                      <FolderOpen className="size-4" />
+                    </button>
+                    <Switch
+                      checked={
+                        settings.mcpEnabled !== false &&
+                        settings.mcpUserDirEnabled !== false
+                      }
+                      onChange={(checked) =>
+                        onSettingsChange({
+                          ...settings,
+                          mcpUserDirEnabled: checked,
+                        })
+                      }
+                      disabled={settings.mcpEnabled === false}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* App Directory */}
+              <div
+                className={cn(
+                  'border-border bg-background rounded-xl border p-4 transition-opacity',
+                  settings.mcpEnabled === false && 'opacity-50'
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-foreground text-sm font-medium">
+                      {t.settings.mcpLoadFromApp}
+                    </h3>
+                    <code className="bg-muted text-muted-foreground mt-2 block truncate rounded px-2 py-1 text-xs">
+                      {mcpDirs.app || '~/.workany/mcp.json'}
+                    </code>
+                  </div>
+                  <div className="ml-4 flex shrink-0 items-center gap-2">
+                    <button
+                      onClick={() => openFolderInSystem(mcpDirs.app)}
+                      className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
+                    >
+                      <FolderOpen className="size-4" />
+                    </button>
+                    <Switch
+                      checked={
+                        settings.mcpEnabled !== false &&
+                        settings.mcpAppDirEnabled !== false
+                      }
+                      onChange={(checked) =>
+                        onSettingsChange({
+                          ...settings,
+                          mcpAppDirEnabled: checked,
+                        })
+                      }
+                      disabled={settings.mcpEnabled === false}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Right Panel */}
-      <div className="flex-1 overflow-y-auto">
-        {showAddServer ? (
-          <div className="p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-foreground text-base font-medium">
-                {t.settings.mcpAddServer}
-              </h3>
-              <button
-                onClick={() => setShowAddServer(false)}
-                className="hover:bg-muted rounded p-1"
-              >
-                <X className="text-muted-foreground size-4" />
-              </button>
+      {/* Import Dialog - Using Radix Dialog */}
+      <DialogPrimitive.Root
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+      >
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/60" />
+          <DialogPrimitive.Content className="bg-background border-border fixed top-1/2 left-1/2 z-[100] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-6 shadow-2xl focus:outline-none">
+            <DialogPrimitive.Title className="text-foreground text-lg font-semibold">
+              {t.settings.mcpImportTitle}
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Description className="text-muted-foreground mt-2 text-sm">
+              {t.settings.mcpImportDesc}
+            </DialogPrimitive.Description>
+
+            <textarea
+              value={importJson}
+              onChange={(e) => setImportJson(e.target.value)}
+              placeholder={t.settings.mcpImportPlaceholder}
+              className="border-input bg-muted text-foreground placeholder:text-muted-foreground focus:ring-ring mt-4 h-64 w-full resize-none rounded-lg border p-3 font-mono text-sm focus:ring-2 focus:outline-none"
+            />
+
+            <button
+              onClick={handleImportJson}
+              disabled={!importJson.trim()}
+              className="bg-foreground text-background hover:bg-foreground/90 mt-4 flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {t.settings.mcpImportButton}
+            </button>
+
+            <DialogPrimitive.Close className="text-muted-foreground hover:text-foreground absolute top-4 right-4 rounded-sm transition-opacity focus:outline-none">
+              <X className="size-5" />
+            </DialogPrimitive.Close>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
+
+      {/* Config Dialog - Using Radix Dialog */}
+      <DialogPrimitive.Root
+        open={configDialog.open}
+        onOpenChange={(open) => {
+          if (!open) setConfigDialog(initialConfigDialog);
+        }}
+      >
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/60" />
+          <DialogPrimitive.Content className="bg-background border-border fixed top-1/2 left-1/2 z-[100] flex max-h-[85vh] w-[500px] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border shadow-2xl focus:outline-none">
+            {/* Header */}
+            <div className="border-border shrink-0 border-b px-6 py-4">
+              <DialogPrimitive.Title className="text-foreground text-lg font-semibold">
+                {t.settings.mcpConfigTitle}
+              </DialogPrimitive.Title>
+              <DialogPrimitive.Close className="text-muted-foreground hover:text-foreground absolute top-4 right-4 rounded-sm transition-opacity focus:outline-none">
+                <X className="size-5" />
+              </DialogPrimitive.Close>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.mcpType}
-                </label>
-                <select
-                  value={newServer.type}
-                  onChange={(e) =>
-                    setNewServer({
-                      ...newServer,
-                      type: e.target.value as 'stdio' | 'http',
-                    })
-                  }
-                  className="border-input bg-background text-foreground focus:ring-ring h-10 w-full max-w-xs cursor-pointer rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                >
-                  <option value="stdio">{t.settings.mcpTypeStdio}</option>
-                  <option value="http">{t.settings.mcpTypeHttp}</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.mcpId}
-                </label>
-                <p className="text-muted-foreground text-xs">
-                  {t.settings.mcpIdHint}
-                </p>
-                <input
-                  type="text"
-                  value={newServer.id}
-                  onChange={(e) =>
-                    setNewServer({ ...newServer, id: e.target.value })
-                  }
-                  placeholder="my-mcp-server"
-                  className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                />
-              </div>
-
-              {newServer.type === 'stdio' && (
-                <>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-foreground block text-sm font-medium">
-                      {t.settings.mcpCommand}
-                    </label>
-                    <input
-                      type="text"
-                      value={newServer.command}
-                      onChange={(e) =>
-                        setNewServer({ ...newServer, command: e.target.value })
-                      }
-                      placeholder="npx"
-                      className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-foreground block text-sm font-medium">
-                      {t.settings.mcpArgs}
-                    </label>
-                    <input
-                      type="text"
-                      value={(newServer.args || []).join(' ')}
-                      onChange={(e) =>
-                        setNewServer({
-                          ...newServer,
-                          args: e.target.value.split(' ').filter((a) => a),
-                        })
-                      }
-                      placeholder="-y @modelcontextprotocol/server-filesystem /tmp"
-                      className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                    />
-                  </div>
-                </>
-              )}
-
-              {newServer.type === 'http' && (
-                <div className="flex flex-col gap-2">
-                  <label className="text-foreground block text-sm font-medium">
-                    {t.settings.mcpUrl}
+            {/* Content */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+              <div className="space-y-4">
+                {/* Server Name */}
+                <div>
+                  <label className="text-foreground mb-2 block text-sm font-medium">
+                    {t.settings.mcpServerName}
                   </label>
                   <input
                     type="text"
-                    value={newServer.url}
+                    value={configDialog.serverName}
                     onChange={(e) =>
-                      setNewServer({ ...newServer, url: e.target.value })
+                      setConfigDialog({
+                        ...configDialog,
+                        serverName: e.target.value,
+                      })
                     }
-                    placeholder="https://mcprouter.to/my-server"
+                    placeholder={t.settings.mcpServerNamePlaceholder}
                     className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                   />
                 </div>
-              )}
 
-              <button
-                onClick={handleAddServer}
-                disabled={!newServer.id}
-                className="bg-primary text-primary-foreground hover:bg-primary/90 mt-4 h-10 w-full rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {t.settings.add}
-              </button>
-            </div>
-          </div>
-        ) : activeSubTab === 'settings' ? (
-          <div className="p-6">
-            <div className="space-y-6">
-              <div>
-                <p className="text-muted-foreground text-sm">
-                  {t.settings.mcpDescription}
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between">
+                {/* Transport Type */}
                 <div>
-                  <label className="text-foreground text-sm font-medium">
-                    {t.settings.mcpEnabled}
+                  <label className="text-foreground mb-2 block text-sm font-medium">
+                    {t.settings.mcpTransportType}
                   </label>
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    {t.settings.mcpEnabledDescription}
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.mcpEnabled ?? true}
-                  onChange={(checked) =>
-                    onSettingsChange({ ...settings, mcpEnabled: checked })
-                  }
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.mcpConfigPath}
-                </label>
-                <p className="text-muted-foreground text-xs">
-                  {t.settings.mcpConfigPathDescription}
-                </p>
-                <div className="flex items-center gap-2">
-                  <div className="relative max-w-md flex-1">
-                    <FolderOpen className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={settings.mcpConfigPath}
-                      onChange={(e) =>
-                        onSettingsChange({
-                          ...settings,
-                          mcpConfigPath: e.target.value,
-                        })
-                      }
-                      placeholder="~/.workany/mcp.json"
-                      className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border pr-3 pl-10 text-sm focus:border-transparent focus:ring-2 focus:outline-none"
-                    />
-                  </div>
-                  <button
-                    onClick={async () => {
-                      const path = await getMcpConfigPath();
-                      onSettingsChange({ ...settings, mcpConfigPath: path });
-                    }}
-                    className="text-muted-foreground hover:text-foreground border-border hover:bg-accent h-10 cursor-pointer rounded-lg border px-3 text-sm transition-colors"
+                  <select
+                    value={configDialog.transportType}
+                    onChange={(e) =>
+                      setConfigDialog({
+                        ...configDialog,
+                        transportType: e.target.value as 'stdio' | 'http',
+                      })
+                    }
+                    className="border-input bg-background text-foreground focus:ring-ring h-10 w-full cursor-pointer rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                   >
-                    {t.common.reset}
-                  </button>
+                    <option value="stdio">stdio</option>
+                    <option value="http">http</option>
+                  </select>
                 </div>
-              </div>
-            </div>
-          </div>
-        ) : selectedServer ? (
-          <div className="p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h3 className="text-foreground text-base font-medium">
-                  {selectedServer.name}
-                </h3>
-                {selectedServer.source === 'claude' && (
-                  <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
-                    claude
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <div
-                    className={cn(
-                      'size-2 rounded-full',
-                      isServerConfigured(selectedServer)
-                        ? 'bg-emerald-500'
-                        : 'bg-gray-300'
-                    )}
-                  />
-                  <span className="text-muted-foreground text-xs">
-                    {isServerConfigured(selectedServer)
-                      ? t.settings.configured
-                      : t.settings.notConfigured}
-                  </span>
-                </div>
-                <Switch
-                  checked={selectedServer.enabled}
-                  onChange={(checked) =>
-                    handleServerUpdate(selectedServer.id, { enabled: checked })
-                  }
-                  disabled={!isServerConfigured(selectedServer)}
-                />
-              </div>
-            </div>
 
-            <div className="space-y-6">
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.mcpType}
-                </label>
-                <select
-                  value={selectedServer.type}
-                  onChange={(e) =>
-                    handleServerUpdate(selectedServer.id, {
-                      type: e.target.value as 'stdio' | 'http',
-                    })
-                  }
-                  className="border-input bg-background text-foreground focus:ring-ring h-10 w-full max-w-xs cursor-pointer rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                >
-                  <option value="stdio">{t.settings.mcpTypeStdio}</option>
-                  <option value="http">{t.settings.mcpTypeHttp}</option>
-                </select>
-              </div>
-
-              {selectedServer.type === 'stdio' && (
-                <>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-foreground block text-sm font-medium">
-                      {t.settings.mcpCommand}
-                    </label>
-                    <input
-                      type="text"
-                      value={selectedServer.command || ''}
-                      onChange={(e) =>
-                        handleServerUpdate(selectedServer.id, {
-                          command: e.target.value,
-                        })
-                      }
-                      placeholder="npx"
-                      className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-foreground block text-sm font-medium">
-                      {t.settings.mcpArgs}
-                    </label>
-                    <input
-                      type="text"
-                      value={(selectedServer.args || []).join(' ')}
-                      onChange={(e) =>
-                        handleServerUpdate(selectedServer.id, {
-                          args: e.target.value.split(' ').filter((a) => a),
-                        })
-                      }
-                      placeholder="-y @modelcontextprotocol/server-filesystem /tmp"
-                      className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                    />
-                  </div>
-                </>
-              )}
-
-              {selectedServer.type === 'http' && (
-                <>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-foreground block text-sm font-medium">
-                      {t.settings.mcpUrl}
-                    </label>
-                    <input
-                      type="text"
-                      value={selectedServer.url || ''}
-                      onChange={(e) =>
-                        handleServerUpdate(selectedServer.id, {
-                          url: e.target.value,
-                        })
-                      }
-                      placeholder="https://mcprouter.to/my-server"
-                      className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-foreground text-sm font-medium">
-                        {t.settings.mcpHeaders}
+                {configDialog.transportType === 'stdio' ? (
+                  <>
+                    {/* Command */}
+                    <div>
+                      <label className="text-foreground mb-2 block text-sm font-medium">
+                        {t.settings.mcpCommand}
                       </label>
-                      <button
-                        onClick={() => handleAddHeader(selectedServer.id)}
-                        className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs"
-                      >
-                        <Plus className="size-3" />
-                        {t.settings.mcpAddHeader}
-                      </button>
+                      <input
+                        type="text"
+                        value={configDialog.command}
+                        onChange={(e) =>
+                          setConfigDialog({
+                            ...configDialog,
+                            command: e.target.value,
+                          })
+                        }
+                        placeholder={t.settings.mcpCommandPlaceholder}
+                        className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                      />
                     </div>
-                    <div className="space-y-2">
-                      {Object.entries(selectedServer.headers || {}).map(
-                        ([key, value], index) => (
+
+                    {/* Arguments */}
+                    <div>
+                      <label className="text-foreground mb-2 block text-sm font-medium">
+                        {t.settings.mcpArguments}
+                      </label>
+                      <div className="space-y-2">
+                        {configDialog.args.map((arg, index) => (
                           <div key={index} className="flex items-center gap-2">
                             <input
                               type="text"
-                              value={key}
+                              value={arg}
                               onChange={(e) =>
-                                handleHeaderChange(
-                                  selectedServer.id,
-                                  e.target.value,
-                                  value,
-                                  key
-                                )
+                                handleUpdateArg(index, e.target.value)
                               }
-                              placeholder="Header Name"
-                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-9 w-36 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                            />
-                            <span className="text-muted-foreground">=</span>
-                            <input
-                              type="text"
-                              value={value}
-                              onChange={(e) =>
-                                handleHeaderChange(
-                                  selectedServer.id,
-                                  key,
-                                  e.target.value
-                                )
-                              }
-                              placeholder="Value"
-                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-9 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                              placeholder={t.settings.mcpArgumentPlaceholder}
+                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                             />
                             <button
-                              onClick={() =>
-                                handleRemoveHeader(selectedServer.id, key)
-                              }
-                              className="text-muted-foreground hover:text-destructive flex size-9 items-center justify-center rounded-lg transition-colors"
+                              onClick={() => handleRemoveArg(index)}
+                              className="text-muted-foreground hover:text-destructive flex size-10 items-center justify-center rounded-lg transition-colors"
                             >
                               <Trash2 className="size-4" />
                             </button>
                           </div>
-                        )
-                      )}
+                        ))}
+                        <button
+                          onClick={handleAddArg}
+                          className="text-primary hover:text-primary/80 flex items-center gap-1 text-sm"
+                        >
+                          <Plus className="size-4" />
+                          {t.settings.mcpAddArgument}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </>
-              )}
+
+                    {/* Environment Variables */}
+                    <div>
+                      <label className="text-foreground mb-2 block text-sm font-medium">
+                        {t.settings.mcpEnvVariables}
+                      </label>
+                      <div className="space-y-2">
+                        {configDialog.env.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center gap-2"
+                          >
+                            <input
+                              type="text"
+                              value={item.key}
+                              onChange={(e) =>
+                                handleUpdateEnv(
+                                  item.id,
+                                  e.target.value,
+                                  item.value
+                                )
+                              }
+                              placeholder={t.settings.mcpEnvVariableName}
+                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-32 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                            />
+                            <span className="text-muted-foreground">=</span>
+                            <input
+                              type="text"
+                              value={item.value}
+                              onChange={(e) =>
+                                handleUpdateEnv(
+                                  item.id,
+                                  item.key,
+                                  e.target.value
+                                )
+                              }
+                              placeholder={t.settings.mcpEnvVariableValue}
+                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                            />
+                            <button
+                              onClick={() => handleRemoveEnv(item.id)}
+                              className="text-muted-foreground hover:text-destructive flex size-10 items-center justify-center rounded-lg transition-colors"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={handleAddEnv}
+                          className="text-primary hover:text-primary/80 flex items-center gap-1 text-sm"
+                        >
+                          <Plus className="size-4" />
+                          {t.settings.mcpAddEnvVariable}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* URL */}
+                    <div>
+                      <label className="text-foreground mb-2 block text-sm font-medium">
+                        {t.settings.mcpServerUrl}
+                      </label>
+                      <input
+                        type="text"
+                        value={configDialog.url}
+                        onChange={(e) =>
+                          setConfigDialog({
+                            ...configDialog,
+                            url: e.target.value,
+                          })
+                        }
+                        placeholder={t.settings.mcpServerUrlPlaceholder}
+                        className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Custom Headers */}
+                    <div>
+                      <label className="text-foreground mb-2 block text-sm font-medium">
+                        {t.settings.mcpCustomHeaders}{' '}
+                        <span className="text-muted-foreground font-normal">
+                          {t.settings.mcpCustomHeadersOptional}
+                        </span>
+                      </label>
+                      <div className="space-y-2">
+                        {configDialog.headers.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center gap-2"
+                          >
+                            <input
+                              type="text"
+                              value={item.key}
+                              onChange={(e) =>
+                                handleUpdateHeader(
+                                  item.id,
+                                  e.target.value,
+                                  item.value
+                                )
+                              }
+                              placeholder="Header Name"
+                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-32 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                            />
+                            <span className="text-muted-foreground">=</span>
+                            <input
+                              type="text"
+                              value={item.value}
+                              onChange={(e) =>
+                                handleUpdateHeader(
+                                  item.id,
+                                  item.key,
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Value"
+                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                            />
+                            <button
+                              onClick={() => handleRemoveHeader(item.id)}
+                              className="text-muted-foreground hover:text-destructive flex size-10 items-center justify-center rounded-lg transition-colors"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={handleAddHeader}
+                          className="text-primary hover:text-primary/80 flex items-center gap-1 text-sm"
+                        >
+                          <Plus className="size-4" />
+                          {t.settings.mcpAddCustomHeader}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-            {t.settings.mcpSelectServer}
-          </div>
-        )}
-      </div>
-    </div>
+
+            {/* Footer */}
+            <div className="border-border shrink-0 border-t px-6 py-4">
+              <button
+                onClick={handleSaveConfigDialog}
+                disabled={!configDialog.serverName}
+                className="bg-foreground text-background hover:bg-foreground/90 flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {t.settings.mcpSave}
+              </button>
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
+    </>
   );
 }

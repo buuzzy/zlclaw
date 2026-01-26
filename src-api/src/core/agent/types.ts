@@ -106,6 +106,34 @@ export interface AgentConfig {
   providerConfig?: Record<string, unknown>;
 }
 
+/**
+ * Skills configuration for loading skills from different directories
+ */
+export interface SkillsConfig {
+  /** Whether skills are globally enabled */
+  enabled: boolean;
+  /** Whether to load skills from user directory (~/.claude/skills) */
+  userDirEnabled: boolean;
+  /** Whether to load skills from app directory (workspace/skills) */
+  appDirEnabled: boolean;
+  /** Custom skills directory path (legacy support) */
+  skillsPath?: string;
+}
+
+/**
+ * MCP configuration for loading MCP servers from different config files
+ */
+export interface McpConfig {
+  /** Whether MCP is globally enabled */
+  enabled: boolean;
+  /** Whether to load MCP servers from user directory (claude config) */
+  userDirEnabled: boolean;
+  /** Whether to load MCP servers from app directory (workany config) */
+  appDirEnabled: boolean;
+  /** Custom MCP config file path (legacy support) */
+  mcpConfigPath?: string;
+}
+
 export interface AgentOptions {
   /** Session ID for continuing conversations */
   sessionId?: string;
@@ -125,8 +153,10 @@ export interface AgentOptions {
   sandbox?: SandboxConfig;
   /** Image attachments for vision capabilities */
   images?: ImageAttachment[];
-  /** Custom skills directory path */
-  skillsPath?: string;
+  /** Skills configuration */
+  skillsConfig?: SkillsConfig;
+  /** MCP configuration */
+  mcpConfig?: McpConfig;
 }
 
 export interface PlanOptions extends AgentOptions {

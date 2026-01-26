@@ -17,6 +17,8 @@ export type {
   AgentProvider,
   AgentOptions,
   IAgent,
+  SkillsConfig,
+  McpConfig,
 } from '@/core/agent/types';
 
 /**
@@ -48,6 +50,26 @@ export interface ImageAttachment {
 }
 
 /**
+ * Skills configuration for API requests
+ */
+export interface SkillsConfigRequest {
+  enabled: boolean;
+  userDirEnabled: boolean;
+  appDirEnabled: boolean;
+  skillsPath?: string;
+}
+
+/**
+ * MCP configuration for API requests
+ */
+export interface McpConfigRequest {
+  enabled: boolean;
+  userDirEnabled: boolean;
+  appDirEnabled: boolean;
+  mcpConfigPath?: string;
+}
+
+/**
  * API Request type for agent endpoints
  */
 export interface AgentRequest {
@@ -63,7 +85,10 @@ export interface AgentRequest {
   // Workspace settings
   workDir?: string; // Working directory for session outputs
   taskId?: string; // Task ID for session folder
-  skillsPath?: string; // Custom skills directory path
+  // Skills configuration
+  skillsConfig?: SkillsConfigRequest;
+  // MCP configuration
+  mcpConfig?: McpConfigRequest;
   // Provider selection (optional, defaults to env config)
   provider?: 'claude' | 'deepagents';
   // Custom model configuration

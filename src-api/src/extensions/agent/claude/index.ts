@@ -37,7 +37,9 @@ import type {
   ConversationMessage,
   ExecuteOptions,
   ImageAttachment,
+  McpConfig,
   PlanOptions,
+  SkillsConfig,
 } from '@/core/agent/types';
 import {
   DEFAULT_API_HOST,
@@ -892,6 +894,37 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
+   * Build settingSources based on skillsConfig
+   * Controls which skill directories are loaded by the Claude Agent SDK
+   */
+  private buildSettingSources(skillsConfig?: SkillsConfig): ('user' | 'project')[] {
+    // If skillsConfig is not provided or skills are globally disabled, use minimal sources
+    if (!skillsConfig || !skillsConfig.enabled) {
+      logger.info('[ClaudeAgent] Skills disabled or no config, using project only');
+      return ['project'];
+    }
+
+    const sources: ('user' | 'project')[] = [];
+
+    // 'user' source loads skills from ~/.claude/skills
+    if (skillsConfig.userDirEnabled) {
+      sources.push('user');
+    }
+
+    // 'project' source loads skills from project directory
+    // Always include project for project-specific settings
+    sources.push('project');
+
+    // Note: App directory skills (workspace/skills) are handled separately
+    // as they are not part of the standard Claude SDK settingSources
+    if (skillsConfig.appDirEnabled) {
+      logger.info('[ClaudeAgent] App directory skills enabled (handled via custom skill loading)');
+    }
+
+    return sources.length > 0 ? sources : ['project'];
+  }
+
+  /**
    * Build environment variables for the SDK query
    * Supports custom API endpoint and API key (including OpenRouter)
    * Also includes extended PATH for packaged app compatibility
@@ -1123,21 +1156,24 @@ User's request (answer this AFTER reading the images):
     if (!claudeCodePath) {
       yield {
         type: 'error',
-        message:
-          'Claude Code is not installed. Please install it with: npm install -g @anthropic-ai/claude-code',
+        message: '__CLAUDE_CODE_NOT_FOUND__',
       };
       yield { type: 'done' };
       return;
     }
 
-    // Load user-configured MCP servers from ~/.workany/mcp.json
-    const userMcpServers = await loadMcpServers();
+    // Load user-configured MCP servers based on mcpConfig settings
+    const userMcpServers = await loadMcpServers(options?.mcpConfig as McpConfig | undefined);
 
     // Build query options
-    // Always use ['user', 'project'] to load skills and MCP from user's ~/.claude directory
+    // Use settingSources based on skillsConfig to control skill loading
+    // - 'user' source loads from ~/.claude directory (User skills)
+    // - 'project' source loads from project/.claude directory
     // User's custom API settings from WorkAny settings page are passed via env config
     // which takes priority over ~/.claude/settings.json because we set ANTHROPIC_API_KEY directly
-    const settingSources: ('user' | 'project')[] = ['user', 'project'];
+    const settingSources: ('user' | 'project')[] = this.buildSettingSources(options?.skillsConfig);
+    logger.info(`[Claude ${session.id}] Skills config:`, options?.skillsConfig);
+    logger.info(`[Claude ${session.id}] Setting sources: ${settingSources.join(', ')}`);
 
     const queryOptions: Options = {
       cwd: sessionCwd,
@@ -1225,13 +1261,31 @@ User's request (answer this AFTER reading the images):
         },
       });
 
-      // Show simple user-friendly error message
-      // Detailed error info is already logged to file
-      const logPath = '~/.workany/logs/workany.log';
-      yield {
-        type: 'error',
-        message: `__INTERNAL_ERROR__|${logPath}`,
-      };
+      // Check for API key related errors
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isApiKeyError =
+        errorMessage.includes('Invalid API key') ||
+        errorMessage.includes('invalid_api_key') ||
+        errorMessage.includes('API key') ||
+        errorMessage.includes('authentication') ||
+        errorMessage.includes('Please run /login') ||
+        errorMessage.includes('Unauthorized') ||
+        errorMessage.includes('401');
+
+      if (isApiKeyError) {
+        yield {
+          type: 'error',
+          message: '__API_KEY_ERROR__',
+        };
+      } else {
+        // Show simple user-friendly error message
+        // Detailed error info is already logged to file
+        const logPath = '~/.workany/logs/workany.log';
+        yield {
+          type: 'error',
+          message: `__INTERNAL_ERROR__|${logPath}`,
+        };
+      }
     } finally {
       this.sessions.delete(session.id);
       yield { type: 'done' };
@@ -1274,8 +1328,7 @@ If you need to create any files during planning, use this directory.
     if (!claudeCodePath) {
       yield {
         type: 'error',
-        message:
-          'Claude Code is not installed. Please install it with: npm install -g @anthropic-ai/claude-code',
+        message: '__CLAUDE_CODE_NOT_FOUND__',
       };
       yield { type: 'done' };
       return;
@@ -1427,19 +1480,20 @@ If you need to create any files during planning, use this directory.
     if (!claudeCodePath) {
       yield {
         type: 'error',
-        message:
-          'Claude Code is not installed. Please install it with: npm install -g @anthropic-ai/claude-code',
+        message: '__CLAUDE_CODE_NOT_FOUND__',
       };
       yield { type: 'done' };
       return;
     }
 
-    // Load user-configured MCP servers from ~/.workany/mcp.json
-    const userMcpServers = await loadMcpServers();
+    // Load user-configured MCP servers based on mcpConfig settings
+    const userMcpServers = await loadMcpServers(options.mcpConfig as McpConfig | undefined);
 
     // Build query options
-    // Always use ['user', 'project'] to load skills and MCP from user's ~/.claude directory
-    const execSettingSources: ('user' | 'project')[] = ['user', 'project'];
+    // Use settingSources based on skillsConfig to control skill loading
+    const execSettingSources: ('user' | 'project')[] = this.buildSettingSources(options.skillsConfig);
+    logger.info(`[Claude ${session.id}] Execute skills config:`, options.skillsConfig);
+    logger.info(`[Claude ${session.id}] Execute setting sources: ${execSettingSources.join(', ')}`);
 
     const queryOptions: Options = {
       cwd: sessionCwd,

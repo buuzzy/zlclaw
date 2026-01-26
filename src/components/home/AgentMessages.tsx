@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { AgentMessage } from '@/shared/hooks/useAgent';
 import { useLanguage } from '@/shared/providers/language-provider';
 import {
@@ -8,10 +9,14 @@ import {
   Globe,
   Monitor,
   Search,
+  Settings,
   Terminal,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+import { SettingsModal } from '@/components/settings';
+import { Button } from '@/components/ui/button';
 
 interface AgentMessagesProps {
   messages: AgentMessage[];
@@ -59,6 +64,89 @@ function getToolIcon(toolName: string) {
     default:
       return <Terminal className="size-4" />;
   }
+}
+
+// Error message component that handles special error codes
+function ErrorMessage({ message }: { message: string }) {
+  const { t } = useLanguage();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Check for Claude Code not found error
+  if (message === '__CLAUDE_CODE_NOT_FOUND__') {
+    return (
+      <>
+        <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
+          <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <span>{t.common.errors.claudeCodeNotFound}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="mr-2 size-4" />
+            {t.common.errors.configureModel}
+          </Button>
+        </div>
+        <SettingsModal
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          initialCategory="model"
+        />
+      </>
+    );
+  }
+
+  // Check for API key error
+  if (message === '__API_KEY_ERROR__') {
+    return (
+      <>
+        <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
+          <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <span>{t.common.errors.apiKeyError}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="mr-2 size-4" />
+            {t.common.errors.configureApiKey}
+          </Button>
+        </div>
+        <SettingsModal
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          initialCategory="model"
+        />
+      </>
+    );
+  }
+
+  // Check for internal error
+  if (message.startsWith('__INTERNAL_ERROR__|')) {
+    const logPath = message.replace('__INTERNAL_ERROR__|', '');
+    return (
+      <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <AlertCircle className="size-4" />
+        <span>
+          {t.common.errors.internalError.replace('{logPath}', logPath)}
+        </span>
+      </div>
+    );
+  }
+
+  // Default error display
+  return (
+    <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+      <AlertCircle className="size-4" />
+      <span>{message}</span>
+    </div>
+  );
 }
 
 export function AgentMessages({ messages, isRunning }: AgentMessagesProps) {
@@ -169,10 +257,7 @@ export function AgentMessages({ messages, isRunning }: AgentMessagesProps) {
           )}
 
           {message.type === 'error' && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-              <AlertCircle className="size-4" />
-              <span>{message.message}</span>
-            </div>
+            <ErrorMessage message={message.message || ''} />
           )}
         </div>
       ))}

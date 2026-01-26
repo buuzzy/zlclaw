@@ -108,20 +108,45 @@ export default {
 
   // Skills
   skills: 'Skills',
+  skillsInstalled: '已安装',
   skillsSettings: 'Skill 设置',
-  skillsDescription: '配置技能定义以扩展功能',
+  skillsDescription: '管理智能体的能力和工具',
   skillsEnabled: '启用 Skills',
   skillsEnabledDescription: '在智能体对话时加载 Skills',
   skillsList: '技能',
   skillsEmpty: '暂无 Skills',
   skillsAdd: '添加 Skill',
-  skillsDelete: '删除 Skill',
+  skillsDelete: '删除',
   skillsName: 'Skill 名称',
+  skillsNamePlaceholder: 'my-skill',
   skillsSource: '目录',
   skillsFiles: '文件',
-  skillsNoFiles: '暂无文件',
+  skillsNoFiles: '此 Skill 暂无文件',
   skillsSelect: '选择一个 Skill 查看详情',
-  skillsOpenFolder: '在访达中打开',
+  skillsOpenFolder: '打开文件夹',
+  skillsSearch: '搜索 Skill',
+  skillsFilterAll: '全部',
+  skillsFilterUser: '用户',
+  skillsFilterApp: '应用',
+  skillsSourceUser: '用户',
+  skillsSourceApp: '应用',
+  skillsLoadFrom: '从此目录加载',
+  skillsLoadFromUser: '从用户目录加载 Skills',
+  skillsLoadFromApp: '从应用目录加载 Skills',
+  skillsAddCustom: '添加自定义 Skills',
+  skillsAddCustomDescription: '添加一个 Skill 为你或你的团队解锁新能力',
+  skillsCreate: '创建',
+  skillsNoResults: '没有匹配的 Skills',
+  skillsNoDescription: '暂无描述',
+  skillsDeleteTitle: '删除 Skill',
+  skillsDeleteDescription: '如需删除此 Skill，请手动删除以下路径的文件夹：',
+  skillsAddToDirectory: '添加 Skills 到应用目录',
+  skillsAddToDirectoryDesc: '打开 Skills 文件夹添加文件',
+  skillsImportGitHub: '从 GitHub 导入',
+  skillsImportGitHubDesc: '粘贴仓库链接开始导入',
+  skillsImportGitHubDialogDesc: '从公开的 GitHub 仓库直接导入 Skill。',
+  skillsImport: '导入',
+  skillsImporting: '导入中...',
 
   // MCP
   mcpSettings: 'MCP 设置',
@@ -146,10 +171,73 @@ export default {
   mcpAddHeader: '添加请求头',
   mcpVerify: '验证 (查看工具)',
   mcpAddServer: '添加服务器',
+  mcpAddServerDescription: '添加自定义 MCP 服务器以扩展智能体能力',
   mcpDeleteServer: '删除服务器',
   mcpSelectServer: '选择一个服务器进行配置',
   mcpNoServers: '暂无 MCP 服务器配置',
   mcpLoadError: '加载 MCP 配置失败',
+  mcpConfigured: '已配置',
+  mcpConfiguredDescription: '管理您已配置的 MCP 服务器',
+  mcpStoreDescription: '从商店浏览和安装 MCP 服务器',
+  mcpSearch: '搜索 MCP 服务器',
+  mcpNoResults: '没有匹配的 MCP 服务器',
+  mcpGoToConfigure: '去配置',
+  mcpInstall: '安装',
+  mcpInstalled: '已安装',
+  mcpIdPlaceholder: 'my-mcp-server',
+  mcpCreate: '创建',
+  mcpFilterAll: '全部',
+  mcpFilterApp: '应用目录',
+  mcpFilterUser: '用户目录',
+  mcpSourceApp: '应用',
+  mcpSourceUser: '用户',
+  mcpLoadFrom: '从此文件加载',
+  mcpOpenInEditor: '在编辑器中打开',
+  mcpLoadFromUser: '从用户目录加载 MCP',
+  mcpLoadFromApp: '从应用目录加载 MCP',
+  mcpImportByJson: '通过 JSON 导入',
+  mcpDirectConfig: '配置',
+  mcpImportTitle: '通过 JSON 导入',
+  mcpImportDesc: '请粘贴您的配置 JSON',
+  mcpImportPlaceholder: `// 支持以下两种格式:
+// STDIO 示例:
+{
+  "mcpServers": {
+    "stdio-server-example": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-example"]
+    }
+  }
+}
+
+// HTTP 示例:
+{
+  "mcpServers": {
+    "http-server-example": {
+      "type": "http",
+      "url": "https://mcp.yourserver.com/mcp"
+    }
+  }
+}`,
+  mcpImportButton: '导入',
+  mcpConfigTitle: 'MCP 配置',
+  mcpServerName: '服务器名称',
+  mcpServerNamePlaceholder: '例如: My Custom Server',
+  mcpTransportType: '传输类型',
+  mcpServerUrl: '服务器 URL',
+  mcpServerUrlPlaceholder: 'https://mcp.yourserver.com/mcp',
+  mcpCustomHeaders: '自定义请求头',
+  mcpCustomHeadersOptional: '(可选)',
+  mcpAddCustomHeader: '添加自定义请求头',
+  mcpArguments: '参数',
+  mcpArgumentPlaceholder: '输入参数值',
+  mcpAddArgument: '添加参数',
+  mcpEnvVariables: '环境变量',
+  mcpEnvVariableName: '变量名',
+  mcpEnvVariableValue: '变量值',
+  mcpAddEnvVariable: '添加环境变量',
+  mcpCommandPlaceholder: '例如: python, node, ./script.sh',
+  mcpSave: '保存',
 
   // Connector
   connectorDescription: '配置 Skills 和 MCP 服务器以扩展功能',

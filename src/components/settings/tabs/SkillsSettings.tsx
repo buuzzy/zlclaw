@@ -1,107 +1,50 @@
 import { useEffect, useState } from 'react';
-import { getSkillsDir } from '@/shared/lib/paths';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import {
+  ArrowLeftRight,
   ChevronDown,
-  ChevronRight,
-  File,
-  FileCode2,
-  FileImage,
-  FileText,
-  FileType,
   FolderOpen,
+  Github,
   Layers,
   Loader2,
+  MoreHorizontal,
+  Package,
   Plus,
-  Settings,
+  Search,
   Trash2,
+  User,
   X,
 } from 'lucide-react';
 
 import { Switch } from '../components/Switch';
 import { API_BASE_URL } from '../constants';
-import type {
-  SettingsTabProps,
-  SkillFile,
-  SkillInfo,
-  SkillsSubTab,
-} from '../types';
+import type { SettingsTabProps, SkillInfo } from '../types';
 
-// Get file icon based on extension
-function getSkillFileIcon(filename: string) {
-  const ext = filename.split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'md':
-    case 'markdown':
-      return FileType;
-    case 'json':
-      return FileText;
-    case 'js':
-    case 'ts':
-    case 'jsx':
-    case 'tsx':
-    case 'py':
-      return FileCode2;
-    case 'png':
-    case 'jpg':
-    case 'jpeg':
-    case 'gif':
-    case 'svg':
-      return FileImage;
-    default:
-      return File;
+// Parse YAML frontmatter from SKILL.md
+function parseSkillMdFrontmatter(content: string): {
+  name?: string;
+  description?: string;
+} {
+  const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!frontmatterMatch) return {};
+
+  const frontmatter = frontmatterMatch[1];
+  const result: { name?: string; description?: string } = {};
+
+  // Parse name
+  const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
+  if (nameMatch) {
+    result.name = nameMatch[1].trim();
   }
-}
 
-// File tree item component
-function SkillFileTreeItem({
-  file,
-  depth = 0,
-}: {
-  file: SkillFile;
-  depth?: number;
-}) {
-  const [isExpanded, setIsExpanded] = useState(depth === 0);
-  const IconComponent = file.isDir ? FolderOpen : getSkillFileIcon(file.name);
+  // Parse description
+  const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
+  if (descMatch) {
+    result.description = descMatch[1].trim();
+  }
 
-  return (
-    <div>
-      <button
-        onClick={() => file.isDir && setIsExpanded(!isExpanded)}
-        className={cn(
-          'flex w-full items-center gap-1 rounded-md py-1 text-left transition-colors',
-          file.isDir ? 'hover:bg-accent/50 cursor-pointer' : 'cursor-default'
-        )}
-        style={{ paddingLeft: `${depth * 12 + 4}px` }}
-      >
-        {file.isDir && (
-          <span className="text-muted-foreground shrink-0">
-            {isExpanded ? (
-              <ChevronDown className="size-3" />
-            ) : (
-              <ChevronRight className="size-3" />
-            )}
-          </span>
-        )}
-        {!file.isDir && <span className="w-3" />}
-        <IconComponent className="text-muted-foreground size-4 shrink-0" />
-        <span className="truncate text-sm">{file.name}</span>
-      </button>
-      {file.isDir && isExpanded && file.children && (
-        <div>
-          {file.children.map((child) => (
-            <SkillFileTreeItem
-              key={child.path}
-              file={child}
-              depth={depth + 1}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  return result;
 }
 
 // Helper function to open folder in system file manager
@@ -121,35 +64,137 @@ const openFolderInSystem = async (folderPath: string) => {
   }
 };
 
+// Skill card component
+function SkillCard({
+  skill,
+  onDelete,
+}: {
+  skill: SkillInfo;
+  onDelete: () => void;
+}) {
+  const { t } = useLanguage();
+  const [showMenu, setShowMenu] = useState(false);
+
+  return (
+    <div className="border-border bg-background hover:border-foreground/20 relative flex flex-col rounded-xl border p-4 transition-colors">
+      <div className="mb-2">
+        <span className="text-foreground text-sm font-medium">
+          {skill.name}
+        </span>
+      </div>
+
+      <p className="text-muted-foreground mb-4 line-clamp-2 flex-1 text-xs">
+        {skill.description || t.settings.skillsNoDescription}
+      </p>
+
+      <div className="border-border flex items-center justify-between border-t pt-3">
+        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          {skill.source === 'claude' ? (
+            <User className="size-3" />
+          ) : (
+            <Package className="size-3" />
+          )}
+          <span>
+            {skill.source === 'claude'
+              ? t.settings.skillsSourceUser
+              : t.settings.skillsSourceApp}
+          </span>
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="text-muted-foreground hover:bg-accent hover:text-foreground rounded p-1 transition-colors"
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+          {showMenu && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setShowMenu(false)}
+              />
+              <div className="border-border bg-popover absolute right-0 bottom-full z-20 mb-1 min-w-max rounded-lg border py-1 shadow-lg">
+                <button
+                  onClick={() => {
+                    openFolderInSystem(skill.path);
+                    setShowMenu(false);
+                  }}
+                  className="hover:bg-accent flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors"
+                >
+                  <FolderOpen className="size-3.5 shrink-0" />
+                  {t.settings.skillsOpenFolder}
+                </button>
+                <button
+                  onClick={() => {
+                    onDelete();
+                    setShowMenu(false);
+                  }}
+                  className="hover:bg-destructive/10 text-destructive flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors"
+                >
+                  <Trash2 className="size-3.5 shrink-0" />
+                  {t.settings.skillsDelete}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type MainTab = 'installed' | 'settings';
+
 export function SkillsSettings({
   settings,
   onSettingsChange,
 }: SettingsTabProps) {
   const [skills, setSkills] = useState<SkillInfo[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<SkillsSubTab>('settings');
-  const [showAddSkill, setShowAddSkill] = useState(false);
+  const [mainTab, setMainTab] = useState<MainTab>('installed');
   const [loading, setLoading] = useState(true);
-  const [newSkill, setNewSkill] = useState({
-    name: '',
-    source: 'workany' as 'claude' | 'workany',
-  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'user' | 'app'>('all');
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [skillsDirs, setSkillsDirs] = useState<{
+    user: string;
+    app: string;
+  }>({ user: '', app: '' });
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showGitHubImport, setShowGitHubImport] = useState(false);
+  const [githubUrl, setGithubUrl] = useState('');
+  const [importing, setImporting] = useState(false);
   const { t } = useLanguage();
-
-  const selectedSkill = skills.find((s) => s.id === activeSubTab);
 
   const isSkillConfigured = (skill: SkillInfo) => {
     return skill.files.length > 0;
   };
 
-  const sortedSkills = [...skills].sort((a, b) => {
-    const aConfigured = isSkillConfigured(a);
-    const bConfigured = isSkillConfigured(b);
-    if (a.enabled && aConfigured && !(b.enabled && bConfigured)) return -1;
-    if (b.enabled && bConfigured && !(a.enabled && aConfigured)) return 1;
-    if (aConfigured && !bConfigured) return -1;
-    if (bConfigured && !aConfigured) return 1;
-    return 0;
-  });
+  // Filter and sort skills
+  const filteredSkills = skills
+    .filter((skill) => {
+      // Filter by search query
+      if (
+        searchQuery &&
+        !skill.name.toLowerCase().includes(searchQuery.toLowerCase())
+      ) {
+        return false;
+      }
+      // Filter by directory type
+      // user = ~/.claude/skills (source: 'claude')
+      // app = workspace/skills (source: 'workany')
+      if (filterType === 'user' && skill.source !== 'claude') return false;
+      if (filterType === 'app' && skill.source !== 'workany') return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const aConfigured = isSkillConfigured(a);
+      const bConfigured = isSkillConfigured(b);
+      if (a.enabled && aConfigured && !(b.enabled && bConfigured)) return -1;
+      if (b.enabled && bConfigured && !(a.enabled && aConfigured)) return 1;
+      if (aConfigured && !bConfigured) return -1;
+      if (bConfigured && !aConfigured) return 1;
+      return 0;
+    });
 
   const loadSkillsFromPath = async (skillsPath: string) => {
     setLoading(true);
@@ -159,6 +204,23 @@ export function SkillsSettings({
       const dirsData = await dirsResponse.json();
 
       const allSkills: SkillInfo[] = [];
+
+      // Save directory paths
+      const dirs: { user: string; app: string } = { user: '', app: '' };
+      if (dirsData.directories) {
+        for (const dir of dirsData.directories as {
+          name: string;
+          path: string;
+          exists: boolean;
+        }[]) {
+          if (dir.name === 'claude') {
+            dirs.user = dir.path;
+          } else if (dir.name === 'workany') {
+            dirs.app = dir.path;
+          }
+        }
+      }
+      setSkillsDirs(dirs);
 
       // Load skills from all available directories
       if (dirsData.directories) {
@@ -180,13 +242,43 @@ export function SkillsSettings({
             if (filesData.success && filesData.files) {
               for (const folder of filesData.files) {
                 if (folder.isDir) {
+                  // Read SKILL.md for name and description
+                  let skillName = folder.name;
+                  let description = '';
+                  try {
+                    const skillMdPath = `${folder.path}/SKILL.md`;
+                    const mdResponse = await fetch(
+                      `${API_BASE_URL}/files/read`,
+                      {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ path: skillMdPath }),
+                      }
+                    );
+                    const mdData = await mdResponse.json();
+                    if (mdData.success && mdData.content) {
+                      const frontmatter = parseSkillMdFrontmatter(
+                        mdData.content
+                      );
+                      if (frontmatter.name) {
+                        skillName = frontmatter.name;
+                      }
+                      if (frontmatter.description) {
+                        description = frontmatter.description;
+                      }
+                    }
+                  } catch {
+                    // Ignore errors reading SKILL.md
+                  }
+
                   allSkills.push({
                     id: `${dir.name}-${folder.name}`,
-                    name: folder.name,
+                    name: skillName,
                     source: dir.name as 'claude' | 'workany',
                     path: folder.path,
                     files: folder.children || [],
                     enabled: true,
+                    description,
                   });
                 }
               }
@@ -217,13 +309,43 @@ export function SkillsSettings({
             if (filesData.success && filesData.files) {
               for (const folder of filesData.files) {
                 if (folder.isDir) {
+                  // Read SKILL.md for name and description
+                  let skillName = folder.name;
+                  let description = '';
+                  try {
+                    const skillMdPath = `${folder.path}/SKILL.md`;
+                    const mdResponse = await fetch(
+                      `${API_BASE_URL}/files/read`,
+                      {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ path: skillMdPath }),
+                      }
+                    );
+                    const mdData = await mdResponse.json();
+                    if (mdData.success && mdData.content) {
+                      const frontmatter = parseSkillMdFrontmatter(
+                        mdData.content
+                      );
+                      if (frontmatter.name) {
+                        skillName = frontmatter.name;
+                      }
+                      if (frontmatter.description) {
+                        description = frontmatter.description;
+                      }
+                    }
+                  } catch {
+                    // Ignore errors reading SKILL.md
+                  }
+
                   allSkills.push({
                     id: `custom-${folder.name}`,
-                    name: folder.name,
+                    name: skillName,
                     source: 'workany',
                     path: folder.path,
                     files: folder.children || [],
                     enabled: true,
+                    description,
                   });
                 }
               }
@@ -250,86 +372,21 @@ export function SkillsSettings({
     loadSkillsFromPath(settings.skillsPath);
   }, [settings.skillsPath]);
 
-  const handleSkillUpdate = (skillId: string, updates: Partial<SkillInfo>) => {
-    const newSkills = skills.map((s) => {
-      if (s.id !== skillId) return s;
-      const updated = { ...s, ...updates };
-      if (!isSkillConfigured(updated) && updated.enabled) {
-        updated.enabled = false;
-      }
-      return updated;
-    });
-    setSkills(newSkills);
-  };
+  const [deleteDialogSkill, setDeleteDialogSkill] = useState<SkillInfo | null>(
+    null
+  );
 
-  const handleAddSkill = async () => {
-    if (!newSkill.name) return;
-
-    try {
-      const dirsResponse = await fetch(`${API_BASE_URL}/files/skills-dir`);
-      const dirsData = await dirsResponse.json();
-      const targetDir = dirsData.directories?.find(
-        (d: { name: string; exists: boolean }) =>
-          d.name === newSkill.source && d.exists
-      );
-
-      if (!targetDir) {
-        console.error('[Skills] Target directory not found');
-        return;
-      }
-
-      const skillPath = `${targetDir.path}/${newSkill.name}`;
-
-      const createResponse = await fetch(`${API_BASE_URL}/sandbox/execute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          command: `mkdir -p "${skillPath}" && echo '# ${newSkill.name}\n\nSkill description here.' > "${skillPath}/README.md"`,
-          workDir: targetDir.path,
-        }),
-      });
-
-      if (createResponse.ok) {
-        const newSkillInfo: SkillInfo = {
-          id: `${newSkill.source}-${newSkill.name}`,
-          name: newSkill.name,
-          source: newSkill.source,
-          path: skillPath,
-          files: [
-            { name: 'README.md', path: `${skillPath}/README.md`, isDir: false },
-          ],
-          enabled: false,
-        };
-
-        setSkills([...skills, newSkillInfo]);
-        setActiveSubTab(newSkillInfo.id);
-        setNewSkill({ name: '', source: 'workany' });
-        setShowAddSkill(false);
-      }
-    } catch (err) {
-      console.error('[Skills] Failed to add skill:', err);
+  const handleDeleteSkill = (skillId: string) => {
+    const skill = skills.find((s) => s.id === skillId);
+    if (skill) {
+      setDeleteDialogSkill(skill);
     }
   };
 
-  const handleDeleteSkill = async (skillId: string) => {
-    const skill = skills.find((s) => s.id === skillId);
-    if (!skill) return;
-
-    try {
-      await fetch(`${API_BASE_URL}/sandbox/execute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          command: `rm -rf "${skill.path}"`,
-          workDir: skill.path.split('/').slice(0, -1).join('/'),
-        }),
-      });
-
-      const newSkills = skills.filter((s) => s.id !== skillId);
-      setSkills(newSkills);
-      setActiveSubTab('settings');
-    } catch (err) {
-      console.error('[Skills] Failed to delete skill:', err);
+  const handleOpenSkillFolder = () => {
+    if (deleteDialogSkill) {
+      openFolderInSystem(deleteDialogSkill.path);
+      setDeleteDialogSkill(null);
     }
   };
 
@@ -343,306 +400,480 @@ export function SkillsSettings({
   }
 
   return (
-    <div className="-m-6 flex h-[calc(100%+48px)]">
-      {/* Left Panel */}
-      <div className="border-border flex w-52 flex-col border-r">
-        <div className="space-y-0.5 p-2">
+    <div className="-m-6 flex h-[calc(100%+48px)] flex-col">
+      {/* Tab Bar */}
+      <div className="border-border shrink-0 border-b px-6">
+        <div className="flex items-center gap-6">
           <button
-            onClick={() => {
-              setActiveSubTab('settings');
-              setShowAddSkill(false);
-            }}
+            onClick={() => setMainTab('installed')}
             className={cn(
-              'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-200',
-              activeSubTab === 'settings' && !showAddSkill
-                ? 'bg-accent text-accent-foreground font-medium'
-                : 'text-foreground/70 hover:bg-accent/50 hover:text-foreground'
+              'relative py-4 text-sm font-medium transition-colors',
+              mainTab === 'installed'
+                ? 'text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <Settings className="size-4" />
-            <span className="flex-1 text-left">
-              {t.settings.skillsSettings}
-            </span>
-          </button>
-        </div>
-
-        <div className="border-border flex min-h-0 flex-1 flex-col border-t">
-          <div className="text-muted-foreground flex shrink-0 items-center px-4 py-2 text-xs font-medium">
-            {t.settings.skillsList}
-          </div>
-          <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
-            {sortedSkills.length === 0 ? (
-              <div className="text-muted-foreground p-2 text-center text-xs">
-                {t.settings.skillsEmpty}
-              </div>
-            ) : (
-              sortedSkills.map((skill) => (
-                <button
-                  key={skill.id}
-                  onClick={() => {
-                    setActiveSubTab(skill.id);
-                    setShowAddSkill(false);
-                  }}
-                  className={cn(
-                    'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-200',
-                    activeSubTab === skill.id && !showAddSkill
-                      ? 'bg-accent text-accent-foreground font-medium'
-                      : 'text-foreground/70 hover:bg-accent/50 hover:text-foreground'
-                  )}
-                >
-                  <span className="bg-muted text-muted-foreground relative flex size-6 items-center justify-center rounded">
-                    <Layers className="size-3.5" />
-                    {isSkillConfigured(skill) && (
-                      <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-500" />
-                    )}
-                  </span>
-                  <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                    <span className="truncate text-left">{skill.name}</span>
-                    {skill.source === 'claude' && (
-                      <span className="shrink-0 rounded bg-blue-500/10 px-1 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
-                        claude
-                      </span>
-                    )}
-                  </span>
-                </button>
-              ))
+            {t.settings.skillsInstalled}
+            {mainTab === 'installed' && (
+              <span className="bg-foreground absolute bottom-0 left-0 h-0.5 w-full" />
             )}
-          </div>
-        </div>
-
-        <div className="border-border mt-auto flex items-center gap-1 border-t p-2">
+          </button>
           <button
-            onClick={() => setShowAddSkill(true)}
-            className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-7 items-center justify-center rounded transition-colors"
-            title={t.settings.skillsAdd}
+            onClick={() => setMainTab('settings')}
+            className={cn(
+              'relative py-4 text-sm font-medium transition-colors',
+              mainTab === 'settings'
+                ? 'text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
           >
-            <Plus className="size-4" />
+            {t.settings.title}
+            {mainTab === 'settings' && (
+              <span className="bg-foreground absolute bottom-0 left-0 h-0.5 w-full" />
+            )}
           </button>
-          {selectedSkill && (
-            <button
-              onClick={() => handleDeleteSkill(selectedSkill.id)}
-              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive flex size-7 items-center justify-center rounded transition-colors"
-              title={t.settings.skillsDelete}
-            >
-              <Trash2 className="size-4" />
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Right Panel */}
-      <div className="flex-1 overflow-y-auto">
-        {showAddSkill ? (
-          <div className="p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-foreground text-base font-medium">
-                {t.settings.skillsAdd}
-              </h3>
-              <button
-                onClick={() => setShowAddSkill(false)}
-                className="hover:bg-muted rounded p-1"
-              >
-                <X className="text-muted-foreground size-4" />
-              </button>
-            </div>
+      {/* Content Area */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {mainTab === 'installed' ? (
+          /* Installed Tab Content */
+          <div className="flex h-full flex-col">
+            {/* Filter Bar */}
+            <div className="flex shrink-0 items-center justify-between gap-4 px-6 pt-6 pb-0">
+              <div className="flex items-center gap-3">
+                {/* Filter Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowFilterMenu(!showFilterMenu)}
+                    className="border-input bg-background hover:bg-accent flex h-9 items-center gap-2 rounded-lg border px-3 text-sm transition-colors"
+                  >
+                    {filterType === 'user' ? (
+                      <User className="size-4" />
+                    ) : filterType === 'app' ? (
+                      <Package className="size-4" />
+                    ) : (
+                      <Layers className="size-4" />
+                    )}
+                    <span>
+                      {filterType === 'all'
+                        ? t.settings.skillsFilterAll
+                        : filterType === 'user'
+                          ? t.settings.skillsFilterUser
+                          : t.settings.skillsFilterApp}
+                    </span>
+                    <ChevronDown className="size-3.5" />
+                  </button>
+                  {showFilterMenu && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setShowFilterMenu(false)}
+                      />
+                      <div className="border-border bg-popover absolute top-full left-0 z-20 mt-1 min-w-max rounded-lg border py-1 shadow-lg">
+                        <button
+                          onClick={() => {
+                            setFilterType('all');
+                            setShowFilterMenu(false);
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors',
+                            filterType === 'all'
+                              ? 'bg-accent text-accent-foreground'
+                              : 'hover:bg-accent'
+                          )}
+                        >
+                          <Layers className="size-4" />
+                          {t.settings.skillsFilterAll}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterType('user');
+                            setShowFilterMenu(false);
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors',
+                            filterType === 'user'
+                              ? 'bg-accent text-accent-foreground'
+                              : 'hover:bg-accent'
+                          )}
+                        >
+                          <User className="size-4" />
+                          {t.settings.skillsFilterUser}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterType('app');
+                            setShowFilterMenu(false);
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors',
+                            filterType === 'app'
+                              ? 'bg-accent text-accent-foreground'
+                              : 'hover:bg-accent'
+                          )}
+                        >
+                          <Package className="size-4" />
+                          {t.settings.skillsFilterApp}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
 
-            <div className="space-y-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.skillsName}
-                </label>
-                <input
-                  type="text"
-                  value={newSkill.name}
-                  onChange={(e) =>
-                    setNewSkill({ ...newSkill, name: e.target.value })
-                  }
-                  placeholder="my-skill"
-                  className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.skillsSource}
-                </label>
-                <div className="text-muted-foreground flex h-10 items-center rounded-lg text-sm">
-                  ~/.workany/skills
+                {/* Search Input */}
+                <div className="relative">
+                  <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={t.settings.skillsSearch}
+                    className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-9 w-64 rounded-lg border py-2 pr-3 pl-9 text-sm focus:ring-2 focus:outline-none"
+                  />
                 </div>
               </div>
 
-              <button
-                onClick={handleAddSkill}
-                disabled={!newSkill.name}
-                className="bg-primary text-primary-foreground hover:bg-primary/90 mt-4 h-10 w-full rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {t.settings.add}
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Add Button with Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowAddMenu(!showAddMenu)}
+                    className="bg-foreground text-background hover:bg-foreground/90 flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
+                  >
+                    <Plus className="size-4" />
+                    {t.settings.add}
+                    <ChevronDown className="size-4" />
+                  </button>
+                  {showAddMenu && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowAddMenu(false)}
+                      />
+                      <div className="border-border bg-popover absolute top-full right-0 z-50 mt-1 min-w-[180px] rounded-xl border py-1 shadow-lg">
+                        <button
+                          onClick={() => {
+                            openFolderInSystem(skillsDirs.app);
+                            setShowAddMenu(false);
+                          }}
+                          className="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
+                        >
+                          <FolderOpen className="text-muted-foreground size-4 shrink-0" />
+                          <span className="text-foreground text-sm">
+                            {t.settings.skillsAddToDirectory}
+                          </span>
+                        </button>
+                        {/* TODO: Import from GitHub - hidden for now
+                        <button
+                          onClick={() => {
+                            setShowGitHubImport(true);
+                            setShowAddMenu(false);
+                          }}
+                          className="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
+                        >
+                          <Github className="text-muted-foreground size-4 shrink-0" />
+                          <span className="text-foreground text-sm">
+                            {t.settings.skillsImportGitHub}
+                          </span>
+                        </button>
+                        */}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Directory Info */}
+            {filterType !== 'all' && (
+              <div className="border-border flex shrink-0 items-center gap-3 border-b px-6 py-3">
+                <span className="text-muted-foreground shrink-0 text-sm">
+                  {t.settings.skillsLoadFrom}
+                </span>
+                <code className="bg-muted text-foreground truncate rounded px-2 py-1 text-xs">
+                  {filterType === 'user' ? skillsDirs.user : skillsDirs.app}
+                </code>
+                <button
+                  onClick={() =>
+                    openFolderInSystem(
+                      filterType === 'user' ? skillsDirs.user : skillsDirs.app
+                    )
+                  }
+                  className="text-muted-foreground hover:text-foreground hover:bg-accent shrink-0 rounded p-1.5 transition-colors"
+                  title={t.settings.skillsOpenFolder}
+                >
+                  <FolderOpen className="size-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Skills Grid */}
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              {filteredSkills.length === 0 ? (
+                <div className="text-muted-foreground flex h-32 items-center justify-center text-sm">
+                  {searchQuery
+                    ? t.settings.skillsNoResults
+                    : t.settings.skillsEmpty}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  {filteredSkills.map((skill) => (
+                    <SkillCard
+                      key={skill.id}
+                      skill={skill}
+                      onDelete={() => handleDeleteSkill(skill.id)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        ) : activeSubTab === 'settings' ? (
-          <div className="p-6">
-            <div className="space-y-6">
-              <div>
-                <p className="text-muted-foreground text-sm">
-                  {t.settings.skillsDescription}
-                </p>
-              </div>
-
+        ) : (
+          /* Settings Tab Content */
+          <div className="space-y-4 p-6">
+            {/* Global Enable Switch */}
+            <div className="border-border bg-background rounded-xl border p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-foreground text-sm font-medium">
+                  <h3 className="text-foreground text-sm font-medium">
                     {t.settings.skillsEnabled}
-                  </label>
+                  </h3>
                   <p className="text-muted-foreground mt-1 text-xs">
                     {t.settings.skillsEnabledDescription}
                   </p>
                 </div>
                 <Switch
-                  checked={settings.skillsEnabled ?? true}
+                  checked={settings.skillsEnabled !== false}
                   onChange={(checked) =>
                     onSettingsChange({ ...settings, skillsEnabled: checked })
                   }
                 />
               </div>
+            </div>
 
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.skillsPath}
-                </label>
-                <p className="text-muted-foreground text-xs">
-                  {t.settings.skillsPathDescription}
-                </p>
-                <div className="flex items-center gap-2">
+            {/* User Directory */}
+            <div
+              className={cn(
+                'border-border bg-background rounded-xl border p-4 transition-opacity',
+                settings.skillsEnabled === false && 'opacity-50'
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-foreground text-sm font-medium">
+                    {t.settings.skillsLoadFromUser}
+                  </h3>
+                  <code className="bg-muted text-muted-foreground mt-2 block truncate rounded px-2 py-1 text-xs">
+                    {skillsDirs.user || '~/.claude/skills'}
+                  </code>
+                </div>
+                <div className="ml-4 flex shrink-0 items-center gap-2">
                   <button
-                    onClick={async () => {
-                      try {
-                        const selected = await openDialog({
-                          directory: true,
-                          multiple: false,
-                          defaultPath: settings.skillsPath || undefined,
-                        });
-                        if (selected && typeof selected === 'string') {
-                          onSettingsChange({
-                            ...settings,
-                            skillsPath: selected,
-                          });
-                        }
-                      } catch (err) {
-                        console.error(
-                          '[Skills] Failed to open folder dialog:',
-                          err
-                        );
-                      }
-                    }}
-                    className="border-input bg-background text-foreground hover:bg-accent relative h-10 max-w-md flex-1 cursor-pointer rounded-lg border pr-3 pl-10 text-left text-sm transition-colors"
+                    onClick={() => openFolderInSystem(skillsDirs.user)}
+                    className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
+                    title={t.settings.skillsOpenFolder}
                   >
-                    <FolderOpen className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-                    <span className="truncate">
-                      {settings.skillsPath ||
-                        `${settings.workDir || '~/.workany'}/skills`}
-                    </span>
+                    <FolderOpen className="size-4" />
                   </button>
-                  <button
-                    onClick={async () => {
-                      // Reset to workDir/skills
-                      const workDir =
-                        settings.workDir ||
-                        (await getSkillsDir()).replace('/skills', '');
+                  <Switch
+                    checked={
+                      settings.skillsEnabled !== false &&
+                      settings.skillsUserDirEnabled !== false
+                    }
+                    onChange={(checked) =>
                       onSettingsChange({
                         ...settings,
-                        skillsPath: `${workDir}/skills`,
-                      });
-                    }}
-                    className="text-muted-foreground hover:text-foreground border-border hover:bg-accent h-10 cursor-pointer rounded-lg border px-3 text-sm transition-colors"
+                        skillsUserDirEnabled: checked,
+                      })
+                    }
+                    disabled={settings.skillsEnabled === false}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* App Directory */}
+            <div
+              className={cn(
+                'border-border bg-background rounded-xl border p-4 transition-opacity',
+                settings.skillsEnabled === false && 'opacity-50'
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-foreground text-sm font-medium">
+                    {t.settings.skillsLoadFromApp}
+                  </h3>
+                  <code className="bg-muted text-muted-foreground mt-2 block truncate rounded px-2 py-1 text-xs">
+                    {skillsDirs.app || 'workspace/skills'}
+                  </code>
+                </div>
+                <div className="ml-4 flex shrink-0 items-center gap-2">
+                  <button
+                    onClick={() => openFolderInSystem(skillsDirs.app)}
+                    className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
+                    title={t.settings.skillsOpenFolder}
                   >
-                    {t.common.reset}
+                    <FolderOpen className="size-4" />
                   </button>
+                  <Switch
+                    checked={
+                      settings.skillsEnabled !== false &&
+                      settings.skillsAppDirEnabled !== false
+                    }
+                    onChange={(checked) =>
+                      onSettingsChange({
+                        ...settings,
+                        skillsAppDirEnabled: checked,
+                      })
+                    }
+                    disabled={settings.skillsEnabled === false}
+                  />
                 </div>
               </div>
             </div>
           </div>
-        ) : selectedSkill ? (
-          <div className="p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h3 className="text-foreground text-base font-medium">
-                  {selectedSkill.name}
-                </h3>
-                {selectedSkill.source === 'claude' && (
-                  <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
-                    claude
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <div
-                    className={cn(
-                      'size-2 rounded-full',
-                      isSkillConfigured(selectedSkill)
-                        ? 'bg-emerald-500'
-                        : 'bg-gray-300'
-                    )}
-                  />
-                  <span className="text-muted-foreground text-xs">
-                    {isSkillConfigured(selectedSkill)
-                      ? t.settings.configured
-                      : t.settings.notConfigured}
-                  </span>
-                </div>
-                <Switch
-                  checked={selectedSkill.enabled}
-                  onChange={(checked) =>
-                    handleSkillUpdate(selectedSkill.id, { enabled: checked })
-                  }
-                  disabled={!isSkillConfigured(selectedSkill)}
-                />
-              </div>
+        )}
+      </div>
+
+      {/* Delete Skill Dialog */}
+      {deleteDialogSkill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="fixed inset-0 bg-black/50"
+            onClick={() => setDeleteDialogSkill(null)}
+          />
+          <div className="bg-background border-border relative z-10 w-[400px] rounded-xl border p-6 shadow-lg">
+            <h3 className="text-foreground mb-2 text-base font-semibold">
+              {t.settings.skillsDeleteTitle}
+            </h3>
+            <p className="text-muted-foreground mb-4 text-sm">
+              {t.settings.skillsDeleteDescription}
+            </p>
+            <div className="bg-muted mb-4 rounded-lg p-3">
+              <code className="text-foreground text-xs break-all">
+                {deleteDialogSkill.path}
+              </code>
             </div>
-
-            <div className="space-y-6">
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground text-sm font-medium">
-                  {t.settings.skillsSource}
-                </label>
-                <p className="text-muted-foreground text-xs">
-                  {selectedSkill.path}
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-foreground text-sm font-medium">
-                  {t.settings.skillsFiles}
-                </label>
-                <div className="border-border bg-muted/30 max-h-[300px] overflow-y-auto rounded-lg border p-2">
-                  {selectedSkill.files.length === 0 ? (
-                    <p className="text-muted-foreground py-4 text-center text-sm">
-                      {t.settings.skillsNoFiles}
-                    </p>
-                  ) : (
-                    selectedSkill.files.map((file) => (
-                      <SkillFileTreeItem key={file.path} file={file} />
-                    ))
-                  )}
-                </div>
-              </div>
-
+            <div className="flex justify-end gap-2">
               <button
-                onClick={() => openFolderInSystem(selectedSkill.path)}
-                className="border-border text-foreground hover:bg-accent flex h-10 items-center gap-2 rounded-lg border px-4 text-sm transition-colors"
+                onClick={() => setDeleteDialogSkill(null)}
+                className="border-border hover:bg-accent h-9 rounded-lg border px-4 text-sm transition-colors"
+              >
+                {t.common.cancel}
+              </button>
+              <button
+                onClick={handleOpenSkillFolder}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-9 items-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors"
               >
                 <FolderOpen className="size-4" />
                 {t.settings.skillsOpenFolder}
               </button>
             </div>
           </div>
-        ) : (
-          <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-            {t.settings.skillsSelect}
+        </div>
+      )}
+
+      {/* Import from GitHub Dialog */}
+      {showGitHubImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="fixed inset-0 bg-black/50"
+            onClick={() => {
+              setShowGitHubImport(false);
+              setGithubUrl('');
+            }}
+          />
+          <div className="bg-background border-border relative z-10 w-[420px] rounded-xl border p-6 shadow-lg">
+            <button
+              onClick={() => {
+                setShowGitHubImport(false);
+                setGithubUrl('');
+              }}
+              className="text-muted-foreground hover:text-foreground absolute top-4 right-4"
+            >
+              <X className="size-5" />
+            </button>
+
+            {/* Icons */}
+            <div className="mb-4 flex items-center justify-center gap-3">
+              <div className="bg-muted flex size-12 items-center justify-center rounded-xl">
+                <Github className="size-6" />
+              </div>
+              <ArrowLeftRight className="text-muted-foreground size-5" />
+              <div className="bg-muted flex size-12 items-center justify-center rounded-xl">
+                <Layers className="size-6" />
+              </div>
+            </div>
+
+            <h3 className="text-foreground mb-2 text-center text-lg font-semibold">
+              {t.settings.skillsImportGitHub}
+            </h3>
+            <p className="text-muted-foreground mb-6 text-center text-sm">
+              {t.settings.skillsImportGitHubDialogDesc}
+            </p>
+
+            <div className="mb-4">
+              <label className="text-foreground mb-2 block text-sm font-medium">
+                URL
+              </label>
+              <input
+                type="text"
+                value={githubUrl}
+                onChange={(e) => setGithubUrl(e.target.value)}
+                placeholder="https://github.com/username/repo"
+                className="border-input bg-muted text-foreground placeholder:text-muted-foreground focus:ring-ring h-11 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <button
+              onClick={async () => {
+                if (!githubUrl) return;
+                setImporting(true);
+                try {
+                  const response = await fetch(
+                    `${API_BASE_URL}/files/import-skill`,
+                    {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        url: githubUrl,
+                        targetDir: skillsDirs.app,
+                      }),
+                    }
+                  );
+                  const data = await response.json();
+                  if (data.success) {
+                    setShowGitHubImport(false);
+                    setGithubUrl('');
+                    // Reload skills
+                    loadSkillsFromPath(settings.skillsPath || '');
+                  } else {
+                    console.error('[Skills] Import failed:', data.error);
+                  }
+                } catch (err) {
+                  console.error('[Skills] Import error:', err);
+                } finally {
+                  setImporting(false);
+                }
+              }}
+              disabled={!githubUrl || importing}
+              className="bg-foreground text-background hover:bg-foreground/90 flex h-11 w-full items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {importing ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  {t.settings.skillsImporting}
+                </>
+              ) : (
+                t.settings.skillsImport
+              )}
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

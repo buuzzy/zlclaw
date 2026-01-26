@@ -21,6 +21,8 @@ export default {
     'Requires Node.js for npm install, or Homebrew for brew install (macOS)',
   connecting: 'Connecting to service',
   apiError: 'Unable to check dependencies',
+  apiErrorHint:
+    'The background service may still be starting. Please wait a few seconds and retry. If the problem persists, try restarting the app.',
   retry: 'Retry',
   noDeps: 'No dependencies to check',
   required: 'Required',

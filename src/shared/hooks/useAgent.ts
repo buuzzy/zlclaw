@@ -245,11 +245,61 @@ function getSandboxConfig():
   }
 }
 
-// Helper to get skills path from settings
-function getSkillsPath(): string | undefined {
+// Helper to get skills configuration from settings
+function getSkillsConfig(): {
+  enabled: boolean;
+  userDirEnabled: boolean;
+  appDirEnabled: boolean;
+  skillsPath?: string;
+} | undefined {
   try {
     const settings = getSettings();
-    return settings.skillsPath || undefined;
+
+    // If global switch is off, return undefined (no skills)
+    if (settings.skillsEnabled === false) {
+      console.log('[useAgent] Skills disabled globally');
+      return undefined;
+    }
+
+    const config = {
+      enabled: true,
+      userDirEnabled: settings.skillsUserDirEnabled !== false,
+      appDirEnabled: settings.skillsAppDirEnabled !== false,
+      skillsPath: settings.skillsPath || undefined,
+    };
+
+    console.log('[useAgent] Skills config:', config);
+    return config;
+  } catch {
+    return undefined;
+  }
+}
+
+// Helper to get MCP configuration from settings
+function getMcpConfig(): {
+  enabled: boolean;
+  userDirEnabled: boolean;
+  appDirEnabled: boolean;
+  mcpConfigPath?: string;
+} | undefined {
+  try {
+    const settings = getSettings();
+
+    // If global switch is off, return undefined (no MCP)
+    if (settings.mcpEnabled === false) {
+      console.log('[useAgent] MCP disabled globally');
+      return undefined;
+    }
+
+    const config = {
+      enabled: true,
+      userDirEnabled: settings.mcpUserDirEnabled !== false,
+      appDirEnabled: settings.mcpAppDirEnabled !== false,
+      mcpConfigPath: settings.mcpConfigPath || undefined,
+    };
+
+    console.log('[useAgent] MCP config:', config);
+    return config;
   } catch {
     return undefined;
   }
@@ -1631,7 +1681,9 @@ export function useAgent(): UseAgentReturn {
           // Use session folder as workDir
           const workDir = computedSessionFolder || (await getAppDataDir());
           const sandboxConfig = getSandboxConfig();
-          const skillsPath = getSkillsPath();
+          const skillsConfig = getSkillsConfig();
+
+          const mcpConfig = getMcpConfig();
 
           // Use direct execution endpoint with images
           const response = await fetchWithRetry(`${AGENT_SERVER_URL}/agent`, {
@@ -1646,7 +1698,8 @@ export function useAgent(): UseAgentReturn {
               modelConfig,
               sandboxConfig,
               images,
-              skillsPath,
+              skillsConfig,
+              mcpConfig,
             }),
             signal: abortController.signal,
           });
@@ -1846,7 +1899,8 @@ export function useAgent(): UseAgentReturn {
       }
       const modelConfig = getModelConfig();
       const sandboxConfig = getSandboxConfig();
-      const skillsPath = getSkillsPath();
+      const skillsConfig = getSkillsConfig();
+      const mcpConfig = getMcpConfig();
 
       const response = await fetchWithRetry(
         `${AGENT_SERVER_URL}/agent/execute`,
@@ -1862,7 +1916,8 @@ export function useAgent(): UseAgentReturn {
             taskId,
             modelConfig,
             sandboxConfig,
-            skillsPath,
+            skillsConfig,
+            mcpConfig,
           }),
           signal: abortController.signal,
         }
@@ -2044,7 +2099,8 @@ export function useAgent(): UseAgentReturn {
         }
         const modelConfig = getModelConfig();
         const sandboxConfig = getSandboxConfig();
-        const skillsPath = getSkillsPath();
+        const skillsConfig = getSkillsConfig();
+        const mcpConfig = getMcpConfig();
 
         // Prepare images for API (only send image attachments with actual data)
         const images = attachments
@@ -2082,7 +2138,8 @@ export function useAgent(): UseAgentReturn {
             modelConfig,
             sandboxConfig,
             images: images && images.length > 0 ? images : undefined,
-            skillsPath,
+            skillsConfig,
+            mcpConfig,
           }),
           signal: abortController.signal,
         });

@@ -14,7 +14,9 @@ import {
   type ConversationMessage,
   type IAgent,
   type ImageAttachment,
+  type McpConfig,
   type SandboxConfig,
+  type SkillsConfig,
   type TaskPlan,
 } from '@/core/agent';
 // ============================================================================
@@ -173,7 +175,8 @@ export async function* runExecutionPhase(
   taskId?: string,
   modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
   sandboxConfig?: SandboxConfig,
-  skillsPath?: string
+  skillsConfig?: SkillsConfig,
+  mcpConfig?: McpConfig
 ): AsyncGenerator<AgentMessage> {
   const agent = getAgent(modelConfig);
 
@@ -194,6 +197,8 @@ export async function* runExecutionPhase(
     sandboxProvider: sandboxConfig?.provider,
     apiEndpoint: sandboxConfig?.apiEndpoint,
   });
+  serviceLogger.info('[AgentService] runExecutionPhase skills config:', skillsConfig);
+  serviceLogger.info('[AgentService] runExecutionPhase mcp config:', mcpConfig);
 
   for await (const message of agent.execute({
     planId,
@@ -204,7 +209,8 @@ export async function* runExecutionPhase(
     taskId,
     abortController: session.abortController,
     sandbox: sandboxConfig,
-    skillsPath,
+    skillsConfig,
+    mcpConfig,
   })) {
     yield message;
   }
@@ -222,7 +228,8 @@ export async function* runAgent(
   modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
   sandboxConfig?: SandboxConfig,
   images?: ImageAttachment[],
-  skillsPath?: string
+  skillsConfig?: SkillsConfig,
+  mcpConfig?: McpConfig
 ): AsyncGenerator<AgentMessage> {
   const agent = getAgent(modelConfig);
 
@@ -233,6 +240,8 @@ export async function* runAgent(
     sandboxProvider: sandboxConfig?.provider,
     apiEndpoint: sandboxConfig?.apiEndpoint,
   });
+  serviceLogger.info('[AgentService] runAgent called with skills config:', skillsConfig);
+  serviceLogger.info('[AgentService] runAgent called with mcp config:', mcpConfig);
 
   for await (const message of agent.run(prompt, {
     sessionId: session.id,
@@ -242,7 +251,8 @@ export async function* runAgent(
     abortController: session.abortController,
     sandbox: sandboxConfig,
     images,
-    skillsPath,
+    skillsConfig,
+    mcpConfig,
   })) {
     yield message;
   }
@@ -267,4 +277,6 @@ export type {
   AgentConfig,
   IAgent,
   ImageAttachment,
+  SkillsConfig,
+  McpConfig,
 };

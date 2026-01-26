@@ -111,20 +111,46 @@ export default {
 
   // Skills
   skills: 'Skills',
+  skillsInstalled: 'Installed',
   skillsSettings: 'Skill Settings',
-  skillsDescription: 'Configure skill definitions for extended capabilities',
+  skillsDescription: 'Manage capabilities & tools for your agents',
   skillsEnabled: 'Enable Skills',
   skillsEnabledDescription: 'Load skills during agent conversations',
   skillsList: 'Skills',
   skillsEmpty: 'No skills found',
   skillsAdd: 'Add Skill',
-  skillsDelete: 'Delete Skill',
+  skillsDelete: 'Delete',
   skillsName: 'Skill Name',
+  skillsNamePlaceholder: 'my-skill',
   skillsSource: 'Source Directory',
   skillsFiles: 'Files',
-  skillsNoFiles: 'No files',
+  skillsNoFiles: 'No files in this skill',
   skillsSelect: 'Select a skill to view details',
-  skillsOpenFolder: 'Open in Finder',
+  skillsOpenFolder: 'Open Folder',
+  skillsSearch: 'Search Skill',
+  skillsFilterAll: 'All',
+  skillsFilterUser: 'User',
+  skillsFilterApp: 'App',
+  skillsSourceUser: 'User',
+  skillsSourceApp: 'App',
+  skillsLoadFrom: 'Load skills from',
+  skillsLoadFromUser: 'Load skills from User directory',
+  skillsLoadFromApp: 'Load skills from App directory',
+  skillsAddCustom: 'Add custom Skills',
+  skillsAddCustomDescription: 'Add a skill to unlock new capabilities for yourself or your team.',
+  skillsCreate: 'Create',
+  skillsNoResults: 'No skills match your search',
+  skillsNoDescription: 'No description available',
+  skillsDeleteTitle: 'Delete Skill',
+  skillsDeleteDescription:
+    'To delete this skill, please manually remove the folder at the following path:',
+  skillsAddToDirectory: 'Add skills to App directory',
+  skillsAddToDirectoryDesc: 'Open the skills folder to add files',
+  skillsImportGitHub: 'Import from GitHub',
+  skillsImportGitHubDesc: 'Paste a repository link to get started',
+  skillsImportGitHubDialogDesc: 'Import a skill directly from a public GitHub repository.',
+  skillsImport: 'Import',
+  skillsImporting: 'Importing...',
 
   // MCP
   mcpSettings: 'MCP Settings',
@@ -149,10 +175,73 @@ export default {
   mcpAddHeader: 'Add Header',
   mcpVerify: 'Verify (View Tools)',
   mcpAddServer: 'Add Server',
+  mcpAddServerDescription: 'Add a custom MCP server to extend agent capabilities',
   mcpDeleteServer: 'Delete Server',
   mcpSelectServer: 'Select a server to configure',
   mcpNoServers: 'No MCP servers configured',
   mcpLoadError: 'Failed to load MCP config',
+  mcpConfigured: 'Configured',
+  mcpConfiguredDescription: 'Manage your configured MCP servers',
+  mcpStoreDescription: 'Browse and install MCP servers from the marketplace',
+  mcpSearch: 'Search MCP servers',
+  mcpNoResults: 'No MCP servers match your search',
+  mcpGoToConfigure: 'Go to configure',
+  mcpInstall: 'Install',
+  mcpInstalled: 'Installed',
+  mcpIdPlaceholder: 'my-mcp-server',
+  mcpCreate: 'Create',
+  mcpFilterAll: 'All',
+  mcpFilterApp: 'App directory',
+  mcpFilterUser: 'User directory',
+  mcpSourceApp: 'App',
+  mcpSourceUser: 'User',
+  mcpLoadFrom: 'Load MCP from',
+  mcpOpenInEditor: 'Open in Editor',
+  mcpLoadFromUser: 'Load MCP from User directory',
+  mcpLoadFromApp: 'Load MCP from App directory',
+  mcpImportByJson: 'Import by JSON',
+  mcpDirectConfig: 'Configure',
+  mcpImportTitle: 'Import by JSON',
+  mcpImportDesc: 'Please paste your configuration JSON',
+  mcpImportPlaceholder: `// You can use either format:
+// STDIO example:
+{
+  "mcpServers": {
+    "stdio-server-example": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-example"]
+    }
+  }
+}
+
+// HTTP example:
+{
+  "mcpServers": {
+    "http-server-example": {
+      "type": "http",
+      "url": "https://mcp.yourserver.com/mcp"
+    }
+  }
+}`,
+  mcpImportButton: 'Import',
+  mcpConfigTitle: 'MCP configuration',
+  mcpServerName: 'Server Name',
+  mcpServerNamePlaceholder: 'e.g., My Custom Server',
+  mcpTransportType: 'Transport Type',
+  mcpServerUrl: 'Server URL',
+  mcpServerUrlPlaceholder: 'https://mcp.yourserver.com/mcp',
+  mcpCustomHeaders: 'Custom headers',
+  mcpCustomHeadersOptional: '(optional)',
+  mcpAddCustomHeader: 'Add custom header',
+  mcpArguments: 'Arguments',
+  mcpArgumentPlaceholder: 'Enter argument value',
+  mcpAddArgument: 'Add arguments',
+  mcpEnvVariables: 'Environment variables',
+  mcpEnvVariableName: 'Variable name',
+  mcpEnvVariableValue: 'Variable value',
+  mcpAddEnvVariable: 'Add environment variable',
+  mcpCommandPlaceholder: 'e.g., python, node, ./script.sh',
+  mcpSave: 'Save',
 
   // Connector
   connectorDescription:

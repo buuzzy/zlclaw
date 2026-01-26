@@ -251,9 +251,9 @@ export function SetupPage({ onSkip }: SetupPageProps = {}) {
           <div className="space-y-4">
             {/* API Error */}
             {apiError && (
-              <div className="border-border rounded-xl border bg-red-500/5 p-6">
+              <div className="border-border rounded-xl border bg-orange-500/5 p-6">
                 <div className="flex items-start gap-4">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-500">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-orange-500/10 text-orange-500">
                     <AlertCircle className="size-5" />
                   </div>
                   <div className="flex-1">
@@ -261,6 +261,10 @@ export function SetupPage({ onSkip }: SetupPageProps = {}) {
                       {t.setup?.apiError || 'Unable to check dependencies'}
                     </h3>
                     <p className="text-muted-foreground mt-1 text-sm">
+                      {t.setup?.apiErrorHint ||
+                        'The background service may still be starting. Please wait a few seconds and retry.'}
+                    </p>
+                    <p className="text-muted-foreground/60 mt-1 font-mono text-xs">
                       {apiError}
                     </p>
                     <button

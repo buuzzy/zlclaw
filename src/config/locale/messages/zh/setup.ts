@@ -20,6 +20,8 @@ export default {
   installHint: 'npm 安装需要 Node.js，brew 安装需要 Homebrew (macOS)',
   connecting: '正在连接服务',
   apiError: '无法检查依赖',
+  apiErrorHint:
+    '后台服务可能还在启动中，请稍等几秒后重试。如果问题持续，请尝试重启应用。',
   retry: '重试',
   noDeps: '没有需要检查的依赖',
   required: '必需',

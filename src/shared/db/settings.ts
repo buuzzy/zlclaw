@@ -204,10 +204,14 @@ export interface Settings {
   // MCP settings - path to mcp.json config file
   mcpConfigPath: string;
   mcpEnabled: boolean; // Enable MCP mounting during agent conversations
+  mcpUserDirEnabled: boolean; // Enable loading MCP servers from user directory (claude config)
+  mcpAppDirEnabled: boolean; // Enable loading MCP servers from app directory (workany config)
 
   // Skills settings
   skillsPath: string;
   skillsEnabled: boolean; // Enable skills mounting during agent conversations
+  skillsUserDirEnabled: boolean; // Enable loading skills from user directory (~/.claude/skills)
+  skillsAppDirEnabled: boolean; // Enable loading skills from app directory (workspace/skills)
 
   // Workspace settings
   workDir: string; // Working directory for sessions and outputs
@@ -350,8 +354,12 @@ export const defaultSettings: Settings = {
   defaultModel: '',
   mcpConfigPath: '', // Will be resolved to app data dir at init
   mcpEnabled: true, // Enable MCP by default
+  mcpUserDirEnabled: true, // Enable user directory MCP by default
+  mcpAppDirEnabled: true, // Enable app directory MCP by default
   skillsPath: '', // Will be resolved to app data dir at init
   skillsEnabled: true, // Enable skills by default
+  skillsUserDirEnabled: true, // Enable user directory skills by default
+  skillsAppDirEnabled: true, // Enable app directory skills by default
   workDir: '', // Will be resolved to app data dir at init
   sandboxEnabled: true,
   sandboxProviders: defaultSandboxProviders,

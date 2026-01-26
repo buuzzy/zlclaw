@@ -45,5 +45,11 @@ export default {
     requestFailed: 'Request failed: {message}',
     retrying: 'Retrying ({attempt}/{max})...',
     internalError: 'Internal server error. Please check log file: {logPath}',
+    claudeCodeNotFound:
+      'Claude Code is not installed or unavailable. Please configure a custom AI model in Settings, or install Claude Code (npm install -g @anthropic-ai/claude-code)',
+    configureModel: 'Configure Model',
+    apiKeyError:
+      'API key is invalid or not configured. Please configure your API key in Settings to start chatting.',
+    configureApiKey: 'Configure API Key',
   },
 };

@@ -82,7 +82,18 @@ agent.post('/execute', async (c) => {
     taskId?: string;
     modelConfig?: { apiKey?: string; baseUrl?: string; model?: string };
     sandboxConfig?: SandboxConfig;
-    skillsPath?: string;
+    skillsConfig?: {
+      enabled: boolean;
+      userDirEnabled: boolean;
+      appDirEnabled: boolean;
+      skillsPath?: string;
+    };
+    mcpConfig?: {
+      enabled: boolean;
+      userDirEnabled: boolean;
+      appDirEnabled: boolean;
+      mcpConfigPath?: string;
+    };
   }>();
 
   console.log('[AgentAPI] POST /execute received:', {
@@ -94,6 +105,8 @@ agent.post('/execute', async (c) => {
           provider: body.sandboxConfig.provider,
         }
       : null,
+    skillsConfig: body.skillsConfig,
+    mcpConfig: body.mcpConfig,
   });
 
   if (!body.planId) {
@@ -115,7 +128,8 @@ agent.post('/execute', async (c) => {
       body.taskId,
       body.modelConfig,
       body.sandboxConfig,
-      body.skillsPath
+      body.skillsConfig,
+      body.mcpConfig
     )
   );
 
@@ -174,7 +188,8 @@ agent.post('/', async (c) => {
       body.modelConfig,
       body.sandboxConfig,
       body.images,
-      body.skillsPath
+      body.skillsConfig,
+      body.mcpConfig
     )
   );
 

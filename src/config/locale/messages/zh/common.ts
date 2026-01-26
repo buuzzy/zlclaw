@@ -43,5 +43,10 @@ export default {
     requestFailed: '请求失败：{message}',
     retrying: '正在重试 ({attempt}/{max})...',
     internalError: '服务内部错误，详情请查看日志文件：{logPath}',
+    claudeCodeNotFound:
+      'Claude Code 未安装或不可用。请在设置中配置自定义 AI 模型，或安装 Claude Code（npm install -g @anthropic-ai/claude-code）',
+    configureModel: '配置模型',
+    apiKeyError: 'API 密钥无效或未配置。请在设置中配置您的 API 密钥以开始对话。',
+    configureApiKey: '配置 API 密钥',
   },
 };
