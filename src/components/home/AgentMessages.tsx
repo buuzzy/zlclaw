@@ -66,6 +66,22 @@ function getToolIcon(toolName: string) {
   }
 }
 
+// Check if text content is an API error that should be displayed as error
+function isApiErrorText(content: string): boolean {
+  const errorPatterns = [
+    /API Error:\s*\d{3}/i,
+    /HTTP\s+\d{3}/i,
+    /身份验证失败/,
+    /认证失败/,
+    /鉴权失败/,
+    /Invalid API key/i,
+    /Unauthorized/i,
+    /authentication.*fail/i,
+    /process exited with code [1-9]/i,
+  ];
+  return errorPatterns.some((pattern) => pattern.test(content));
+}
+
 // Error message component that handles special error codes
 function ErrorMessage({ message }: { message: string }) {
   const { t } = useLanguage();
@@ -167,7 +183,11 @@ export function AgentMessages({ messages, isRunning }: AgentMessagesProps) {
             message.content &&
             // Skip rendering if content is plan JSON (already rendered by PlanApproval)
             !message.content.trim().startsWith('{"type":"plan"') &&
-            !message.content.trim().startsWith('{"type": "plan"') && (
+            !message.content.trim().startsWith('{"type": "plan"') &&
+            // Check if this is an API error - render as error instead
+            (isApiErrorText(message.content) ? (
+              <ErrorMessage message="__API_KEY_ERROR__" />
+            ) : (
               <div className="bg-card text-card-foreground prose prose-sm dark:prose-invert max-w-none rounded-lg p-4">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
@@ -198,7 +218,7 @@ export function AgentMessages({ messages, isRunning }: AgentMessagesProps) {
                   {message.content}
                 </ReactMarkdown>
               </div>
-            )}
+            ))}
 
           {message.type === 'tool_use' &&
             (() => {

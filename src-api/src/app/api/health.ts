@@ -1,5 +1,7 @@
 import { exec } from 'child_process';
 import { existsSync, readdirSync } from 'fs';
+import { arch, platform } from 'os';
+import { dirname, join } from 'path';
 import { promisify } from 'util';
 import { Hono } from 'hono';
 
@@ -90,6 +92,126 @@ const DEPENDENCIES: DependencyInfo[] = [
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+/**
+ * Get the target triple for the current platform
+ */
+function getTargetTriple(): string {
+  const os = platform();
+  const cpuArch = arch();
+
+  if (os === 'darwin') {
+    return cpuArch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
+  } else if (os === 'linux') {
+    return cpuArch === 'arm64'
+      ? 'aarch64-unknown-linux-gnu'
+      : 'x86_64-unknown-linux-gnu';
+  } else if (os === 'win32') {
+    return 'x86_64-pc-windows-msvc';
+  }
+
+  return 'unknown';
+}
+
+/**
+ * Check if bundled sidecar Claude Code exists
+ * The bundle structure is:
+ * - claude-{target} or claude (launcher script)
+ * - cli-bundle/
+ *   - node (Node.js binary)
+ *   - node_modules/@anthropic-ai/claude-code/ (Claude Code package)
+ */
+function checkSidecarClaudeCode(): boolean {
+  const os = platform();
+  const targetTriple = getTargetTriple();
+  const claudeName =
+    os === 'win32' ? `claude-${targetTriple}.exe` : `claude-${targetTriple}`;
+
+  // Get the directory where this process (workany-api) is running from
+  const execDir = dirname(process.execPath);
+
+  // Possible locations for the bundled Claude Code launcher
+  const possibleLauncherPaths = [
+    join(execDir, claudeName),
+    join(execDir, 'claude'),
+  ];
+
+  // For macOS .app bundles, also check Resources directory
+  if (os === 'darwin') {
+    const resourcesDir = join(execDir, '..', 'Resources');
+    possibleLauncherPaths.push(join(resourcesDir, claudeName));
+    possibleLauncherPaths.push(join(resourcesDir, 'claude'));
+  }
+
+  // For pkg bundled apps
+  // @ts-expect-error - pkg specific property
+  if (process.pkg) {
+    const pkgDir = dirname(process.argv[0]);
+    possibleLauncherPaths.push(join(pkgDir, claudeName));
+    possibleLauncherPaths.push(join(pkgDir, 'claude'));
+  }
+
+  // Check each possible launcher path
+  for (const launcherPath of possibleLauncherPaths) {
+    if (!existsSync(launcherPath)) continue;
+
+    // Get the directory containing the launcher
+    const launcherDir = dirname(launcherPath);
+
+    // Check if cli-bundle directory exists alongside the launcher
+    const bundleDir = join(launcherDir, 'cli-bundle');
+    const claudeCliPath = join(
+      bundleDir,
+      'node_modules',
+      '@anthropic-ai',
+      'claude-code',
+      'cli.js'
+    );
+    const nodeBinPath = join(bundleDir, os === 'win32' ? 'node.exe' : 'node');
+
+    if (
+      existsSync(bundleDir) &&
+      existsSync(claudeCliPath) &&
+      existsSync(nodeBinPath)
+    ) {
+      console.log(`[Health] Found bundled Claude Code at: ${launcherPath}`);
+      return true;
+    }
+
+    // If launcher exists without bundle dir, it might be a standalone binary
+    if (existsSync(launcherPath)) {
+      console.log(`[Health] Found Claude Code launcher at: ${launcherPath}`);
+      return true;
+    }
+  }
+
+  // Also try direct check for cli-bundle in common locations
+  const bundleLocations = [
+    join(execDir, 'cli-bundle'),
+    join(execDir, '..', 'Resources', 'cli-bundle'),
+    join(execDir, '..', 'Resources', '_up_', 'src-api', 'dist', 'cli-bundle'),
+  ];
+
+  for (const bundleDir of bundleLocations) {
+    if (!existsSync(bundleDir)) continue;
+
+    const claudeCliPath = join(
+      bundleDir,
+      'node_modules',
+      '@anthropic-ai',
+      'claude-code',
+      'cli.js'
+    );
+    const nodeBinPath = join(bundleDir, os === 'win32' ? 'node.exe' : 'node');
+
+    if (existsSync(claudeCliPath) && existsSync(nodeBinPath)) {
+      console.log(`[Health] Found bundled Claude Code at: ${bundleDir}`);
+      return true;
+    }
+  }
+
+  return false;
+}
 
 // Build extended PATH that includes common package manager bin locations
 function getExtendedPath(): string {
@@ -217,8 +339,8 @@ async function checkCommand(command: string): Promise<boolean> {
   }
 }
 
-// Check dependency with fallback to WSL on Windows
-async function checkDependency(nativeCommand: string, binaryName: string): Promise<{ installed: boolean; location: 'native' | 'wsl' | null }> {
+// Check dependency with fallback to WSL on Windows and sidecar
+async function checkDependency(nativeCommand: string, binaryName: string): Promise<{ installed: boolean; location: 'native' | 'wsl' | 'sidecar' | null }> {
   // First try native check
   const nativeInstalled = await checkCommand(nativeCommand);
   if (nativeInstalled) {
@@ -233,6 +355,14 @@ async function checkDependency(nativeCommand: string, binaryName: string): Promi
       if (wslInstalled) {
         return { installed: true, location: 'wsl' };
       }
+    }
+  }
+
+  // Check for bundled sidecar (for claude-code specifically)
+  if (binaryName === 'claude') {
+    const sidecarInstalled = checkSidecarClaudeCode();
+    if (sidecarInstalled) {
+      return { installed: true, location: 'sidecar' };
     }
   }
 
@@ -299,9 +429,18 @@ health.get('/dependencies', async (c) => {
       // If installed in WSL, get version from WSL
       if (location === 'wsl') {
         version = await getVersion(`wsl -e ${binaryName} --version`);
-      } else {
+      } else if (location !== 'sidecar') {
+        // Skip version check for sidecar (bundled) as it may not be in PATH
         version = await getVersion(dep.versionCommand);
       }
+    }
+
+    // Build version string with location indicator
+    let versionString: string | undefined;
+    if (version) {
+      versionString = location === 'wsl' ? `${version} (WSL)` : version;
+    } else if (location === 'sidecar') {
+      versionString = '(Bundled)';
     }
 
     statuses.push({
@@ -310,7 +449,7 @@ health.get('/dependencies', async (c) => {
       description: dep.description,
       required: dep.required,
       installed,
-      version: version ? `${version}${location === 'wsl' ? ' (WSL)' : ''}` : undefined,
+      version: versionString,
       installUrl: dep.installUrl,
     });
 
@@ -454,9 +593,18 @@ health.get('/dependencies/:id', async (c) => {
   if (installed && dep.versionCommand) {
     if (location === 'wsl') {
       version = await getVersion(`wsl -e ${binaryName} --version`);
-    } else {
+    } else if (location !== 'sidecar') {
+      // Skip version check for sidecar (bundled) as it may not be in PATH
       version = await getVersion(dep.versionCommand);
     }
+  }
+
+  // Build version string with location indicator
+  let versionString: string | undefined;
+  if (version) {
+    versionString = location === 'wsl' ? `${version} (WSL)` : version;
+  } else if (location === 'sidecar') {
+    versionString = '(Bundled)';
   }
 
   return c.json({
@@ -466,7 +614,7 @@ health.get('/dependencies/:id', async (c) => {
     description: dep.description,
     required: dep.required,
     installed,
-    version: version ? `${version}${location === 'wsl' ? ' (WSL)' : ''}` : undefined,
+    version: versionString,
     location: location,
     installUrl: dep.installUrl,
   });

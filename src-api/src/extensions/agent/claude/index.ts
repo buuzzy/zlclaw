@@ -1261,7 +1261,7 @@ User's request (answer this AFTER reading the images):
         },
       });
 
-      // Check for API key related errors
+      // Check for API key related errors (including Chinese error messages from third-party APIs)
       const errorMessage = error instanceof Error ? error.message : String(error);
       const isApiKeyError =
         errorMessage.includes('Invalid API key') ||
@@ -1270,7 +1270,14 @@ User's request (answer this AFTER reading the images):
         errorMessage.includes('authentication') ||
         errorMessage.includes('Please run /login') ||
         errorMessage.includes('Unauthorized') ||
-        errorMessage.includes('401');
+        errorMessage.includes('401') ||
+        errorMessage.includes('403') ||
+        errorMessage.includes('身份验证') ||
+        errorMessage.includes('认证失败') ||
+        errorMessage.includes('鉴权失败') ||
+        errorMessage.includes('密钥无效') ||
+        errorMessage.includes('token') ||
+        errorMessage.includes('credential');
 
       if (isApiKeyError) {
         yield {

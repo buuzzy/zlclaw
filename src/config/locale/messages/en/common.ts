@@ -49,7 +49,7 @@ export default {
       'Claude Code is not installed or unavailable. Please configure a custom AI model in Settings, or install Claude Code (npm install -g @anthropic-ai/claude-code)',
     configureModel: 'Configure Model',
     apiKeyError:
-      'API key is invalid or not configured. Please configure your API key in Settings to start chatting.',
-    configureApiKey: 'Configure API Key',
+      'AI model request failed. Please check your model configuration (API URL, API key, model name, etc.)',
+    configureApiKey: 'Go to Settings',
   },
 };

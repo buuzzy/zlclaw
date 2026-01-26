@@ -46,7 +46,7 @@ export default {
     claudeCodeNotFound:
       'Claude Code 未安装或不可用。请在设置中配置自定义 AI 模型，或安装 Claude Code（npm install -g @anthropic-ai/claude-code）',
     configureModel: '配置模型',
-    apiKeyError: 'API 密钥无效或未配置。请在设置中配置您的 API 密钥以开始对话。',
-    configureApiKey: '配置 API 密钥',
+    apiKeyError: 'AI 模型接口请求失败，请检查模型配置是否正确（API 地址、密钥、模型名称等）',
+    configureApiKey: '前往配置',
   },
 };

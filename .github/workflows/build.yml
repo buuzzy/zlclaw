@@ -154,6 +154,227 @@ jobs:
           mkdir -p dist
           bun build src/index.ts --compile --target=${{ matrix.bun_target }} --outfile dist/workany-api-${{ matrix.rust_target }}.exe
 
+      - name: Bundle CLI tools (Unix)
+        if: steps.check.outputs.skip != 'true' && matrix.platform != 'windows'
+        shell: bash
+        run: |
+          cd src-api/dist
+          mkdir -p cli-bundle
+          cd cli-bundle
+
+          # Download Node.js for target platform
+          NODE_VERSION="22.2.0"
+          case "${{ matrix.rust_target }}" in
+            x86_64-unknown-linux-gnu)
+              NODE_PLATFORM="linux"
+              NODE_ARCH="x64"
+              ;;
+            x86_64-apple-darwin)
+              NODE_PLATFORM="darwin"
+              NODE_ARCH="x64"
+              ;;
+            aarch64-apple-darwin)
+              NODE_PLATFORM="darwin"
+              NODE_ARCH="arm64"
+              ;;
+          esac
+
+          NODE_FILENAME="node-v${NODE_VERSION}-${NODE_PLATFORM}-${NODE_ARCH}"
+          curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_FILENAME}.tar.gz" | tar xz
+          cp "${NODE_FILENAME}/bin/node" ./node
+          chmod +x ./node
+          rm -rf "${NODE_FILENAME}"
+
+          # Install CLI packages
+          echo '{"name":"cli-bundle","private":true,"type":"module"}' > package.json
+          npm install @anthropic-ai/claude-code @openai/codex --registry=https://registry.npmmirror.com
+
+          # Copy wasm files
+          cp node_modules/@anthropic-ai/claude-code/*.wasm . 2>/dev/null || true
+
+          # Clean up unused platform binaries
+          case "${{ matrix.rust_target }}" in
+            x86_64-unknown-linux-gnu)
+              CODEX_KEEP="x86_64-unknown-linux-musl"
+              CLAUDE_KEEP="x64-linux"
+              ;;
+            x86_64-apple-darwin)
+              CODEX_KEEP="x86_64-apple-darwin"
+              CLAUDE_KEEP="x64-darwin"
+              ;;
+            aarch64-apple-darwin)
+              CODEX_KEEP="aarch64-apple-darwin"
+              CLAUDE_KEEP="arm64-darwin"
+              ;;
+          esac
+
+          # Clean @openai/codex vendor
+          if [ -d "node_modules/@openai/codex/vendor" ]; then
+            for dir in node_modules/@openai/codex/vendor/*; do
+              dirname=$(basename "$dir")
+              if [ "$dirname" != "$CODEX_KEEP" ] && [ -d "$dir" ]; then
+                rm -rf "$dir"
+              fi
+            done
+          fi
+
+          # Clean @anthropic-ai/claude-code vendor/ripgrep
+          if [ -d "node_modules/@anthropic-ai/claude-code/vendor/ripgrep" ]; then
+            for item in node_modules/@anthropic-ai/claude-code/vendor/ripgrep/*; do
+              itemname=$(basename "$item")
+              if [ -d "$item" ] && [ "$itemname" != "$CLAUDE_KEEP" ]; then
+                rm -rf "$item"
+              fi
+            done
+          fi
+
+          cd ..
+
+          # Create claude launcher script (no indentation in heredoc)
+          cat > claude << 'EOF'
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+for DIR in "$SCRIPT_DIR/cli-bundle" "$SCRIPT_DIR/../Resources/_up_/src-api/dist/cli-bundle" "$SCRIPT_DIR/../Resources/cli-bundle"; do
+    if [ -f "$DIR/node" ] && [ -d "$DIR/node_modules" ]; then
+        BUNDLE_DIR="$DIR"
+        break
+    fi
+done
+if [ -z "$BUNDLE_DIR" ]; then
+    echo "Error: cli-bundle not found" >&2
+    exit 1
+fi
+exec "$BUNDLE_DIR/node" "$BUNDLE_DIR/node_modules/@anthropic-ai/claude-code/cli.js" "$@"
+EOF
+          chmod +x claude
+          cp claude "claude-${{ matrix.rust_target }}"
+
+          # Create codex launcher script
+          cat > codex << 'EOF'
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+for DIR in "$SCRIPT_DIR/cli-bundle" "$SCRIPT_DIR/../Resources/_up_/src-api/dist/cli-bundle" "$SCRIPT_DIR/../Resources/cli-bundle"; do
+    if [ -f "$DIR/node" ] && [ -d "$DIR/node_modules" ]; then
+        BUNDLE_DIR="$DIR"
+        break
+    fi
+done
+if [ -z "$BUNDLE_DIR" ]; then
+    echo "Error: cli-bundle not found" >&2
+    exit 1
+fi
+exec "$BUNDLE_DIR/node" "$BUNDLE_DIR/node_modules/@openai/codex/bin/codex.js" "$@"
+EOF
+          chmod +x codex
+          cp codex "codex-${{ matrix.rust_target }}"
+
+          echo "CLI bundle created successfully"
+          ls -la
+          ls -la cli-bundle/
+          du -sh cli-bundle/
+
+      - name: Bundle CLI tools (Windows)
+        if: steps.check.outputs.skip != 'true' && matrix.platform == 'windows'
+        shell: bash
+        run: |
+          cd src-api/dist
+          mkdir -p cli-bundle
+          cd cli-bundle
+
+          # Download Node.js for Windows
+          NODE_VERSION="22.2.0"
+          NODE_FILENAME="node-v${NODE_VERSION}-win-x64"
+          curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_FILENAME}.zip" -o node.zip
+          unzip -q node.zip
+          cp "${NODE_FILENAME}/node.exe" ./node.exe
+          rm -rf "${NODE_FILENAME}" node.zip
+
+          # Install CLI packages
+          echo '{"name":"cli-bundle","private":true,"type":"module"}' > package.json
+          npm install @anthropic-ai/claude-code @openai/codex --registry=https://registry.npmmirror.com
+
+          # Copy wasm files
+          cp node_modules/@anthropic-ai/claude-code/*.wasm . 2>/dev/null || true
+
+          # Clean up unused platform binaries (keep Windows only)
+          if [ -d "node_modules/@openai/codex/vendor" ]; then
+            for dir in node_modules/@openai/codex/vendor/*; do
+              dirname=$(basename "$dir")
+              if [ "$dirname" != "x86_64-pc-windows-msvc" ] && [ -d "$dir" ]; then
+                rm -rf "$dir"
+              fi
+            done
+          fi
+
+          if [ -d "node_modules/@anthropic-ai/claude-code/vendor/ripgrep" ]; then
+            for item in node_modules/@anthropic-ai/claude-code/vendor/ripgrep/*; do
+              itemname=$(basename "$item")
+              if [ -d "$item" ] && [ "$itemname" != "x64-win32" ]; then
+                rm -rf "$item"
+              fi
+            done
+          fi
+
+          cd ..
+
+          # Create Windows batch launchers (no indentation in heredoc)
+          cat > claude.cmd << 'EOF'
+@echo off
+setlocal
+set "SCRIPT_DIR=%~dp0"
+set "BUNDLE_DIR=%SCRIPT_DIR%cli-bundle"
+if not exist "%BUNDLE_DIR%\node.exe" set "BUNDLE_DIR=%SCRIPT_DIR%..\Resources\cli-bundle"
+"%BUNDLE_DIR%\node.exe" "%BUNDLE_DIR%\node_modules\@anthropic-ai\claude-code\cli.js" %*
+EOF
+          cp claude.cmd "claude-${{ matrix.rust_target }}.cmd"
+
+          cat > codex.cmd << 'EOF'
+@echo off
+setlocal
+set "SCRIPT_DIR=%~dp0"
+set "BUNDLE_DIR=%SCRIPT_DIR%cli-bundle"
+if not exist "%BUNDLE_DIR%\node.exe" set "BUNDLE_DIR=%SCRIPT_DIR%..\Resources\cli-bundle"
+"%BUNDLE_DIR%\node.exe" "%BUNDLE_DIR%\node_modules\@openai\codex\bin\codex.js" %*
+EOF
+          cp codex.cmd "codex-${{ matrix.rust_target }}.cmd"
+
+          echo "CLI bundle created successfully"
+          ls -la
+          ls -la cli-bundle/
+          du -sh cli-bundle/
+
+      - name: Update tauri.conf.json for CLI bundle
+        if: steps.check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          node -e "
+          const fs = require('fs');
+          const config = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+
+          if (!config.bundle.externalBin) config.bundle.externalBin = [];
+          if (!config.bundle.resources) config.bundle.resources = [];
+
+          // Add CLI launchers
+          if (!config.bundle.externalBin.includes('../src-api/dist/claude')) {
+            config.bundle.externalBin.unshift('../src-api/dist/claude');
+          }
+          if (!config.bundle.externalBin.includes('../src-api/dist/codex')) {
+            config.bundle.externalBin.unshift('../src-api/dist/codex');
+          }
+
+          // Add cli-bundle as resource
+          const cliResource = '../src-api/dist/cli-bundle/**/*';
+          if (!config.bundle.resources.includes(cliResource)) {
+            config.bundle.resources = config.bundle.resources.filter(r =>
+              !r.includes('claude-bundle') && !r.includes('codex-bundle') && !r.includes('cli-bundle')
+            );
+            config.bundle.resources.push(cliResource);
+          }
+
+          fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(config, null, 2));
+          console.log('Updated tauri.conf.json with CLI bundle config');
+          "
+
       - name: Build frontend
         if: steps.check.outputs.skip != 'true'
         run: pnpm build
