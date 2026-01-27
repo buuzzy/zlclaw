@@ -760,12 +760,16 @@ function extractExternalFolders(
 
   // Helper to add folder if it's external
   const addIfExternal = (filePath: string) => {
-    if (!filePath || !filePath.startsWith('/')) return;
+    // Support both Unix (/) and Windows (\) paths
+    const isUnixPath = filePath?.startsWith('/');
+    const isWindowsPath = filePath && /^[A-Za-z]:\\/.test(filePath);
+    if (!filePath || (!isUnixPath && !isWindowsPath)) return;
 
-    // Get folder path
-    const folderPath = filePath.includes('/')
-      ? filePath.substring(0, filePath.lastIndexOf('/')) || '/'
-      : filePath;
+    // Get folder path (works for both Unix / and Windows \)
+    const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+    const folderPath = lastSlash > 0
+      ? filePath.substring(0, lastSlash)
+      : (isWindowsPath ? filePath.substring(0, 3) : '/');
 
     // Only add if it's not within workingDir
     if (folderPath && (!workingDir || !filePath.startsWith(workingDir))) {
@@ -824,13 +828,14 @@ function extractExternalFolders(
 
       if (path.startsWith('~')) {
         // For ~ paths, add as-is (will be displayed with ~)
-        const folderPath = path.includes('/')
-          ? path.substring(0, path.lastIndexOf('/')) || '~'
-          : path;
+        // Support both Unix / and Windows \ separators
+        const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        const folderPath = lastSlash > 0 ? path.substring(0, lastSlash) : path;
         if (folderPath && folderPath !== '~') {
           foldersSet.add(folderPath);
         }
-      } else if (path.startsWith('/')) {
+      } else if (path.startsWith('/') || /^[A-Za-z]:\\/.test(path)) {
+        // Unix absolute path or Windows absolute path (e.g., C:\)
         addIfExternal(path);
       }
     }

@@ -315,30 +315,47 @@ function getSidecarClaudeCodePath(): string | undefined {
  */
 function getExtendedPath(): string {
   const home = homedir();
-  const paths = [
-    process.env.PATH || '',
-    '/usr/local/bin',
-    '/opt/homebrew/bin',
-    `${home}/.local/bin`,
-    `${home}/.npm-global/bin`,
-    `${home}/.volta/bin`,
-    `${home}/code/node/npm_global/bin`,
-  ];
+  const os = platform();
+  const isWindows = os === 'win32';
+  const pathSeparator = isWindows ? ';' : ':';
 
-  // Add nvm paths
-  const nvmDir = join(home, '.nvm', 'versions', 'node');
-  try {
-    if (existsSync(nvmDir)) {
-      const versions = readdirSync(nvmDir);
-      for (const version of versions) {
-        paths.push(join(nvmDir, version, 'bin'));
+  const paths = [process.env.PATH || ''];
+
+  if (isWindows) {
+    // Windows paths
+    paths.push(
+      join(home, 'AppData', 'Roaming', 'npm'),
+      join(home, 'AppData', 'Local', 'Programs', 'nodejs'),
+      join(home, '.volta', 'bin'),
+      'C:\\Program Files\\nodejs',
+      'C:\\Program Files (x86)\\nodejs'
+    );
+  } else {
+    // Unix paths
+    paths.push(
+      '/usr/local/bin',
+      '/opt/homebrew/bin',
+      `${home}/.local/bin`,
+      `${home}/.npm-global/bin`,
+      `${home}/.volta/bin`,
+      `${home}/code/node/npm_global/bin`
+    );
+
+    // Add nvm paths (Unix only)
+    const nvmDir = join(home, '.nvm', 'versions', 'node');
+    try {
+      if (existsSync(nvmDir)) {
+        const versions = readdirSync(nvmDir);
+        for (const version of versions) {
+          paths.push(join(nvmDir, version, 'bin'));
+        }
       }
+    } catch {
+      // nvm not installed
     }
-  } catch {
-    // nvm not installed
   }
 
-  return paths.join(':');
+  return paths.join(pathSeparator);
 }
 
 /**
@@ -532,13 +549,22 @@ async function ensureClaudeCode(): Promise<string | undefined> {
 }
 
 /**
- * Expand ~ to home directory
+ * Expand ~ to home directory and normalize path separators
  */
-function expandPath(path: string): string {
-  if (path.startsWith('~')) {
-    return join(homedir(), path.slice(1));
+function expandPath(inputPath: string): string {
+  let result = inputPath;
+
+  // Expand ~ to home directory
+  if (result.startsWith('~')) {
+    result = join(homedir(), result.slice(1));
   }
-  return path;
+
+  // Normalize path separators for current platform
+  if (platform() === 'win32') {
+    result = result.replace(/\//g, '\\');
+  }
+
+  return result;
 }
 
 /**
@@ -588,10 +614,10 @@ function getSessionWorkDir(
   // Check if the workDir is already a session folder path from frontend
   // Session paths from frontend look like: ~/.workany/sessions/{sessionId}/task-{xx}
   // or: ~/.workany/sessions/{sessionId}
-  if (
-    expandedPath.includes('/sessions/') &&
-    !expandedPath.endsWith('/sessions')
-  ) {
+  // Support both Unix (/) and Windows (\) path separators
+  const hasSessionsPath = expandedPath.includes('/sessions/') || expandedPath.includes('\\sessions\\');
+  const endsWithSessions = expandedPath.endsWith('/sessions') || expandedPath.endsWith('\\sessions');
+  if (hasSessionsPath && !endsWithSessions) {
     // Frontend already provided a proper session path, use it directly
     console.log('[Claude] Using frontend-provided session path:', expandedPath);
     return expandedPath;
@@ -1035,7 +1061,11 @@ export class ClaudeAgent extends BaseAgent {
       env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
       // Force the SDK to not use any cached/stored API configuration
       env.CLAUDE_CODE_SKIP_CONFIG = '1';
-      logger.info('[ClaudeAgent] Custom API mode: disabled non-essential traffic');
+      // Set longer timeout for third-party APIs (10 minutes)
+      env.API_TIMEOUT_MS = '600000';
+      // Disable model validation for third-party APIs
+      env.CLAUDE_CODE_SKIP_MODEL_VALIDATION = '1';
+      logger.info('[ClaudeAgent] Custom API mode: disabled non-essential traffic, set timeout to 600s');
     }
 
     // Debug: Log final environment variables for API configuration
@@ -1305,6 +1335,10 @@ User's request (answer this AFTER reading the images):
       model: this.config.model,
       pathToClaudeCodeExecutable: claudeCodePath,
       maxTurns: 200, // Allow more agentic turns before stopping
+      // Capture stderr for debugging
+      stderr: (data: string) => {
+        logger.error(`[Claude ${session.id}] STDERR: ${data}`);
+      },
     };
 
     // Initialize MCP servers with user-configured servers
@@ -1380,28 +1414,34 @@ User's request (answer this AFTER reading the images):
       }
     } catch (error) {
       // Log detailed error information to file for debugging
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
       logger.error(`[Claude ${session.id}] Error occurred`, {
-        error:
-          error instanceof Error
-            ? {
-                name: error.name,
-                message: error.message,
-                stack: error.stack,
-              }
-            : error,
+        error: {
+          name: error instanceof Error ? error.name : 'Unknown',
+          message: errorMessage,
+          stack: errorStack,
+        },
         config: {
           baseUrl: this.config.baseUrl || '(default)',
           apiKey: this.config.apiKey ? 'configured' : 'not set',
           model: this.config.model || '(default)',
         },
+        env: {
+          ANTHROPIC_BASE_URL: this.buildEnvConfig().ANTHROPIC_BASE_URL || '(not set)',
+          ANTHROPIC_MODEL: this.buildEnvConfig().ANTHROPIC_MODEL || '(not set)',
+          hasAuthToken: !!this.buildEnvConfig().ANTHROPIC_AUTH_TOKEN,
+        },
       });
 
       // Check for API key related errors (including Chinese error messages from third-party APIs)
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
       // If no API key is configured and process exits with error, it's likely an auth issue
       const noApiKeyConfigured = !this.config.apiKey && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN;
       const processExitError = errorMessage.includes('exited with code');
+
+      // Check if using custom API - process exit with custom API is likely API compatibility issue
+      const usingCustomApi = this.isUsingCustomApi();
 
       const isApiKeyError =
         errorMessage.includes('Invalid API key') ||
@@ -1420,10 +1460,20 @@ User's request (answer this AFTER reading the images):
         errorMessage.includes('credential') ||
         (noApiKeyConfigured && processExitError);  // No API key + process exit = likely auth issue
 
+      // Custom API + process exit error = likely API compatibility issue
+      const isApiCompatibilityError = usingCustomApi && processExitError;
+
       if (isApiKeyError) {
         yield {
           type: 'error',
           message: '__API_KEY_ERROR__',
+        };
+      } else if (isApiCompatibilityError) {
+        // Custom API compatibility error - show more specific message
+        logger.error(`[Claude ${session.id}] Custom API compatibility error. Check if the API endpoint supports Claude Code SDK format.`);
+        yield {
+          type: 'error',
+          message: `__CUSTOM_API_ERROR__|${this.config.baseUrl}|${LOG_FILE_PATH}`,
         };
       } else {
         // Show simple user-friendly error message
@@ -1654,6 +1704,10 @@ If you need to create any files during planning, use this directory.
       model: this.config.model,
       pathToClaudeCodeExecutable: claudeCodePath,
       maxTurns: 200, // Allow more agentic turns before stopping
+      // Capture stderr for debugging
+      stderr: (data: string) => {
+        logger.error(`[Claude ${session.id}] STDERR: ${data}`);
+      },
     };
 
     // Initialize MCP servers with user-configured servers

@@ -26,7 +26,7 @@ import {
   updateBackgroundTaskStatus,
   type BackgroundTask,
 } from '@/shared/lib/background-tasks';
-import { getAppDataDir } from '@/shared/lib/paths';
+import { getAppDataDir, getFileName } from '@/shared/lib/paths';
 
 const AGENT_SERVER_URL = API_BASE_URL;
 
@@ -568,7 +568,7 @@ async function extractFilesFromText(
         const filePath = match[1] || match[0];
         if (filePath && !detectedFiles.has(filePath)) {
           detectedFiles.add(filePath);
-          const fileName = filePath.split('/').pop() || filePath;
+          const fileName = getFileName(filePath);
           const fileType = getFileTypeFromPath(filePath);
 
           await createFile({
@@ -603,7 +603,7 @@ async function extractAndSaveFiles(
     // Handle Write tool - creates new files
     if (toolName === 'Write' && toolInput.file_path) {
       const filePath = String(toolInput.file_path);
-      const fileName = filePath.split('/').pop() || filePath;
+      const fileName = getFileName(filePath);
       const content = toolInput.content ? String(toolInput.content) : '';
       const preview = content.slice(0, 500);
       const fileType = getFileTypeFromPath(filePath);
@@ -621,7 +621,7 @@ async function extractAndSaveFiles(
     // Handle Edit tool - modifies existing files
     if (toolName === 'Edit' && toolInput.file_path) {
       const filePath = String(toolInput.file_path);
-      const fileName = filePath.split('/').pop() || filePath;
+      const fileName = getFileName(filePath);
       const newContent = toolInput.new_string
         ? String(toolInput.new_string)
         : '';
@@ -689,7 +689,7 @@ async function extractAndSaveFiles(
             const filePath = match[1] || match[0];
             if (filePath && !detectedBashFiles.has(filePath)) {
               detectedBashFiles.add(filePath);
-              const fileName = filePath.split('/').pop() || filePath;
+              const fileName = getFileName(filePath);
               const fileType = getFileTypeFromPath(filePath);
 
               await createFile({
@@ -731,7 +731,7 @@ async function extractAndSaveFiles(
           const filePath = match[1] || match[0];
           if (filePath && !detectedFiles.has(filePath)) {
             detectedFiles.add(filePath);
-            const fileName = filePath.split('/').pop() || filePath;
+            const fileName = getFileName(filePath);
             const fileType = getFileTypeFromPath(filePath);
 
             await createFile({

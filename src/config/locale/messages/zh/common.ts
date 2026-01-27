@@ -43,6 +43,8 @@ export default {
     requestFailed: '请求失败：{message}',
     retrying: '正在重试 ({attempt}/{max})...',
     internalError: '服务内部错误，详情请查看日志文件：{logPath}',
+    customApiError:
+      '自定义 API ({baseUrl}) 可能与 Claude Code SDK 不兼容。请检查 API 配置或尝试其他服务商。日志文件：{logPath}',
     openLogFile: '打开日志文件',
     modelNotConfigured:
       '尚未配置 AI 模型。请先配置自定义模型（API 地址、密钥、模型名称）后再开始对话。',

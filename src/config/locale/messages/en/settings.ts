@@ -110,6 +110,11 @@ export default {
   custom: 'Custom',
   authMethod: 'Auth Method',
   selectProvider: 'Select a provider to configure',
+  conversationHistoryLimits: 'Conversation History Limits',
+  maxConversationTurns: 'Maximum Conversation Turns',
+  maxConversationTurnsDescription: 'Number of conversation turns to keep in history (0 = unlimited)',
+  maxHistoryTokens: 'Maximum History Tokens',
+  maxHistoryTokensDescription: 'Maximum tokens for conversation history (0 = unlimited)',
 
   // Skills
   skills: 'Skills',

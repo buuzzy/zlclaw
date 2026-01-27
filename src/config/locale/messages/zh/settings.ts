@@ -108,6 +108,11 @@ export default {
   custom: '自定义',
   authMethod: '身份验证方式',
   selectProvider: '选择一个供应商进行配置',
+  conversationHistoryLimits: '对话历史限制',
+  maxConversationTurns: '最大对话轮次',
+  maxConversationTurnsDescription: '保留的对话轮次数量（0 = 不限制）',
+  maxHistoryTokens: '最大历史 Token 数',
+  maxHistoryTokensDescription: '对话历史的最大 Token 数量（0 = 不限制）',
 
   // Skills
   skills: 'Skills',

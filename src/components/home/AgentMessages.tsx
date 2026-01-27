@@ -204,6 +204,53 @@ function ErrorMessage({ message }: { message: string }) {
     );
   }
 
+  // Check for custom API error
+  if (message.startsWith('__CUSTOM_API_ERROR__|')) {
+    const parts = message.split('|');
+    const baseUrl = parts[1] || '';
+    const logPath = parts[2] || '';
+
+    const openLogFile = async () => {
+      try {
+        const { open } = await import('@tauri-apps/plugin-shell');
+        await open(logPath);
+      } catch {
+        try {
+          const { openPath } = await import('@tauri-apps/plugin-opener');
+          // Get directory path (works for both Unix / and Windows \)
+          const lastSlash = Math.max(logPath.lastIndexOf('/'), logPath.lastIndexOf('\\'));
+          const logDir = lastSlash > 0 ? logPath.substring(0, lastSlash) : logPath;
+          await openPath(logDir);
+        } catch {
+          console.error('Failed to open log file');
+        }
+      }
+    };
+
+    const errorMsg = (t.common.errors.customApiError ||
+      'Custom API ({baseUrl}) may not be compatible with Claude Code SDK. Please check the API configuration or try a different provider. Log file: {logPath}')
+      .replace('{baseUrl}', baseUrl)
+      .replace('{logPath}', logPath);
+
+    return (
+      <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
+        <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-fit"
+          onClick={openLogFile}
+        >
+          <FolderOpen className="mr-2 size-4" />
+          {t.common.errors.openLogFile || 'Open Log File'}
+        </Button>
+      </div>
+    );
+  }
+
   // Check for internal error
   if (message.startsWith('__INTERNAL_ERROR__|')) {
     const logPath = message.replace('__INTERNAL_ERROR__|', '');
@@ -217,9 +264,9 @@ function ErrorMessage({ message }: { message: string }) {
         // Fallback: try to open the containing folder
         try {
           const { openPath } = await import('@tauri-apps/plugin-opener');
-          // Get the directory containing the log file
-          const logDir = logPath.substring(0, logPath.lastIndexOf('/')) ||
-                        logPath.substring(0, logPath.lastIndexOf('\\'));
+          // Get directory path (works for both Unix / and Windows \)
+          const lastSlash = Math.max(logPath.lastIndexOf('/'), logPath.lastIndexOf('\\'));
+          const logDir = lastSlash > 0 ? logPath.substring(0, lastSlash) : logPath;
           await openPath(logDir);
         } catch {
           console.error('Failed to open log file');

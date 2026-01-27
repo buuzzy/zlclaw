@@ -1732,6 +1732,33 @@ function ErrorMessage({ message }: { message: string }) {
     );
   }
 
+  // Check if this is a custom API error (format: __CUSTOM_API_ERROR__|baseUrl|logPath)
+  const isCustomApiError = message.startsWith('__CUSTOM_API_ERROR__|');
+  if (isCustomApiError) {
+    const parts = message.split('|');
+    const baseUrl = parts[1] || '';
+    const logPath = parts[2] || '~/.workany/logs/workany.log';
+    const errorMessage = (
+      t.common.errors.customApiError ||
+      'Custom API ({baseUrl}) may not be compatible with Claude Code SDK. Please check the API configuration or try a different provider. Log file: {logPath}'
+    ).replace('{baseUrl}', baseUrl).replace('{logPath}', logPath);
+
+    return (
+      <div className="flex items-start gap-3 py-2">
+        <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center">
+          <svg
+            viewBox="0 0 16 16"
+            className="size-4 text-amber-500"
+            fill="currentColor"
+          >
+            <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7 4.5a1 1 0 112 0v3a1 1 0 11-2 0v-3zm1 7a1 1 0 100-2 1 1 0 000 2z" />
+          </svg>
+        </div>
+        <p className="text-muted-foreground text-sm">{errorMessage}</p>
+      </div>
+    );
+  }
+
   // Check if this is an internal error (format: __INTERNAL_ERROR__|logPath)
   const isInternalError = message.startsWith('__INTERNAL_ERROR__|');
   if (isInternalError) {

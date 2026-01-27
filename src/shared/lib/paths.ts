@@ -207,3 +207,43 @@ export async function getDisplayPath(path: string): Promise<string> {
 
   return path;
 }
+
+/**
+ * Get the filename from a path (cross-platform)
+ * Works with both Unix (/) and Windows (\) paths
+ */
+export function getFileName(filePath: string): string {
+  if (!filePath) return '';
+  // Split on both / and \ and get the last part
+  const parts = filePath.split(/[/\\]/);
+  return parts[parts.length - 1] || filePath;
+}
+
+/**
+ * Get the directory from a path (cross-platform)
+ * Works with both Unix (/) and Windows (\) paths
+ */
+export function getDirName(filePath: string): string {
+  if (!filePath) return '';
+  const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+  if (lastSlash <= 0) {
+    // Handle root paths
+    if (filePath.startsWith('/')) return '/';
+    if (/^[A-Za-z]:\\/.test(filePath)) return filePath.substring(0, 3);
+    return '';
+  }
+  return filePath.substring(0, lastSlash);
+}
+
+/**
+ * Check if a path is absolute (cross-platform)
+ * Works with both Unix (/) and Windows (C:\) paths
+ */
+export function isAbsolutePath(filePath: string): boolean {
+  if (!filePath) return false;
+  // Unix absolute path
+  if (filePath.startsWith('/')) return true;
+  // Windows absolute path (e.g., C:\, D:\)
+  if (/^[A-Za-z]:\\/.test(filePath)) return true;
+  return false;
+}

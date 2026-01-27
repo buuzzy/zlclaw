@@ -348,20 +348,28 @@ export function ModelSettings({
                 )}
               </div>
 
+              {/* Add Custom Model Button */}
+              <button
+                onClick={() => setShowAddProvider(true)}
+                className="text-primary hover:text-primary/80 inline-flex items-center gap-1.5 text-sm"
+              >
+                <Plus className="size-4" />
+                {t.settings.addCustomModel}
+              </button>
+
               {/* Conversation History Settings */}
               <div className="space-y-4">
                 <h4 className="text-foreground text-sm font-medium">
-                  Conversation History Limits
+                  {t.settings.conversationHistoryLimits}
                 </h4>
 
                 {/* Max Conversation Turns */}
                 <div className="flex flex-col gap-2">
                   <label className="text-foreground block text-sm font-medium">
-                    Maximum Conversation Turns
+                    {t.settings.maxConversationTurns}
                   </label>
                   <p className="text-muted-foreground text-xs">
-                    Number of conversation turns to keep in history (0 =
-                    unlimited)
+                    {t.settings.maxConversationTurnsDescription}
                   </p>
                   <input
                     type="number"
@@ -382,10 +390,10 @@ export function ModelSettings({
                 {/* Max History Tokens */}
                 <div className="flex flex-col gap-2">
                   <label className="text-foreground block text-sm font-medium">
-                    Maximum History Tokens
+                    {t.settings.maxHistoryTokens}
                   </label>
                   <p className="text-muted-foreground text-xs">
-                    Maximum tokens for conversation history (0 = unlimited)
+                    {t.settings.maxHistoryTokensDescription}
                   </p>
                   <input
                     type="number"
@@ -404,15 +412,6 @@ export function ModelSettings({
                   />
                 </div>
               </div>
-
-              {/* Add Custom Model Button */}
-              <button
-                onClick={() => setShowAddProvider(true)}
-                className="text-primary hover:text-primary/80 inline-flex items-center gap-1.5 text-sm"
-              >
-                <Plus className="size-4" />
-                {t.settings.addCustomModel}
-              </button>
             </div>
           </div>
         ) : selectedProvider ? (

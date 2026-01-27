@@ -45,6 +45,8 @@ export default {
     requestFailed: 'Request failed: {message}',
     retrying: 'Retrying ({attempt}/{max})...',
     internalError: 'Internal server error. Please check log file: {logPath}',
+    customApiError:
+      'Custom API ({baseUrl}) may not be compatible with Claude Code SDK. Please check the API configuration or try a different provider. Log file: {logPath}',
     openLogFile: 'Open Log File',
     modelNotConfigured:
       'AI model not configured. Please configure a custom model (API URL, API key, model name) before starting a conversation.',

@@ -187,10 +187,12 @@ export abstract class BaseSandboxProvider implements ISandboxProvider {
    */
   protected getContainerScriptPath(filePath: string, workDir: string): string {
     if (filePath.startsWith(workDir)) {
-      const relativePath = filePath.slice(workDir.length).replace(/^\//, '');
+      // Remove workDir prefix and leading slash/backslash, then normalize to forward slashes for container
+      const relativePath = filePath.slice(workDir.length).replace(/^[/\\]/, '').replace(/\\/g, '/');
       return `/workspace/${relativePath}`;
     }
-    const fileName = filePath.split('/').pop() || 'script';
+    // Support both Unix (/) and Windows (\) paths
+    const fileName = filePath.split(/[/\\]/).pop() || 'script';
     return `/workspace/${fileName}`;
   }
 }
