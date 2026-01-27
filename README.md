@@ -80,6 +80,11 @@ workany/
 | Backend | Hono, Claude Agent SDK, MCP SDK |
 | Desktop | Tauri 2, SQLite |
 
+
+## Architecture
+
+![](/public/imgs/architecture.png)
+
 ## Development
 
 ### Requirements

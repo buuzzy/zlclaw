@@ -939,6 +939,11 @@ export class ClaudeAgent extends BaseAgent {
   /**
    * Build settingSources for Claude SDK
    * Skills are loaded from ~/.claude/skills/ via 'user' source
+   *
+   * IMPORTANT: When custom API is configured, we should be careful about
+   * loading user settings from ~/.claude/settings.json as it may contain
+   * model settings that conflict with the custom API (e.g., model: "opus"
+   * won't work with third-party APIs like 火山引擎/OpenRouter)
    */
   private buildSettingSources(skillsConfig?: SkillsConfig): ('user' | 'project')[] {
     // If skills are globally disabled, use project only (no user skills)
@@ -953,11 +958,20 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
+   * Check if using custom (non-Anthropic) API
+   */
+  private isUsingCustomApi(): boolean {
+    return !!(this.config.baseUrl && this.config.apiKey);
+  }
+
+  /**
    * Build environment variables for the SDK query
    * Supports custom API endpoint and API key (including OpenRouter)
    * Also includes extended PATH for packaged app compatibility
+   *
+   * NOTE: SDK expects Record<string, string>, so we filter out undefined values
    */
-  private buildEnvConfig(): Record<string, string | undefined> {
+  private buildEnvConfig(): Record<string, string> {
     const env: Record<string, string | undefined> = { ...process.env };
 
     // Extend PATH for packaged app to find node and other binaries
@@ -1000,11 +1014,28 @@ export class ClaudeAgent extends BaseAgent {
       env.ANTHROPIC_DEFAULT_HAIKU_MODEL = this.config.model;
       env.ANTHROPIC_DEFAULT_OPUS_MODEL = this.config.model;
       logger.info('[ClaudeAgent] Model configured:', this.config.model);
+    } else if (this.config.apiKey) {
+      // When using custom API but no model specified, clear any model from ~/.claude/settings.json
+      // to let the third-party API use its default model
+      delete env.ANTHROPIC_MODEL;
+      delete env.ANTHROPIC_DEFAULT_SONNET_MODEL;
+      delete env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
+      delete env.ANTHROPIC_DEFAULT_OPUS_MODEL;
+      logger.info('[ClaudeAgent] Custom API without model: cleared local model settings');
     } else {
       logger.info(
         '[ClaudeAgent] Model to use:',
         env.ANTHROPIC_MODEL || 'default from SDK'
       );
+    }
+
+    // When using custom API, disable telemetry and non-essential traffic
+    // This helps avoid potential issues with third-party API compatibility
+    if (this.isUsingCustomApi()) {
+      env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
+      // Force the SDK to not use any cached/stored API configuration
+      env.CLAUDE_CODE_SKIP_CONFIG = '1';
+      logger.info('[ClaudeAgent] Custom API mode: disabled non-essential traffic');
     }
 
     // Debug: Log final environment variables for API configuration
@@ -1025,7 +1056,14 @@ export class ClaudeAgent extends BaseAgent {
       ANTHROPIC_MODEL: env.ANTHROPIC_MODEL || 'not set',
     });
 
-    return env;
+    // Filter out undefined values - SDK expects Record<string, string>
+    const filteredEnv: Record<string, string> = {};
+    for (const [key, value] of Object.entries(env)) {
+      if (value !== undefined) {
+        filteredEnv[key] = value;
+      }
+    }
+    return filteredEnv;
   }
 
   /**
@@ -1248,14 +1286,31 @@ User's request (answer this AFTER reading the images):
       );
     }
 
-    // Log query start for debugging
-    logger.info(`[Claude ${session.id}] Starting query`, {
-      claudeCodePath,
-      model: this.config.model,
-      baseUrl: this.config.baseUrl,
+    // Log detailed query options for debugging
+    const envConfig = queryOptions.env || {};
+    logger.info(`[Claude ${session.id}] ========== AGENT CONFIG START ==========`);
+    logger.info(`[Claude ${session.id}] Claude Code Path: ${claudeCodePath}`);
+    logger.info(`[Claude ${session.id}] Working Directory: ${queryOptions.cwd}`);
+    logger.info(`[Claude ${session.id}] Model (from config): ${this.config.model || '(not set)'}`);
+    logger.info(`[Claude ${session.id}] Model (queryOptions): ${queryOptions.model || '(not set)'}`);
+    logger.info(`[Claude ${session.id}] API Config:`, {
+      baseUrl: this.config.baseUrl || '(default Anthropic)',
       hasApiKey: !!this.config.apiKey,
-      promptLength: enhancedPrompt.length,
+      isCustomApi: this.isUsingCustomApi(),
     });
+    logger.info(`[Claude ${session.id}] Environment Variables:`, {
+      ANTHROPIC_AUTH_TOKEN: envConfig.ANTHROPIC_AUTH_TOKEN ? `${envConfig.ANTHROPIC_AUTH_TOKEN.slice(0, 15)}...` : '(not set)',
+      ANTHROPIC_API_KEY: envConfig.ANTHROPIC_API_KEY ? `${envConfig.ANTHROPIC_API_KEY.slice(0, 15)}...` : '(not set)',
+      ANTHROPIC_BASE_URL: envConfig.ANTHROPIC_BASE_URL || '(not set)',
+      ANTHROPIC_MODEL: envConfig.ANTHROPIC_MODEL || '(not set)',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: envConfig.ANTHROPIC_DEFAULT_SONNET_MODEL || '(not set)',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: envConfig.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC || '(not set)',
+    });
+    logger.info(`[Claude ${session.id}] Setting Sources: ${queryOptions.settingSources?.join(', ') || '(none)'}`);
+    logger.info(`[Claude ${session.id}] Permission Mode: ${queryOptions.permissionMode}`);
+    logger.info(`[Claude ${session.id}] MCP Servers: ${queryOptions.mcpServers ? Object.keys(queryOptions.mcpServers).join(', ') : '(none)'}`);
+    logger.info(`[Claude ${session.id}] Prompt Length: ${enhancedPrompt.length} chars`);
+    logger.info(`[Claude ${session.id}] ========== AGENT CONFIG END ==========`);
 
     try {
       for await (const message of query({
@@ -1611,12 +1666,20 @@ If you need to create any files during planning, use this directory.
    * that should not be exposed to users
    */
   private sanitizeText(text: string): string {
+    let sanitized = text;
+
     // Replace "Claude Code process exited with code X" with a special marker
     // The marker will be replaced with localized text on the frontend
-    return text.replace(
+    sanitized = sanitized.replace(
       /Claude Code process exited with code \d+/gi,
       '__AGENT_PROCESS_ERROR__'
     );
+
+    // Remove "Please run /login" messages - not relevant for custom API users
+    sanitized = sanitized.replace(/\s*[·•\-–—]\s*Please run \/login\.?/gi, '');
+    sanitized = sanitized.replace(/Please run \/login\.?/gi, '');
+
+    return sanitized;
   }
 
   /**

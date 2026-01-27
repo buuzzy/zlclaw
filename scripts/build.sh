@@ -359,28 +359,57 @@ bundle_cli_tools() {
     # Copy .wasm files to bundle root (some may be needed at runtime)
     cp node_modules/@anthropic-ai/claude-code/*.wasm . 2>/dev/null || true
 
+    # Remove quarantine attribute from all files in cli-bundle
+    # This prevents SIGTRAP errors when running binaries on macOS
+    # Must be done BEFORE signing, as quarantine can cause issues even with signed binaries
+    if [ "$node_platform" = "darwin" ]; then
+        log_info "Removing quarantine attributes from cli-bundle..."
+        xattr -r -d com.apple.quarantine . 2>/dev/null || true
+        # Also remove other extended attributes that might cause issues
+        xattr -r -c . 2>/dev/null || true
+        log_info "Quarantine attributes removed"
+    fi
+
     # Sign all native modules and binaries for macOS notarization
     # Apple notarization requires:
     # 1. All binaries signed with Developer ID certificate
     # 2. Secure timestamp included
     # 3. Hardened runtime enabled
+    # Node.js binary needs special entitlements for JIT compilation
     if [ "$node_platform" = "darwin" ] && [ "$SKIP_SIGNING" != "true" ]; then
         log_info "Signing all Mach-O binaries for macOS notarization..."
 
         # Get signing identity from environment or use default
         local signing_identity="${APPLE_SIGNING_IDENTITY:-Developer ID Application}"
+        local entitlements_file="$PROJECT_ROOT/src-tauri/entitlements.plist"
 
         # Find and sign ALL Mach-O binary files (not just by extension)
         find . -type f | while read -r file; do
             if file "$file" 2>/dev/null | grep -q "Mach-O"; then
+                local filename=$(basename "$file")
                 log_info "  Signing: $file"
-                codesign --force --timestamp --options runtime --sign "$signing_identity" "$file" 2>&1 || {
-                    log_warn "  Failed to sign $file, trying with specific identity..."
-                    local identity=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
-                    if [ -n "$identity" ]; then
-                        codesign --force --timestamp --options runtime --sign "$identity" "$file"
-                    fi
-                }
+                # Node binary needs special entitlements for JIT
+                if [ "$filename" = "node" ] || [ "$filename" = "node.exe" ]; then
+                    codesign --force --timestamp --options runtime \
+                        --entitlements "$entitlements_file" \
+                        --sign "$signing_identity" "$file" 2>&1 || {
+                        log_warn "  Failed to sign $file, trying with specific identity..."
+                        local identity=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+                        if [ -n "$identity" ]; then
+                            codesign --force --timestamp --options runtime \
+                                --entitlements "$entitlements_file" \
+                                --sign "$identity" "$file"
+                        fi
+                    }
+                else
+                    codesign --force --timestamp --options runtime --sign "$signing_identity" "$file" 2>&1 || {
+                        log_warn "  Failed to sign $file, trying with specific identity..."
+                        local identity=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+                        if [ -n "$identity" ]; then
+                            codesign --force --timestamp --options runtime --sign "$identity" "$file"
+                        fi
+                    }
+                fi
             fi
         done
 
@@ -771,6 +800,12 @@ sign_cli_bundle_in_app() {
     if [ -d "$cli_bundle_path" ]; then
         log_info "  Found cli-bundle at: $cli_bundle_path"
 
+        # Remove quarantine and extended attributes first
+        # This prevents SIGTRAP errors even after signing
+        log_info "  Removing quarantine attributes..."
+        xattr -r -d com.apple.quarantine "$cli_bundle_path" 2>/dev/null || true
+        xattr -r -c "$cli_bundle_path" 2>/dev/null || true
+
         # Remove symlinks in .bin directory that cause signing failures
         local bin_dir="$cli_bundle_path/node_modules/.bin"
         if [ -d "$bin_dir" ]; then
@@ -778,12 +813,22 @@ sign_cli_bundle_in_app() {
             rm -rf "$bin_dir"
         fi
 
-        # Sign all Mach-O binaries in cli-bundle
-        log_info "  Signing cli-bundle Mach-O binaries..."
+        # Sign all Mach-O binaries in cli-bundle with entitlements
+        # Node.js requires JIT and unsigned memory entitlements to run properly
+        log_info "  Signing cli-bundle Mach-O binaries with entitlements..."
         find "$cli_bundle_path" -type f | while read -r file; do
             if file "$file" 2>/dev/null | grep -q "Mach-O"; then
-                log_info "    Signing: $(basename "$file")"
-                codesign --force --timestamp --options runtime --sign "$signing_identity" "$file" 2>&1 || true
+                local filename=$(basename "$file")
+                log_info "    Signing: $filename"
+                # Node binary needs special entitlements for JIT
+                if [ "$filename" = "node" ] || [ "$filename" = "node.exe" ]; then
+                    codesign --force --timestamp --options runtime \
+                        --entitlements "$entitlements" \
+                        --sign "$signing_identity" "$file" 2>&1 || true
+                else
+                    codesign --force --timestamp --options runtime \
+                        --sign "$signing_identity" "$file" 2>&1 || true
+                fi
             fi
         done
     else
