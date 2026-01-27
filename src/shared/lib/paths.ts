@@ -10,6 +10,7 @@
 
 // Cache for resolved paths
 let cachedAppDataDir: string | null = null;
+let cachedSeparator: string | null = null;
 
 /**
  * Check if running in Tauri environment
@@ -20,8 +21,67 @@ function isTauri(): boolean {
 }
 
 /**
+ * Get the path separator for the current platform
+ */
+export async function getPathSeparator(): Promise<string> {
+  if (cachedSeparator) {
+    return cachedSeparator;
+  }
+
+  if (isTauri()) {
+    try {
+      const { sep } = await import('@tauri-apps/api/path');
+      cachedSeparator = sep();
+      return cachedSeparator;
+    } catch {
+      // Fallback
+    }
+  }
+
+  // Default to Unix separator
+  cachedSeparator = '/';
+  return cachedSeparator;
+}
+
+/**
+ * Join path segments using the correct separator for the platform
+ */
+export async function joinPath(...segments: string[]): Promise<string> {
+  const sep = await getPathSeparator();
+  return segments.join(sep);
+}
+
+/**
+ * Get the Claude skills directory path (platform-aware)
+ */
+export async function getClaudeSkillsDir(): Promise<string> {
+  if (isTauri()) {
+    try {
+      const { homeDir, sep } = await import('@tauri-apps/api/path');
+      const home = await homeDir();
+      const separator = sep();
+      const homeClean =
+        home.endsWith('/') || home.endsWith('\\') ? home.slice(0, -1) : home;
+      return `${homeClean}${separator}.claude${separator}skills`;
+    } catch {
+      // Fallback
+    }
+  }
+  return '~/.claude/skills';
+}
+
+/**
+ * Get the WorkAny MCP config path (platform-aware)
+ */
+export async function getWorkanyMcpPath(): Promise<string> {
+  const appDir = await getAppDataDir();
+  const sep = await getPathSeparator();
+  return `${appDir}${sep}mcp.json`;
+}
+
+/**
  * Get the application data directory
- * Returns ~/.workany on all platforms
+ * Returns ~/.workany on all platforms (using correct path separator)
  */
 export async function getAppDataDir(): Promise<string> {
   if (cachedAppDataDir) {
@@ -30,12 +90,13 @@ export async function getAppDataDir(): Promise<string> {
 
   if (isTauri()) {
     try {
-      const { homeDir } = await import('@tauri-apps/api/path');
+      const { homeDir, sep } = await import('@tauri-apps/api/path');
       const home = await homeDir();
-      // Remove trailing slash if present
+      const separator = sep();
+      // Remove trailing slash/backslash if present
       const homeClean =
         home.endsWith('/') || home.endsWith('\\') ? home.slice(0, -1) : home;
-      cachedAppDataDir = `${homeClean}/.workany`;
+      cachedAppDataDir = `${homeClean}${separator}.workany`;
       return cachedAppDataDir;
     } catch (error) {
       console.warn('[Paths] Failed to get home dir:', error);
@@ -60,7 +121,8 @@ export async function getDefaultWorkDir(): Promise<string> {
  */
 export async function getSessionsDir(): Promise<string> {
   const appDir = await getAppDataDir();
-  return `${appDir}/sessions`;
+  const sep = await getPathSeparator();
+  return `${appDir}${sep}sessions`;
 }
 
 /**
@@ -68,7 +130,8 @@ export async function getSessionsDir(): Promise<string> {
  */
 export async function getMcpConfigPath(): Promise<string> {
   const appDir = await getAppDataDir();
-  return `${appDir}/mcp.json`;
+  const sep = await getPathSeparator();
+  return `${appDir}${sep}mcp.json`;
 }
 
 /**
@@ -76,7 +139,8 @@ export async function getMcpConfigPath(): Promise<string> {
  */
 export async function getSkillsDir(): Promise<string> {
   const appDir = await getAppDataDir();
-  return `${appDir}/skills`;
+  const sep = await getPathSeparator();
+  return `${appDir}${sep}skills`;
 }
 
 /**
@@ -84,7 +148,8 @@ export async function getSkillsDir(): Promise<string> {
  */
 export async function getConfigPath(): Promise<string> {
   const appDir = await getAppDataDir();
-  return `${appDir}/config.json`;
+  const sep = await getPathSeparator();
+  return `${appDir}${sep}config.json`;
 }
 
 /**
@@ -101,13 +166,24 @@ export async function expandPath(path: string): Promise<string> {
     try {
       const { homeDir } = await import('@tauri-apps/api/path');
       const home = await homeDir();
-      return path.replace(/^~/, home.replace(/\/$/, ''));
+      // Remove trailing slash or backslash
+      const homeClean = home.replace(/[/\\]$/, '');
+      return path.replace(/^~/, homeClean);
     } catch (error) {
       console.warn('[Paths] Failed to expand path:', error);
     }
   }
 
   return path;
+}
+
+/**
+ * Get the log file path (platform-aware)
+ */
+export async function getLogPath(): Promise<string> {
+  const appDir = await getAppDataDir();
+  const sep = await getPathSeparator();
+  return `${appDir}${sep}logs${sep}workany.log`;
 }
 
 /**
@@ -119,7 +195,8 @@ export async function getDisplayPath(path: string): Promise<string> {
     try {
       const { homeDir } = await import('@tauri-apps/api/path');
       const home = await homeDir();
-      const homeWithoutSlash = home.replace(/\/$/, '');
+      // Remove trailing slash or backslash for comparison
+      const homeWithoutSlash = home.replace(/[/\\]$/, '');
       if (path.startsWith(homeWithoutSlash)) {
         return path.replace(homeWithoutSlash, '~');
       }

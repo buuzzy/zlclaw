@@ -1668,6 +1668,23 @@ If you need to create any files during planning, use this directory.
   private sanitizeText(text: string): string {
     let sanitized = text;
 
+    // Check for API key related errors first - these should show config prompt
+    const apiKeyErrorPatterns = [
+      /Invalid API key/i,
+      /invalid_api_key/i,
+      /API key.*invalid/i,
+      /authentication.*fail/i,
+      /Unauthorized/i,
+      /身份验证失败/,
+      /认证失败/,
+      /鉴权失败/,
+      /密钥无效/,
+    ];
+
+    const hasApiKeyError = apiKeyErrorPatterns.some((pattern) =>
+      pattern.test(sanitized)
+    );
+
     // Replace "Claude Code process exited with code X" with a special marker
     // The marker will be replaced with localized text on the frontend
     sanitized = sanitized.replace(
@@ -1678,6 +1695,12 @@ If you need to create any files during planning, use this directory.
     // Remove "Please run /login" messages - not relevant for custom API users
     sanitized = sanitized.replace(/\s*[·•\-–—]\s*Please run \/login\.?/gi, '');
     sanitized = sanitized.replace(/Please run \/login\.?/gi, '');
+
+    // If API key error detected, replace entire message with special marker
+    // This ensures frontend shows the config prompt instead of raw error
+    if (hasApiKeyError) {
+      return '__API_KEY_ERROR__';
+    }
 
     return sanitized;
   }

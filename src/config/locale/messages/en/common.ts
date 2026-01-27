@@ -46,6 +46,8 @@ export default {
     retrying: 'Retrying ({attempt}/{max})...',
     internalError: 'Internal server error. Please check log file: {logPath}',
     openLogFile: 'Open Log File',
+    modelNotConfigured:
+      'AI model not configured. Please configure a custom model (API URL, API key, model name) before starting a conversation.',
     claudeCodeNotFound:
       'Claude Code is not installed or unavailable. Please configure a custom AI model in Settings, or install Claude Code (npm install -g @anthropic-ai/claude-code)',
     configureModel: 'Configure Model',

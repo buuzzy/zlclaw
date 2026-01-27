@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getWorkanyMcpPath } from '@/shared/lib/paths';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
@@ -140,6 +141,12 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
     user: '',
     app: '',
   });
+  const [defaultMcpPath, setDefaultMcpPath] = useState('');
+
+  // Load default MCP path on mount (platform-aware)
+  useEffect(() => {
+    getWorkanyMcpPath().then(setDefaultMcpPath);
+  }, []);
 
   // Import by JSON dialog
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -245,6 +252,11 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
     }
 
     loadMCPConfig();
+  }, []);
+
+  // Initialize platform-aware default path
+  useEffect(() => {
+    getWorkanyMcpPath().then(setDefaultMcpPath);
   }, []);
 
   // Save MCP config via API
@@ -735,7 +747,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
                       {t.settings.mcpConfigPath}
                     </h3>
                     <code className="bg-muted text-muted-foreground mt-2 block truncate rounded px-2 py-1 text-xs">
-                      {mcpDirs.app || '~/.workany/mcp.json'}
+                      {mcpDirs.app || defaultMcpPath}
                     </code>
                   </div>
                   <div className="ml-4 flex shrink-0 items-center gap-2">

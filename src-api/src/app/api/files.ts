@@ -185,8 +185,15 @@ files.post('/readdir', async (c) => {
     }
 
     // Security check: only allow reading from home directory
-    const homedir = process.env.HOME || process.env.USERPROFILE || '';
-    if (!dirPath.startsWith(homedir) && !dirPath.startsWith('/tmp')) {
+    const homedir = getHomeDir();
+    const tempDir = process.platform === 'win32'
+      ? (process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp')
+      : '/tmp';
+    const normalizedPath = process.platform === 'win32' ? dirPath.toLowerCase() : dirPath;
+    const normalizedHome = process.platform === 'win32' ? homedir.toLowerCase() : homedir;
+    const normalizedTemp = process.platform === 'win32' ? tempDir.toLowerCase() : tempDir;
+
+    if (!normalizedPath.startsWith(normalizedHome) && !normalizedPath.startsWith(normalizedTemp)) {
       return c.json(
         { error: 'Access denied: path must be within home directory' },
         403
@@ -274,8 +281,15 @@ files.post('/read', async (c) => {
     }
 
     // Security check
-    const homedir = process.env.HOME || process.env.USERPROFILE || '';
-    if (!filePath.startsWith(homedir) && !filePath.startsWith('/tmp')) {
+    const homedir = getHomeDir();
+    const tempDir = process.platform === 'win32'
+      ? (process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp')
+      : '/tmp';
+    const normalizedPath = process.platform === 'win32' ? filePath.toLowerCase() : filePath;
+    const normalizedHome = process.platform === 'win32' ? homedir.toLowerCase() : homedir;
+    const normalizedTemp = process.platform === 'win32' ? tempDir.toLowerCase() : tempDir;
+
+    if (!normalizedPath.startsWith(normalizedHome) && !normalizedPath.startsWith(normalizedTemp)) {
       return c.json({ error: 'Access denied' }, 403);
     }
 
@@ -353,8 +367,15 @@ files.post('/read-binary', async (c) => {
     }
 
     // Security check
-    const homedir = process.env.HOME || process.env.USERPROFILE || '';
-    if (!filePath.startsWith(homedir) && !filePath.startsWith('/tmp')) {
+    const homedir = getHomeDir();
+    const tempDir = process.platform === 'win32'
+      ? (process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp')
+      : '/tmp';
+    const normalizedPath = process.platform === 'win32' ? filePath.toLowerCase() : filePath;
+    const normalizedHome = process.platform === 'win32' ? homedir.toLowerCase() : homedir;
+    const normalizedTemp = process.platform === 'win32' ? tempDir.toLowerCase() : tempDir;
+
+    if (!normalizedPath.startsWith(normalizedHome) && !normalizedPath.startsWith(normalizedTemp)) {
       return c.json({ error: 'Access denied' }, 403);
     }
 
@@ -465,8 +486,15 @@ files.post('/open-in-editor', async (c) => {
     }
 
     // Security check
-    const homedir = process.env.HOME || process.env.USERPROFILE || '';
-    if (!filePath.startsWith(homedir) && !filePath.startsWith('/tmp')) {
+    const homedir = getHomeDir();
+    const tempDir = process.platform === 'win32'
+      ? (process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp')
+      : '/tmp';
+    const normalizedPath = process.platform === 'win32' ? filePath.toLowerCase() : filePath;
+    const normalizedHome = process.platform === 'win32' ? homedir.toLowerCase() : homedir;
+    const normalizedTemp = process.platform === 'win32' ? tempDir.toLowerCase() : tempDir;
+
+    if (!normalizedPath.startsWith(normalizedHome) && !normalizedPath.startsWith(normalizedTemp)) {
       return c.json({ error: 'Access denied' }, 403);
     }
 
@@ -505,24 +533,26 @@ files.post('/open-in-editor', async (c) => {
       }
     }
 
-    let command: string;
-    if (editorCommand) {
-      command = `${editorCommand} "${filePath}"`;
-    } else {
-      // Fallback to system default
-      if (platform === 'darwin') {
-        command = `open -t "${filePath}"`;
-      } else if (platform === 'win32') {
-        command = `start "" "${filePath}"`;
-      } else {
-        command = `xdg-open "${filePath}"`;
-      }
-    }
-
     console.log(`[Files API] Opening in editor (${editorName}): ${filePath}`);
 
     try {
-      await execAsync(command);
+      if (editorCommand) {
+        if (platform === 'win32') {
+          await execAsync(`${editorCommand} "${filePath}"`, { shell: 'cmd.exe' });
+        } else {
+          await execAsync(`${editorCommand} "${filePath}"`);
+        }
+      } else {
+        // Fallback to system default
+        if (platform === 'darwin') {
+          await execAsync(`open -t "${filePath}"`);
+        } else if (platform === 'win32') {
+          const escapedPath = filePath.replace(/"/g, '""');
+          await execAsync(`cmd /c start "" "${escapedPath}"`, { shell: 'cmd.exe' });
+        } else {
+          await execAsync(`xdg-open "${filePath}"`);
+        }
+      }
       return c.json({ success: true, editor: editorName });
     } catch (execError) {
       console.error('[Files API] Failed to open in editor:', execError);
@@ -554,52 +584,73 @@ files.post('/open', async (c) => {
       return c.json({ error: 'Path is required' }, 400);
     }
 
-    // Expand ~ to home directory
+    // Expand ~ to home directory (handles both ~/path and ~\path)
     const homedir = getHomeDir();
-    if (filePath.startsWith('~/')) {
-      filePath = filePath.replace('~', homedir);
+    if (filePath.startsWith('~/') || filePath.startsWith('~\\')) {
+      filePath = filePath.replace(/^~/, homedir);
     } else if (filePath === '~') {
       filePath = homedir;
     }
 
-    // Security check: only allow opening files from home directory
-    if (!filePath.startsWith(homedir) && !filePath.startsWith('/tmp')) {
+    // Normalize path separators for current platform
+    if (process.platform === 'win32') {
+      filePath = filePath.replace(/\//g, '\\');
+    }
+
+    // Security check: only allow opening files from home directory or temp directory
+    const tempDir = process.platform === 'win32'
+      ? (process.env.TEMP || process.env.TMP || 'C:\\Windows\\Temp')
+      : '/tmp';
+
+    // Normalize paths for comparison (case-insensitive on Windows)
+    const normalizedPath = process.platform === 'win32' ? filePath.toLowerCase() : filePath;
+    const normalizedHome = process.platform === 'win32' ? homedir.toLowerCase() : homedir;
+    const normalizedTemp = process.platform === 'win32' ? tempDir.toLowerCase() : tempDir;
+
+    if (!normalizedPath.startsWith(normalizedHome) && !normalizedPath.startsWith(normalizedTemp)) {
       return c.json(
         { error: 'Access denied: path must be within home directory' },
         403
       );
     }
 
-    // Check if file exists
+    // Check if file/directory exists
+    let isDirectory = false;
     try {
-      await fs.stat(filePath);
+      const stat = await fs.stat(filePath);
+      isDirectory = stat.isDirectory();
     } catch {
       return c.json({ error: 'File does not exist' }, 404);
     }
 
     // Open file with system default application
     const platform = process.platform;
-    let command: string;
 
-    if (platform === 'darwin') {
-      // macOS
-      command = `open "${filePath}"`;
-    } else if (platform === 'win32') {
-      // Windows
-      command = `start "" "${filePath}"`;
-    } else {
-      // Linux
-      command = `xdg-open "${filePath}"`;
-    }
-
-    console.log(`[Files API] Opening file: ${filePath}`);
+    console.log(`[Files API] Opening ${isDirectory ? 'directory' : 'file'}: ${filePath}`);
 
     try {
-      await execAsync(command);
-      console.log('[Files API] File opened successfully');
+      if (platform === 'darwin') {
+        // macOS
+        await execAsync(`open "${filePath}"`);
+      } else if (platform === 'win32') {
+        // Windows - use explorer.exe for directories, start for files
+        if (isDirectory) {
+          // Use explorer to open directories
+          await execAsync(`explorer "${filePath}"`, { shell: 'cmd.exe' });
+        } else {
+          // Use start command with cmd /c for files
+          // Escape path properly for Windows cmd
+          const escapedPath = filePath.replace(/"/g, '""');
+          await execAsync(`cmd /c start "" "${escapedPath}"`, { shell: 'cmd.exe' });
+        }
+      } else {
+        // Linux
+        await execAsync(`xdg-open "${filePath}"`);
+      }
+      console.log('[Files API] Opened successfully');
       return c.json({ success: true });
     } catch (execError) {
-      console.error('[Files API] Failed to open file:', execError);
+      console.error('[Files API] Failed to open:', execError);
       return c.json({ success: false, error: String(execError) }, 500);
     }
   } catch (error) {

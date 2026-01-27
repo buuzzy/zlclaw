@@ -70,17 +70,19 @@ function getToolIcon(toolName: string) {
 // Check if text content is an API error that should be displayed as error
 function isApiErrorText(content: string): boolean {
   const errorPatterns = [
+    /^__API_KEY_ERROR__$/, // Exact match for API key error marker
+    /__AGENT_PROCESS_ERROR__/,
     /API Error:\s*\d{3}/i,
     /HTTP\s+\d{3}/i,
     /身份验证失败/,
     /认证失败/,
     /鉴权失败/,
+    /密钥无效/,
     /Invalid API key/i,
     /Unauthorized/i,
     /authentication.*fail/i,
     /process exited with code [1-9]/i,
     /Claude Code process exited/i,
-    /__AGENT_PROCESS_ERROR__/,
   ];
   return errorPatterns.some((pattern) => pattern.test(content));
 }
@@ -89,6 +91,34 @@ function isApiErrorText(content: string): boolean {
 function ErrorMessage({ message }: { message: string }) {
   const { t } = useLanguage();
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Check for model not configured error (highest priority - show before any API calls)
+  if (message === '__MODEL_NOT_CONFIGURED__') {
+    return (
+      <>
+        <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
+          <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <span>{t.common.errors.modelNotConfigured}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="mr-2 size-4" />
+            {t.common.errors.configureModel}
+          </Button>
+        </div>
+        <SettingsModal
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          initialCategory="model"
+        />
+      </>
+    );
+  }
 
   // Check for Claude Code not found error
   if (message === '__CLAUDE_CODE_NOT_FOUND__') {

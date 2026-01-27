@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import { getPathSeparator } from '@/shared/lib/paths';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import { FileText, FolderOpen, Shield, ShieldOff } from 'lucide-react';
@@ -44,6 +46,17 @@ export function WorkplaceSettings({
   defaultPaths,
 }: WorkplaceSettingsProps) {
   const { t } = useLanguage();
+  const [pathSep, setPathSep] = useState('/');
+
+  // Load platform-aware path separator
+  useEffect(() => {
+    getPathSeparator().then(setPathSep);
+  }, []);
+
+  // Get the log file path using the correct separator
+  const getLogFilePath = (workDir: string) => {
+    return `${workDir}${pathSep}logs${pathSep}workany.log`;
+  };
 
   return (
     <div className="space-y-6">
@@ -143,10 +156,10 @@ export function WorkplaceSettings({
         </p>
         <div className="flex items-center gap-2">
           <div className="border-input bg-muted text-foreground flex h-10 max-w-md flex-1 items-center rounded-lg border px-3 text-sm">
-            {`${settings.workDir || defaultPaths.workDir}/logs/workany.log`}
+            {getLogFilePath(settings.workDir || defaultPaths.workDir)}
           </div>
           <button
-            onClick={() => openFolderInSystem(`${settings.workDir || defaultPaths.workDir}/logs/workany.log`)}
+            onClick={() => openFolderInSystem(getLogFilePath(settings.workDir || defaultPaths.workDir))}
             className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
             title={t.settings.logFileOpen}
           >

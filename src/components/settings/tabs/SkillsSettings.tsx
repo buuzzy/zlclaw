@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getClaudeSkillsDir } from '@/shared/lib/paths';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import {
@@ -142,7 +143,13 @@ export function SkillsSettings({
     user: string;
     app: string;
   }>({ user: '', app: '' });
+  const [defaultSkillsPath, setDefaultSkillsPath] = useState('');
   const [showAddMenu, setShowAddMenu] = useState(false);
+
+  // Load default skills path on mount (platform-aware)
+  useEffect(() => {
+    getClaudeSkillsDir().then(setDefaultSkillsPath);
+  }, []);
   const [showGitHubImport, setShowGitHubImport] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
   const [importing, setImporting] = useState(false);
@@ -351,6 +358,11 @@ export function SkillsSettings({
     loadSkillsFromPath(settings.skillsPath);
   }, [settings.skillsPath]);
 
+  // Initialize platform-aware default path
+  useEffect(() => {
+    getClaudeSkillsDir().then(setDefaultSkillsPath);
+  }, []);
+
   const [deleteDialogSkill, setDeleteDialogSkill] = useState<SkillInfo | null>(
     null
   );
@@ -543,7 +555,7 @@ export function SkillsSettings({
                     {t.settings.skillsSource}
                   </h3>
                   <code className="bg-muted text-muted-foreground mt-2 block truncate rounded px-2 py-1 text-xs">
-                    {skillsDirs.user || '~/.claude/skills'}
+                    {skillsDirs.user || defaultSkillsPath}
                   </code>
                 </div>
                 <div className="ml-4 flex shrink-0 items-center gap-2">

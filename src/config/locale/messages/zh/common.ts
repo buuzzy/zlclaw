@@ -44,6 +44,8 @@ export default {
     retrying: '正在重试 ({attempt}/{max})...',
     internalError: '服务内部错误，详情请查看日志文件：{logPath}',
     openLogFile: '打开日志文件',
+    modelNotConfigured:
+      '尚未配置 AI 模型。请先配置自定义模型（API 地址、密钥、模型名称）后再开始对话。',
     claudeCodeNotFound:
       'Claude Code 未安装或不可用。请在设置中配置自定义 AI 模型，或安装 Claude Code（npm install -g @anthropic-ai/claude-code）',
     configureModel: '配置模型',

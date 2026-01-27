@@ -315,6 +315,7 @@ jobs:
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          ENTITLEMENTS_FILE="${GITHUB_WORKSPACE}/src-tauri/entitlements.plist"
 
           # Decode and save certificate
           echo -n "$APPLE_CERTIFICATE" | base64 --decode -o $CERTIFICATE_PATH
@@ -332,10 +333,10 @@ jobs:
           echo "Signing binaries in cli-bundle..."
           cd src-api/dist/cli-bundle
 
-          # Sign node binary first
+          # Sign node binary first with entitlements (required for JIT/V8)
           if [ -f "node" ]; then
-            echo "Signing node..."
-            codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" --timestamp node
+            echo "Signing node with entitlements..."
+            codesign --force --options runtime --entitlements "$ENTITLEMENTS_FILE" --sign "$APPLE_SIGNING_IDENTITY" --timestamp node
           fi
 
           # Sign ALL .dylib files (including @img/sharp-libvips-*)
@@ -361,11 +362,16 @@ jobs:
 
           # Sign ripgrep and other Mach-O executables
           echo "Signing Mach-O executable binaries..."
-          find . -type f \( -name "rg" -o -name "node" -o -perm -u+x \) 2>/dev/null | while read -r file; do
+          find . -type f \( -name "rg" -o -perm -u+x \) 2>/dev/null | while read -r file; do
             # Skip non-binary files
             case "$file" in
               *.js|*.json|*.md|*.txt|*.ts|*.mjs|*.cjs|*.map|*.yml|*.yaml) continue ;;
             esac
+            # Skip node (already signed with entitlements above)
+            filename=$(basename "$file")
+            if [ "$filename" = "node" ]; then
+              continue
+            fi
             # Check if it's a Mach-O binary
             if file "$file" 2>/dev/null | grep -q "Mach-O"; then
               echo "Signing Mach-O: $file..."
