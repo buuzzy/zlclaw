@@ -309,6 +309,47 @@ export const defaultProviders: AIProvider[] = [
     apiKeyUrl: 'https://docs.ollama.com/integrations/claude-code',
     canDelete: true,
   },
+  {
+    id: 'siliconflow-cn',
+    name: 'SiliconFlow CN',
+    apiKey: '',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    enabled: true,
+    models: [
+      'Pro/deepseek-ai/DeepSeek-V3.1-Terminus',
+      'Pro/deepseek-ai/DeepSeek-V3.2',
+      'Pro/moonshotai/Kimi-K2-Instruct-0905',
+      'Pro/moonshotai/Kimi-K2-Thinking',
+      'Pro/MiniMaxAI/MiniMax-M2.1',
+      'Pro/zai-org/GLM-4.7',
+      'deepseek-ai/DeepSeek-V3.1-Terminus',
+      'deepseek-ai/DeepSeek-V3.2',
+      'moonshotai/Kimi-K2-Instruct-0905',
+      'moonshotai/Kimi-K2-Thinking'
+    ],
+    icon: 'S',
+    apiKeyUrl: 'https://cloud.siliconflow.cn/me/account/ak',
+    canDelete: true,
+  },
+  {
+    id: 'siliconflow',
+    name: 'SiliconFlow',
+    apiKey: '',
+    baseUrl: 'https://api.siliconflow.com/v1',
+    enabled: true,
+    models: [
+      'deepseek-ai/DeepSeek-V3.1-Terminus',
+      'deepseek-ai/DeepSeek-V3.2',
+      'moonshotai/Kimi-K2-Instruct-0905',
+      'moonshotai/Kimi-K2-Thinking',
+      'MiniMaxAI/MiniMax-M2.1',
+      'openai/gpt-oss-120b',
+      'zai-org/GLM-4.7',      
+    ],
+    icon: 'S',
+    apiKeyUrl: 'https://cloud.siliconflow.com/me/account/ak',
+    canDelete: true,
+  },
 ];
 
 // Default provider IDs that cannot be deleted (derived from defaultProviders)
@@ -343,6 +384,25 @@ export const customProviderModels: Record<string, string[]> = {
   moonshot: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
   zhipu: ['glm-4-plus', 'glm-4-flash', 'glm-4-long'],
   qwen: ['qwen-max', 'qwen-plus', 'qwen-turbo'],
+  siliconflow: [
+    'deepseek-ai/DeepSeek-V3',
+    'deepseek-ai/DeepSeek-V3.1-Terminus',
+    'deepseek-ai/DeepSeek-V3.2',
+    'deepseek-ai/DeepSeek-R1',
+    'Pro/deepseek-ai/DeepSeek-V3',
+    'Pro/deepseek-ai/DeepSeek-V3.1-Terminus',
+    'Pro/deepseek-ai/DeepSeek-V3.2',
+    'Pro/deepseek-ai/DeepSeek-R1',
+    'Qwen/Qwen3-235B-A22B-Instruct-2507',
+    'Qwen/Qwen3-235B-A22B-Thinking-2507',
+    'Qwen/Qwen3-Coder-480B-A35B-Instruct',
+    'moonshotai/Kimi-K2-Instruct-0905',
+    'moonshotai/Kimi-K2-Thinking',
+    'Pro/moonshotai/Kimi-K2-Instruct-0905',
+    'Pro/moonshotai/Kimi-K2-Thinking',
+    'Pro/MiniMaxAI/MiniMax-M2.1',
+    'Pro/zai-org/GLM-4.7',
+  ],
 };
 
 // Default settings
