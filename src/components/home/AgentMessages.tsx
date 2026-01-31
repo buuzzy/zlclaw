@@ -87,6 +87,45 @@ function isApiErrorText(content: string): boolean {
   return errorPatterns.some((pattern) => pattern.test(content));
 }
 
+// Check if text content is plan JSON (should be hidden as it's rendered by PlanApproval)
+function isPlanJson(content: string): boolean {
+  // Simple and robust check: if content contains plan markers, it's plan JSON
+  const hasTypeplan =
+    content.includes('"type": "plan"') || content.includes('"type":"plan"');
+  const hasStepsOrGoal =
+    content.includes('"steps"') || content.includes('"goal"');
+  return hasTypeplan && hasStepsOrGoal;
+}
+
+// Check if text content is direct_answer JSON wrapper (should extract and display only the answer)
+function extractDirectAnswer(content: string): string | null {
+  const trimmed = content.trim();
+  // Check for direct_answer JSON pattern
+  if (
+    !trimmed.startsWith('{') ||
+    !/"type"\s*:\s*"direct_answer"/.test(trimmed)
+  ) {
+    return null;
+  }
+  // Try to extract the answer field
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed.type === 'direct_answer' && typeof parsed.answer === 'string') {
+      return parsed.answer;
+    }
+  } catch {
+    // If JSON parse fails, try regex extraction
+    const match = trimmed.match(/"answer"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (match) {
+      return match[1]
+        .replace(/\\n/g, '\n')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\');
+    }
+  }
+  return null;
+}
+
 // Error message component that handles special error codes
 function ErrorMessage({ message }: { message: string }) {
   const { t } = useLanguage();
@@ -321,43 +360,51 @@ export function AgentMessages({ messages, isRunning }: AgentMessagesProps) {
           {message.type === 'text' &&
             message.content &&
             // Skip rendering if content is plan JSON (already rendered by PlanApproval)
-            !message.content.trim().startsWith('{"type":"plan"') &&
-            !message.content.trim().startsWith('{"type": "plan"') &&
-            // Check if this is an API error - render as error instead
-            (isApiErrorText(message.content) ? (
-              <ErrorMessage message="__API_KEY_ERROR__" />
-            ) : (
-              <div className="bg-card text-card-foreground prose prose-sm dark:prose-invert max-w-none rounded-lg p-4">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    a: ({ children, href }: any) => (
-                      <a
-                        href={href}
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          if (href) {
-                            try {
-                              const { openUrl } =
-                                await import('@tauri-apps/plugin-opener');
-                              await openUrl(href);
-                            } catch {
-                              window.open(href, '_blank');
+            // Handle both compact and formatted JSON
+            !isPlanJson(message.content) &&
+            (() => {
+              // Extract actual content (handle direct_answer JSON wrapper)
+              const displayContent =
+                extractDirectAnswer(message.content) || message.content;
+
+              // Check if this is an API error - render as error instead
+              if (isApiErrorText(displayContent)) {
+                return <ErrorMessage message="__API_KEY_ERROR__" />;
+              }
+
+              return (
+                <div className="bg-card text-card-foreground prose prose-sm dark:prose-invert max-w-none rounded-lg p-4">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      a: ({ children, href }: any) => (
+                        <a
+                          href={href}
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            if (href) {
+                              try {
+                                const { openUrl } =
+                                  await import('@tauri-apps/plugin-opener');
+                                await openUrl(href);
+                              } catch {
+                                window.open(href, '_blank');
+                              }
                             }
-                          }
-                        }}
-                        className="text-primary cursor-pointer hover:underline"
-                      >
-                        {children}
-                      </a>
-                    ),
-                  }}
-                >
-                  {message.content}
-                </ReactMarkdown>
-              </div>
-            ))}
+                          }}
+                          className="text-primary cursor-pointer hover:underline"
+                        >
+                          {children}
+                        </a>
+                      ),
+                    }}
+                  >
+                    {displayContent}
+                  </ReactMarkdown>
+                </div>
+              );
+            })()}
 
           {message.type === 'tool_use' &&
             (() => {

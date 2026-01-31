@@ -55,4 +55,13 @@ export default {
     configureApiKey: '前往配置',
     agentProcessError: 'Agent 运行遇到错误，请检查模型配置后重试',
   },
+
+  // Question input
+  questionInput: {
+    needsInput: '需要您的输入',
+    submit: '提交回答',
+    other: '其他',
+    customInput: '自定义输入',
+    placeholder: '请输入您的回答...',
+  },
 };

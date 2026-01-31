@@ -34,6 +34,7 @@ export default {
   executionPlan: '执行计划',
   pendingApproval: '待确认',
   planCompleted: '已完成',
+  planCancelled: '已取消',
   goal: '目标',
   steps: '步骤',
   stepsCount: '步骤 ({count})',

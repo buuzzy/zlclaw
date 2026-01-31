@@ -59,4 +59,13 @@ export default {
     agentProcessError:
       'Agent encountered an error. Please check your model configuration and try again.',
   },
+
+  // Question input
+  questionInput: {
+    needsInput: 'Your input is needed',
+    submit: 'Submit',
+    other: 'Other',
+    customInput: 'Custom input',
+    placeholder: 'Enter your answer...',
+  },
 };

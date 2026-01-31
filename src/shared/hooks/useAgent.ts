@@ -384,7 +384,7 @@ export interface AgentMessage {
 export interface PlanStep {
   id: string;
   description: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 }
 
 export interface TaskPlan {
@@ -957,6 +957,20 @@ export function useAgent(): UseAgentReturn {
     const isRestoringFromBackground =
       backgroundTask && backgroundTask.isRunning;
 
+    // Get task status to determine if plan should be restored
+    const task = await getTask(id);
+    const taskIsCompleted = task && task.status === 'completed';
+    const taskIsStopped = task && task.status === 'stopped';
+
+    console.log('[useAgent] loadMessages:', {
+      taskId: id,
+      taskStatus: task?.status,
+      taskIsCompleted,
+      hasBackgroundTask: !!backgroundTask,
+      backgroundTaskIsRunning: backgroundTask?.isRunning,
+      isRestoringFromBackground,
+    });
+
     if (isRestoringFromBackground) {
       console.log(
         '[useAgent] Task is running in background (loadMessages), restoring:',
@@ -974,8 +988,13 @@ export function useAgent(): UseAgentReturn {
         removeBackgroundTask(id);
       } else {
         setIsRunning(true);
+        isRunningRef.current = true; // Sync update ref immediately to avoid race condition
         setPhase('executing'); // Note: might not be accurate if task was in planning phase
-        removeBackgroundTask(id);
+        // Delay removal from background tasks to avoid UI flicker
+        // This ensures isRunning state is updated before task is removed from backgroundTasks
+        setTimeout(() => {
+          removeBackgroundTask(id);
+        }, 50);
 
         // Start polling for new messages (messages will be loaded immediately below)
         if (refreshIntervalRef.current) {
@@ -1035,16 +1054,35 @@ export function useAgent(): UseAgentReturn {
             // Refresh messages from database
             try {
               const dbMessages = await getMessagesByTaskId(pollingTaskId);
-              const agentMessages: AgentMessage[] = dbMessages.map((msg) => ({
-                type: msg.type as AgentMessage['type'],
-                content: msg.content || undefined,
-                name: msg.tool_name || undefined,
-                input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
-                output: msg.tool_output || undefined,
-                toolUseId: msg.tool_use_id || undefined,
-                subtype: msg.subtype as AgentMessage['subtype'],
-                message: msg.error_message || undefined,
-              }));
+              const agentMessages: AgentMessage[] = dbMessages.map((msg) => {
+                // Special handling for plan messages - parse the plan JSON
+                if (msg.type === 'plan' && msg.content) {
+                  try {
+                    const planData = JSON.parse(msg.content) as TaskPlan;
+                    return {
+                      type: 'plan' as const,
+                      plan: planData,
+                    };
+                  } catch {
+                    // If parse fails, return basic message
+                    return {
+                      type: msg.type as AgentMessage['type'],
+                      content: msg.content || undefined,
+                    };
+                  }
+                }
+                // Default handling for other message types
+                return {
+                  type: msg.type as AgentMessage['type'],
+                  content: msg.content || undefined,
+                  name: msg.tool_name || undefined,
+                  input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
+                  output: msg.tool_output || undefined,
+                  toolUseId: msg.tool_use_id || undefined,
+                  subtype: msg.subtype as AgentMessage['subtype'],
+                  message: msg.error_message || undefined,
+                };
+              });
               setMessages(agentMessages);
 
               // Check if there are pending tools (tool_use without matching tool_result)
@@ -1208,17 +1246,30 @@ export function useAgent(): UseAgentReturn {
               ? (JSON.parse(msg.content) as TaskPlan)
               : undefined;
             if (planData) {
-              // Only mark steps as completed if task is NOT running
-              // For running tasks (restored from background), keep original status
-              const restoredPlan: TaskPlan = isRestoringFromBackground
-                ? planData
-                : {
-                    ...planData,
-                    steps: planData.steps.map((s) => ({
-                      ...s,
-                      status: 'completed' as const,
-                    })),
-                  };
+              // Determine how to mark plan steps based on task status
+              let restoredPlan: TaskPlan;
+              if (taskIsStopped && !isRestoringFromBackground) {
+                // Task was cancelled - mark steps as cancelled
+                restoredPlan = {
+                  ...planData,
+                  steps: planData.steps.map((s) => ({
+                    ...s,
+                    status: 'cancelled' as const,
+                  })),
+                };
+              } else if (taskIsCompleted && !isRestoringFromBackground) {
+                // Task completed - mark steps as completed
+                restoredPlan = {
+                  ...planData,
+                  steps: planData.steps.map((s) => ({
+                    ...s,
+                    status: 'completed' as const,
+                  })),
+                };
+              } else {
+                // Task in progress or awaiting approval - keep original status
+                restoredPlan = planData;
+              }
               agentMessages.push({
                 type: 'plan' as const,
                 plan: restoredPlan,
@@ -1235,6 +1286,30 @@ export function useAgent(): UseAgentReturn {
       // Set messages immediately (with loading placeholders for attachments)
       setMessages(agentMessages);
       setTaskId(id);
+
+      // Check if task has a pending plan awaiting approval
+      // Only restore if NOT running in background (running tasks already have plan approved)
+      if (!isRestoringFromBackground) {
+        const lastPlanMessage = [...agentMessages]
+          .reverse()
+          .find((m) => m.type === 'plan' && m.plan);
+        if (lastPlanMessage && lastPlanMessage.type === 'plan' && lastPlanMessage.plan) {
+          const planSteps = lastPlanMessage.plan.steps || [];
+          // Check if plan has incomplete steps (pending or no status)
+          const hasIncompleteSteps = planSteps.some(
+            (s) => !s.status || s.status === 'pending'
+          );
+
+          // Restore plan if task is not completed/stopped and has incomplete steps
+          if (hasIncompleteSteps && !taskIsCompleted && !taskIsStopped) {
+            console.log('[useAgent] Restoring plan awaiting approval for task:', id, {
+              planSteps: planSteps.map((s) => ({ title: s.title, status: s.status })),
+            });
+            setPlan(lastPlanMessage.plan);
+            setPhase('awaiting_approval');
+          }
+        }
+      }
 
       // Load attachments asynchronously in background
       if (attachmentLoadTasks.length > 0) {
@@ -1569,6 +1644,7 @@ export function useAgent(): UseAgentReturn {
       }
 
       setIsRunning(true);
+      isRunningRef.current = true; // Sync update ref immediately
       setMessages([]);
       setInitialPrompt(prompt);
       setPhase('planning');
@@ -1650,22 +1726,10 @@ export function useAgent(): UseAgentReturn {
       try {
         const modelConfig = getModelConfig();
 
-        // Check if model is configured - if using default provider without API key, prompt user to configure
-        if (!modelConfig) {
-          const settings = getSettings();
-          if (settings.defaultProvider === 'default') {
-            console.log('[useAgent] No model configured, prompting user to configure');
-            setMessages([
-              {
-                type: 'error',
-                message: '__MODEL_NOT_CONFIGURED__',
-              },
-            ]);
-            setIsRunning(false);
-            setPhase('idle');
-            return currentTaskId;
-          }
-        }
+        // Note: We no longer check if model is configured here.
+        // The backend will check if Claude Code is available locally.
+        // If Claude Code is available, it will use it even without explicit model configuration.
+        // If Claude Code is not available and no model is configured, the backend will return an error.
 
         // If images are attached, use direct execution (skip planning)
         // because images need to be processed during execution, not planning
@@ -1804,11 +1868,26 @@ export function useAgent(): UseAgentReturn {
                   console.log(
                     '[useAgent] Received direct answer, no plan needed'
                   );
+                  // Extract actual answer if content is JSON
+                  let actualContent = data.content;
+                  try {
+                    if (
+                      typeof data.content === 'string' &&
+                      data.content.trim().startsWith('{')
+                    ) {
+                      const parsed = JSON.parse(data.content);
+                      if (parsed.answer && typeof parsed.answer === 'string') {
+                        actualContent = parsed.answer;
+                      }
+                    }
+                  } catch {
+                    // Not JSON, use original content
+                  }
                   // UI updates only for active task
                   if (isActive) {
                     setMessages((prev) => [
                       ...prev,
-                      { type: 'text', content: data.content },
+                      { type: 'text', content: actualContent },
                     ]);
                     setPlan(null); // Clear any plan when we get a direct answer
                     setPhase('idle');
@@ -1819,7 +1898,7 @@ export function useAgent(): UseAgentReturn {
                     await createMessage({
                       task_id: currentTaskId,
                       type: 'text',
-                      content: data.content,
+                      content: actualContent,
                     });
                     await updateTask(currentTaskId, { status: 'completed' });
                   } catch (dbError) {
@@ -1833,8 +1912,25 @@ export function useAgent(): UseAgentReturn {
                     setPhase('awaiting_approval');
                     setMessages((prev) => [...prev, data]);
                   }
+
+                  // Save plan to database (always, even if not active)
+                  try {
+                    await createMessage({
+                      task_id: currentTaskId,
+                      type: 'plan',
+                      content: JSON.stringify(data.plan),
+                    });
+                  } catch (dbError) {
+                    console.error('Failed to save plan:', dbError);
+                  }
                 } else if (data.type === 'text') {
-                  if (isActive) {
+                  // Skip text messages that contain plan JSON (will be rendered by PlanApproval)
+                  const content = data.content || '';
+                  const isPlanJson =
+                    content.includes('"type"') &&
+                    content.includes('"plan"') &&
+                    (content.includes('"steps"') || content.includes('"goal"'));
+                  if (isActive && !isPlanJson) {
                     setMessages((prev) => [...prev, data]);
                   }
                 } else if (data.type === 'done') {
@@ -1898,6 +1994,7 @@ export function useAgent(): UseAgentReturn {
     activeTaskIdRef.current = taskId;
 
     setIsRunning(true);
+    isRunningRef.current = true; // Sync update ref immediately
     setPhase('executing');
 
     // Initialize plan steps as pending in UI
@@ -1992,7 +2089,15 @@ export function useAgent(): UseAgentReturn {
       if (activeTaskIdRef.current === taskId) {
         setIsRunning(false);
         setPhase('idle');
+        setPlan(null); // Clear plan state to prevent showing confirmation box again
         abortControllerRef.current = null;
+
+        // Mark task as completed in database
+        try {
+          await updateTask(taskId, { status: 'completed' });
+        } catch (dbError) {
+          console.error('Failed to mark task as completed:', dbError);
+        }
 
         // Reload messages from database to ensure all are displayed
         // (in case some were missed during streaming)
@@ -2069,11 +2174,27 @@ export function useAgent(): UseAgentReturn {
   }, [plan, taskId, phase, initialPrompt, processStream, sessionFolder]);
 
   // Reject the plan
-  const rejectPlan = useCallback((): void => {
+  const rejectPlan = useCallback(async (): Promise<void> => {
     setPlan(null);
     setPhase('idle');
     setMessages((prev) => [...prev, { type: 'text', content: '计划已取消。' }]);
-  }, []);
+
+    // Save rejection to database so it won't be restored when switching back
+    if (taskId) {
+      try {
+        // Mark task as stopped (cancelled)
+        await updateTask(taskId, { status: 'stopped' });
+        // Save the cancellation message
+        await createMessage({
+          task_id: taskId,
+          type: 'text',
+          content: '计划已取消。',
+        });
+      } catch (error) {
+        console.error('Failed to save plan rejection:', error);
+      }
+    }
+  }, [taskId]);
 
   // Continue conversation with context
   const continueConversation = useCallback(
@@ -2111,6 +2232,7 @@ export function useAgent(): UseAgentReturn {
       }
 
       setIsRunning(true);
+      isRunningRef.current = true; // Sync update ref immediately
 
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
