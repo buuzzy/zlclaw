@@ -1229,9 +1229,21 @@ function MessageList({
     return toolResultMessages[toolUseIndex];
   };
 
-  // Find the last result message index to only show that one
+  // Filter out duplicate plan messages - only keep the last one
+  const lastPlanIdx = mergedMessages.reduce(
+    (lastIdx, msg, idx) => (msg.type === 'plan' ? idx : lastIdx),
+    -1
+  );
+  const filteredMessages =
+    lastPlanIdx >= 0
+      ? mergedMessages.filter(
+          (msg, idx) => msg.type !== 'plan' || idx === lastPlanIdx
+        )
+      : mergedMessages;
+
+  // Find the last result message index in filteredMessages
   let lastResultIndex = -1;
-  mergedMessages.forEach((msg, index) => {
+  filteredMessages.forEach((msg, index) => {
     if (msg.type === 'result') {
       lastResultIndex = index;
     }
@@ -1273,7 +1285,7 @@ function MessageList({
   // Track pending text message that might be standalone (no following tools)
   let pendingTextMessage: AgentMessage | null = null;
 
-  mergedMessages.forEach((message, msgIndex) => {
+  filteredMessages.forEach((message, msgIndex) => {
     if (message.type === 'text' && message.content) {
       // Skip duplicate consecutive text messages
       if (message.content === lastTextContent) {
@@ -1354,7 +1366,7 @@ function MessageList({
       pushCurrentGroup(true);
       groups.push({ type: 'other', message });
     } else if (message.type === 'plan') {
-      // Plan message - render inline
+      // Plan message - render inline (duplicates already filtered out)
       if (pendingTextMessage) {
         groups.push({ type: 'other', message: pendingTextMessage });
         pendingTextMessage = null;

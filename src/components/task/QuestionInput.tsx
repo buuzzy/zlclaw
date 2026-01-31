@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import type { AgentQuestion, PendingQuestion } from '@/shared/hooks/useAgent';
 import { cn } from '@/shared/lib/utils';
 import { Check, Send } from 'lucide-react';
+import { useLanguage } from '@/shared/providers/language-provider';
 
 interface QuestionInputProps {
   pendingQuestion: PendingQuestion;
@@ -12,6 +13,7 @@ export function QuestionInput({
   pendingQuestion,
   onSubmit,
 }: QuestionInputProps) {
+  const { t } = useLanguage();
   const [answers, setAnswers] = useState<Record<number, string[]>>({});
   const [otherInputs, setOtherInputs] = useState<Record<number, string>>({});
 
@@ -73,7 +75,7 @@ export function QuestionInput({
     <div className="border-primary/30 bg-accent/30 space-y-4 rounded-xl border p-4">
       <div className="text-foreground flex items-center gap-2 text-sm font-medium">
         <span className="bg-primary size-2 animate-pulse rounded-full" />
-        需要您的输入
+        {t.common.questionInput.needsInput}
       </div>
 
       {pendingQuestion.questions.map((question, qIndex) => (
@@ -86,6 +88,7 @@ export function QuestionInput({
             handleOptionSelect(qIndex, option, question.multiSelect)
           }
           onOtherInput={(value) => handleOtherInput(qIndex, value)}
+          t={t}
         />
       ))}
 
@@ -101,7 +104,7 @@ export function QuestionInput({
           )}
         >
           <Send className="size-4" />
-          提交回答
+          {t.common.questionInput.submit}
         </button>
       </div>
     </div>
@@ -114,6 +117,7 @@ interface QuestionItemProps {
   otherInput: string;
   onSelectOption: (option: string) => void;
   onOtherInput: (value: string) => void;
+  t: ReturnType<typeof useLanguage>['t'];
 }
 
 function QuestionItem({
@@ -122,6 +126,7 @@ function QuestionItem({
   otherInput,
   onSelectOption,
   onOtherInput,
+  t,
 }: QuestionItemProps) {
   const [showOther, setShowOther] = useState(false);
 
@@ -197,8 +202,10 @@ function QuestionItem({
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">其他</p>
-            <p className="text-muted-foreground mt-0.5 text-xs">自定义输入</p>
+            <p className="text-sm font-medium">{t.common.questionInput.other}</p>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              {t.common.questionInput.customInput}
+            </p>
           </div>
         </button>
       </div>
@@ -210,7 +217,7 @@ function QuestionItem({
             type="text"
             value={otherInput}
             onChange={(e) => onOtherInput(e.target.value)}
-            placeholder="请输入您的回答..."
+            placeholder={t.common.questionInput.placeholder}
             className="border-border/60 bg-background text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/30 w-full rounded-lg border px-3 py-2 text-sm focus:ring-1 focus:outline-none"
           />
         </div>

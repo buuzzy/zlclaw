@@ -601,6 +601,10 @@ function extractJsonObject(
 export function parsePlanningResponse(
   responseText: string
 ): PlanningResponse | undefined {
+  // Debug: log raw response for troubleshooting
+  console.log('[parsePlanningResponse] Raw response length:', responseText.length);
+  console.log('[parsePlanningResponse] Raw response (first 500 chars):', responseText.slice(0, 500));
+
   try {
     // Try to find JSON in the response
     let jsonString: string | undefined;
@@ -654,9 +658,126 @@ export function parsePlanningResponse(
       }
     }
 
+    // Fallback: if we have parsed JSON but didn't match any type, check for answer field
+    if (parsed && typeof parsed.answer === 'string') {
+      return { type: 'direct_answer', answer: parsed.answer };
+    }
+
     return undefined;
   } catch (error) {
     console.error('Failed to parse planning response:', error);
+    console.log('[parsePlanningResponse] Attempting fallback strategies...');
+    // Fallback: try multiple strategies to extract answer
+
+    // Strategy 1: Find "answer": and extract until the end of the JSON string
+    try {
+      const answerIndex = responseText.indexOf('"answer"');
+      if (answerIndex !== -1) {
+        // Find the start of the string value (after "answer": ")
+        const colonIndex = responseText.indexOf(':', answerIndex);
+        if (colonIndex !== -1) {
+          const quoteStart = responseText.indexOf('"', colonIndex + 1);
+          if (quoteStart !== -1) {
+            // Extract string content by tracking escape sequences
+            let content = '';
+            let i = quoteStart + 1;
+            while (i < responseText.length) {
+              const char = responseText[i];
+              if (char === '\\' && i + 1 < responseText.length) {
+                const nextChar = responseText[i + 1];
+                if (nextChar === 'n') {
+                  content += '\n';
+                } else if (nextChar === '"') {
+                  content += '"';
+                } else if (nextChar === '\\') {
+                  content += '\\';
+                } else if (nextChar === 't') {
+                  content += '\t';
+                } else if (nextChar === 'r') {
+                  content += '\r';
+                } else {
+                  content += nextChar;
+                }
+                i += 2;
+              } else if (char === '"') {
+                // End of string
+                break;
+              } else {
+                content += char;
+                i++;
+              }
+            }
+            if (content.length > 0) {
+              console.log('[parsePlanningResponse] Strategy 1 succeeded, extracted', content.length, 'chars');
+              return { type: 'direct_answer', answer: content };
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.log('[parsePlanningResponse] Strategy 1 failed:', e);
+    }
+
+    // Strategy 2: Find "answer": " and extract everything until the last "} or "}
+    try {
+      // Match "answer": " or "answer" : "
+      const answerStartMatch = responseText.match(/"answer"\s*:\s*"/);
+      if (answerStartMatch && answerStartMatch.index !== undefined) {
+        const contentStart = answerStartMatch.index + answerStartMatch[0].length;
+        // Find the ending - look for "} at the end of the text
+        let contentEnd = responseText.length;
+
+        // Try to find the closing pattern: "}``` or "} or just "
+        const endPatterns = ['"}```', '"\n}', '"}', '"```'];
+        for (const pattern of endPatterns) {
+          const idx = responseText.lastIndexOf(pattern);
+          if (idx > contentStart) {
+            contentEnd = idx;
+            break;
+          }
+        }
+
+        let content = responseText.slice(contentStart, contentEnd);
+        // Unescape common JSON escape sequences
+        content = content
+          .replace(/\\n/g, '\n')
+          .replace(/\\r/g, '\r')
+          .replace(/\\t/g, '\t')
+          .replace(/\\"/g, '"')
+          .replace(/\\\\/g, '\\');
+
+        if (content.length > 0) {
+          console.log('[parsePlanningResponse] Strategy 2 succeeded, extracted', content.length, 'chars');
+          return { type: 'direct_answer', answer: content };
+        }
+      }
+    } catch (e) {
+      console.log('[parsePlanningResponse] Strategy 2 failed:', e);
+    }
+
+    // Strategy 3: Strip all JSON markers and return raw text
+    let strippedText = responseText
+      .replace(/```json\s*/g, '')
+      .replace(/```\s*/g, '')
+      .replace(/^\s*\{\s*/m, '')
+      .replace(/\s*\}\s*$/m, '')
+      .replace(/"type"\s*:\s*"direct_answer"\s*,?\s*/g, '')
+      .replace(/"answer"\s*:\s*"/g, '')
+      .replace(/"\s*$/g, '')
+      .trim();
+
+    // Unescape
+    strippedText = strippedText
+      .replace(/\\n/g, '\n')
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
+
+    if (strippedText.length > 10 && !strippedText.includes('"steps"')) {
+      console.log('[parsePlanningResponse] Strategy 3 succeeded, extracted', strippedText.length, 'chars');
+      return { type: 'direct_answer', answer: strippedText };
+    }
+
+    console.log('[parsePlanningResponse] All strategies failed');
     return undefined;
   }
 }

@@ -34,6 +34,7 @@ export default {
   executionPlan: 'Execution Plan',
   pendingApproval: 'Pending',
   planCompleted: 'Completed',
+  planCancelled: 'Cancelled',
   goal: 'Goal',
   steps: 'Steps',
   stepsCount: 'Steps ({count})',

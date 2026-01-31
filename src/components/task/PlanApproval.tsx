@@ -1,7 +1,7 @@
 import type { TaskPlan } from '@/shared/hooks/useAgent';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { Check, ListTodo, Play, X } from 'lucide-react';
+import { Ban, Check, ListTodo, Play, X } from 'lucide-react';
 
 interface PlanApprovalProps {
   plan: TaskPlan;
@@ -23,19 +23,26 @@ export function PlanApproval({
     (step) => step.status === 'completed'
   );
 
+  // Check if plan was cancelled
+  const isCancelled = plan.steps.some((step) => step.status === 'cancelled');
+
   return (
     <div
       className={cn(
         'space-y-4 rounded-xl border p-4',
-        isAllCompleted && !isWaitingApproval
-          ? 'border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/20'
-          : 'border-primary/30 bg-accent/30'
+        isCancelled && !isWaitingApproval
+          ? 'border-muted-foreground/30 bg-muted/30'
+          : isAllCompleted && !isWaitingApproval
+            ? 'border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/20'
+            : 'border-primary/30 bg-accent/30'
       )}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="text-foreground flex items-center gap-2 text-sm font-medium">
-          {isAllCompleted && !isWaitingApproval ? (
+          {isCancelled && !isWaitingApproval ? (
+            <Ban className="text-muted-foreground size-4" />
+          ) : isAllCompleted && !isWaitingApproval ? (
             <Check className="size-4 text-emerald-500" />
           ) : (
             <ListTodo className="text-primary size-4" />
@@ -44,6 +51,10 @@ export function PlanApproval({
           {isWaitingApproval ? (
             <span className="bg-primary/20 text-primary rounded-full px-2 py-0.5 text-xs">
               {t.task.pendingApproval}
+            </span>
+          ) : isCancelled ? (
+            <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs">
+              {t.task.planCancelled}
             </span>
           ) : isAllCompleted ? (
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -77,13 +88,17 @@ export function PlanApproval({
                       ? 'border-primary bg-primary/10 text-primary'
                       : step.status === 'failed'
                         ? 'border-destructive bg-destructive/10 text-destructive'
-                        : 'border-muted-foreground/30 bg-background text-muted-foreground'
+                        : step.status === 'cancelled'
+                          ? 'border-muted-foreground/30 bg-muted text-muted-foreground'
+                          : 'border-muted-foreground/30 bg-background text-muted-foreground'
                 )}
               >
                 {step.status === 'completed' ? (
                   <Check className="size-3" />
                 ) : step.status === 'in_progress' ? (
                   <div className="bg-primary size-1.5 animate-pulse rounded-full" />
+                ) : step.status === 'cancelled' ? (
+                  <X className="size-3" />
                 ) : (
                   index + 1
                 )}
@@ -97,7 +112,9 @@ export function PlanApproval({
                       ? 'text-foreground font-medium'
                       : step.status === 'failed'
                         ? 'text-destructive'
-                        : 'text-foreground'
+                        : step.status === 'cancelled'
+                          ? 'text-muted-foreground line-through'
+                          : 'text-foreground'
                 )}
               >
                 {step.description}
