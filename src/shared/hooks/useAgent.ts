@@ -489,6 +489,8 @@ export interface UseAgentReturn {
     answers: Record<string, string>
   ) => Promise<void>;
   setSessionInfo: (sessionId: string, taskIndex: number) => void;
+  // Generated title from LLM summarization (null until ready)
+  generatedTitle: string | null;
   // Background tasks
   backgroundTasks: BackgroundTask[];
   runningBackgroundTaskCount: number;
@@ -877,6 +879,8 @@ export function useAgent(): UseAgentReturn {
   const [currentTaskIndex, setCurrentTaskIndex] = useState<number>(1);
   // Track file changes to trigger refresh in UI
   const [filesVersion, setFilesVersion] = useState<number>(0);
+  // Generated title from LLM summarization
+  const [generatedTitle, setGeneratedTitle] = useState<string | null>(null);
   const [sessionFolder, setSessionFolder] = useState<string | null>(null);
   const sessionIdRef = useRef<string | null>(null); // Backend session ID for API calls
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -1730,6 +1734,37 @@ export function useAgent(): UseAgentReturn {
             'in session:',
             sessId
           );
+
+          // Generate a short title asynchronously
+          (async () => {
+            try {
+              const modelConfig = getModelConfig();
+              const language = getPreferredLanguage();
+              console.log('[useAgent] Requesting title generation for prompt:', prompt.slice(0, 80));
+              console.log('[useAgent] Title request URL:', `${AGENT_SERVER_URL}/agent/title`);
+              console.log('[useAgent] Title request payload:', { prompt: prompt.slice(0, 80), hasModelConfig: !!modelConfig, language });
+              const res = await fetch(`${AGENT_SERVER_URL}/agent/title`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, modelConfig, language }),
+              });
+              console.log('[useAgent] Title response status:', res.status);
+              if (res.ok) {
+                const data = await res.json();
+                console.log('[useAgent] Title response data:', data);
+                if (data.title) {
+                  await updateTask(currentTaskId, { prompt: data.title });
+                  setGeneratedTitle(data.title);
+                  console.log('[useAgent] Updated task title:', data.title);
+                }
+              } else {
+                const errorText = await res.text();
+                console.error('[useAgent] Title generation failed:', res.status, errorText);
+              }
+            } catch (err) {
+              console.error('[useAgent] Failed to generate title:', err);
+            }
+          })();
         } else {
           console.log('[useAgent] Task already exists:', currentTaskId);
         }
@@ -2801,6 +2836,7 @@ export function useAgent(): UseAgentReturn {
     respondToPermission,
     respondToQuestion,
     setSessionInfo,
+    generatedTitle,
     // Background tasks
     backgroundTasks,
     runningBackgroundTaskCount,

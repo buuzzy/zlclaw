@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
   PanelLeft,
   PanelLeftOpen,
+  Pencil,
   Settings,
   Smartphone,
   Sparkles,
@@ -25,6 +26,13 @@ import {
 } from 'lucide-react';
 
 import { SettingsModal } from '@/components/settings';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,6 +56,7 @@ interface LeftSidebarProps {
   currentTaskId?: string;
   onDeleteTask?: (taskId: string) => void;
   onToggleFavorite?: (taskId: string, favorite: boolean) => void;
+  onRenameTask?: (taskId: string, newTitle: string) => void;
   runningTaskIds?: string[]; // Tasks running in background
 }
 
@@ -123,6 +132,7 @@ export function LeftSidebar({
   currentTaskId,
   onDeleteTask,
   onToggleFavorite,
+  onRenameTask,
   runningTaskIds = [],
 }: LeftSidebarProps) {
   const navigate = useNavigate();
@@ -137,6 +147,11 @@ export function LeftSidebar({
   // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+
+  // Rename dialog state
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [taskToRename, setTaskToRename] = useState<{ id: string; prompt: string } | null>(null);
+  const [renameValue, setRenameValue] = useState('');
 
   // Loading state for task switching
   const [loadingTaskId, setLoadingTaskId] = useState<string | null>(null);
@@ -163,6 +178,22 @@ export function LeftSidebar({
     if (onToggleFavorite) {
       onToggleFavorite(task.id, !task.favorite);
     }
+  };
+
+  const handleRenameClick = (task: Task, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTaskToRename({ id: task.id, prompt: task.prompt });
+    setRenameValue(task.prompt);
+    setRenameDialogOpen(true);
+  };
+
+  const handleConfirmRename = () => {
+    const trimmed = renameValue.trim();
+    if (trimmed && taskToRename && onRenameTask) {
+      onRenameTask(taskToRename.id, trimmed);
+    }
+    setRenameDialogOpen(false);
+    setTaskToRename(null);
   };
 
   // Load profile from settings
@@ -338,6 +369,13 @@ export function LeftSidebar({
                                   ? t.common.unfavorite
                                   : t.common.favorite}
                               </span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="cursor-pointer"
+                              onClick={(e) => handleRenameClick(task, e)}
+                            >
+                              <Pencil className="size-4" />
+                              <span>{t.common.rename}</span>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -584,6 +622,15 @@ export function LeftSidebar({
                                               : t.common.favorite}
                                           </span>
                                         </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          className="cursor-pointer"
+                                          onClick={(e) =>
+                                            handleRenameClick(task, e)
+                                          }
+                                        >
+                                          <Pencil className="size-4" />
+                                          <span>{t.common.rename}</span>
+                                        </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
                                           className="cursor-pointer text-red-500 focus:text-red-500"
@@ -690,6 +737,43 @@ export function LeftSidebar({
         onConfirm={handleConfirmDelete}
         t={t}
       />
+
+      {/* Rename dialog */}
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>{t.common.rename}</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <label className="text-sm font-medium">{t.common.taskTitle}</label>
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleConfirmRename();
+              }}
+              autoFocus
+              className="border-border focus:border-primary focus:ring-primary/30 mt-1.5 w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1"
+            />
+          </div>
+          <DialogFooter>
+            <button
+              onClick={() => setRenameDialogOpen(false)}
+              className="border-border hover:bg-accent rounded-lg border px-4 py-2 text-sm transition-colors"
+            >
+              {t.common.cancel}
+            </button>
+            <button
+              onClick={handleConfirmRename}
+              disabled={!renameValue.trim()}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg px-4 py-2 text-sm transition-colors disabled:opacity-50"
+            >
+              {t.common.confirm}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }
