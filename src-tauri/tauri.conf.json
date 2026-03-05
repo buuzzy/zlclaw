@@ -32,11 +32,15 @@
       "icons/icon.ico"
     ],
     "externalBin": [
+      "../src-api/dist/codex",
+      "../src-api/dist/claude",
       "../src-api/dist/workany-api"
     ],
     "macOS": {
       "entitlements": "entitlements.plist"
     },
-    "resources": []
+    "resources": [
+      "../src-api/dist/cli-bundle/**/*"
+    ]
   }
 }
