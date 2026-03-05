@@ -10,7 +10,7 @@ import {
   runExecutionPhase,
   runPlanningPhase,
 } from '@/shared/services/agent';
-import { runChat } from '@/shared/services/chat';
+import { generateTitle, runChat } from '@/shared/services/chat';
 import type { AgentRequest } from '@/shared/types/agent';
 
 const agent = new Hono();
@@ -220,6 +220,30 @@ agent.post('/', async (c) => {
   );
 
   return new Response(readable, { headers: SSE_HEADERS });
+});
+
+// Generate a short title from a prompt
+agent.post('/title', async (c) => {
+  const body = await c.req.json<{
+    prompt: string;
+    modelConfig?: { apiKey?: string; baseUrl?: string; model?: string };
+    language?: string;
+  }>();
+
+  console.log('[AgentAPI] POST /title received:', {
+    promptLength: body.prompt?.length,
+    promptPreview: body.prompt?.slice(0, 80),
+    hasModelConfig: !!body.modelConfig,
+    language: body.language,
+  });
+
+  if (!body.prompt) {
+    return c.json({ error: 'prompt is required' }, 400);
+  }
+
+  const title = await generateTitle(body.prompt, body.modelConfig, body.language);
+  console.log('[AgentAPI] POST /title result:', { title });
+  return c.json({ title });
 });
 
 // Stop a running agent

@@ -30,6 +30,7 @@ import {
   ChevronDown,
   FileText,
   PanelLeft,
+  Pencil,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -40,6 +41,13 @@ import {
   type Artifact,
 } from '@/components/artifacts';
 import { Logo } from '@/components/common/logo';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
 import { SettingsModal } from '@/components/settings';
 import { ChatInput, type ChatMode } from '@/components/shared/ChatInput';
@@ -115,6 +123,7 @@ function TaskDetailContent() {
     sessionFolder,
     filesVersion,
     backgroundTasks,
+    generatedTitle,
   } = useAgent();
   const { toggleLeft, setLeftOpen } = useSidebar();
   const [hasStarted, setHasStarted] = useState(false);
@@ -259,62 +268,33 @@ function TaskDetailContent() {
   // Tool search
   const [toolSearchQuery] = useState('');
 
-  // Title editing state
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editedTitle, setEditedTitle] = useState('');
-  const titleInputRef = useRef<HTMLInputElement>(null);
+  // Title rename dialog state
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
 
-  // Handle title click to start editing
-  const handleTitleClick = useCallback(() => {
-    const currentTitle = task?.prompt || initialPrompt;
-    setEditedTitle(currentTitle);
-    setIsEditingTitle(true);
-  }, [task?.prompt, initialPrompt]);
+  const openRenameDialog = useCallback(() => {
+    setRenameValue(task?.prompt || generatedTitle || initialPrompt);
+    setRenameDialogOpen(true);
+  }, [task?.prompt, generatedTitle, initialPrompt]);
 
-  // Handle title save
-  const handleTitleSave = useCallback(async () => {
-    if (!taskId || !editedTitle.trim()) {
-      setIsEditingTitle(false);
+  const handleRenameConfirm = useCallback(async () => {
+    const trimmed = renameValue.trim();
+    if (!taskId || !trimmed) {
+      setRenameDialogOpen(false);
       return;
     }
-
-    const trimmedTitle = editedTitle.trim();
-    if (trimmedTitle !== (task?.prompt || initialPrompt)) {
-      try {
-        const updatedTask = await updateTask(taskId, { prompt: trimmedTitle });
-        if (updatedTask) {
-          setTask(updatedTask);
-          // Refresh all tasks to update sidebar
-          const tasks = await getAllTasks();
-          setAllTasks(tasks);
-        }
-      } catch (error) {
-        console.error('Failed to update task title:', error);
+    try {
+      const updatedTask = await updateTask(taskId, { prompt: trimmed });
+      if (updatedTask) {
+        setTask(updatedTask);
+        const tasks = await getAllTasks();
+        setAllTasks(tasks);
       }
+    } catch (error) {
+      console.error('Failed to rename task:', error);
     }
-    setIsEditingTitle(false);
-  }, [taskId, editedTitle, task?.prompt, initialPrompt]);
-
-  // Handle title input key down
-  const handleTitleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleTitleSave();
-      } else if (e.key === 'Escape') {
-        setIsEditingTitle(false);
-      }
-    },
-    [handleTitleSave]
-  );
-
-  // Focus title input when editing starts
-  useEffect(() => {
-    if (isEditingTitle && titleInputRef.current) {
-      titleInputRef.current.focus();
-      titleInputRef.current.select();
-    }
-  }, [isEditingTitle]);
+    setRenameDialogOpen(false);
+  }, [taskId, renameValue]);
 
   // Handle artifact selection - opens preview
   const handleSelectArtifact = useCallback((artifact: Artifact) => {
@@ -670,6 +650,16 @@ function TaskDetailContent() {
     loadAllTasks();
   }, [task, taskId]);
 
+  // Update UI immediately when a generated title arrives
+  useEffect(() => {
+    if (generatedTitle && taskId) {
+      // Update current task state
+      setTask((prev) => prev && prev.id === taskId ? { ...prev, prompt: generatedTitle } : prev);
+      // Update sidebar task list
+      setAllTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, prompt: generatedTitle } : t));
+    }
+  }, [generatedTitle, taskId]);
+
   // Handle task deletion from sidebar
   const handleDeleteTask = async (id: string) => {
     try {
@@ -693,6 +683,23 @@ function TaskDetailContent() {
       );
     } catch (error) {
       console.error('Failed to update task:', error);
+    }
+  };
+
+  // Handle rename from sidebar
+  const handleRenameTask = async (id: string, newTitle: string) => {
+    try {
+      const updatedTask = await updateTask(id, { prompt: newTitle });
+      if (updatedTask) {
+        setAllTasks((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, prompt: newTitle } : t))
+        );
+        if (id === taskId) {
+          setTask(updatedTask);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to rename task:', error);
     }
   };
 
@@ -801,7 +808,8 @@ function TaskDetailContent() {
     [isRunning, taskId, continueConversation]
   );
 
-  const displayPrompt = task?.prompt || initialPrompt;
+  const displayTitle = task?.prompt || generatedTitle || initialPrompt;
+  const displayPrompt = initialPrompt || task?.prompt || '';
 
   // Get attachments for the initial user message:
   // 1. From navigation state (first navigation from home page)
@@ -847,6 +855,7 @@ function TaskDetailContent() {
           currentTaskId={taskId}
           onDeleteTask={handleDeleteTask}
           onToggleFavorite={handleToggleFavorite}
+          onRenameTask={handleRenameTask}
           runningTaskIds={[
             ...backgroundTasks.filter((t) => t.isRunning).map((t) => t.taskId),
             // Include current task if it's running
@@ -883,33 +892,18 @@ function TaskDetailContent() {
                 <PanelLeft className="size-5" />
               </button>
 
-              <div className="min-w-0 flex-1">
-                {isEditingTitle ? (
-                  <input
-                    ref={titleInputRef}
-                    type="text"
-                    value={editedTitle}
-                    onChange={(e) => setEditedTitle(e.target.value)}
-                    onBlur={handleTitleSave}
-                    onKeyDown={handleTitleKeyDown}
-                    className="text-foreground border-primary/50 focus:border-primary focus:ring-primary/30 max-w-full rounded-md border bg-transparent px-2 py-1 text-sm font-normal outline-none focus:ring-1"
-                    style={{
-                      width: `${Math.min(
-                        Math.max(editedTitle.length + 2, 20),
-                        50
-                      )}ch`,
-                    }}
-                  />
-                ) : (
-                  <h1
-                    onClick={handleTitleClick}
-                    className="text-foreground hover:bg-accent/50 inline-block max-w-full cursor-pointer truncate rounded-md px-2 py-1 text-sm font-normal transition-colors"
-                    title="Click to edit title"
-                  >
-                    {displayPrompt.slice(0, 40) || `Task ${taskId}`}
-                    {displayPrompt.length > 40 && '...'}
-                  </h1>
-                )}
+              <div className="group/title flex min-w-0 flex-1 items-center gap-1">
+                <h1 className="text-foreground inline-block max-w-full truncate px-2 py-1 text-sm font-normal">
+                  {displayTitle.slice(0, 40) || `Task ${taskId}`}
+                  {displayTitle.length > 40 && '...'}
+                </h1>
+                <button
+                  onClick={openRenameDialog}
+                  className="text-muted-foreground hover:text-foreground shrink-0 opacity-0 transition-opacity group-hover/title:opacity-100"
+                  title={t.common.rename}
+                >
+                  <Pencil className="size-3.5" />
+                </button>
               </div>
 
               {isRunning && (
@@ -1074,6 +1068,42 @@ function TaskDetailContent() {
           </div>
         </div>
       </div>
+      {/* Rename dialog */}
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>{t.common.rename}</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <label className="text-sm font-medium">{t.common.taskTitle}</label>
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRenameConfirm();
+              }}
+              autoFocus
+              className="border-border focus:border-primary focus:ring-primary/30 mt-1.5 w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1"
+            />
+          </div>
+          <DialogFooter>
+            <button
+              onClick={() => setRenameDialogOpen(false)}
+              className="border-border hover:bg-accent rounded-lg border px-4 py-2 text-sm transition-colors"
+            >
+              {t.common.cancel}
+            </button>
+            <button
+              onClick={handleRenameConfirm}
+              disabled={!renameValue.trim()}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg px-4 py-2 text-sm transition-colors disabled:opacity-50"
+            >
+              {t.common.confirm}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ToolSelectionContext.Provider>
   );
 }

@@ -137,3 +137,62 @@ export async function* runChat(
     yield { type: 'done' };
   }
 }
+
+/**
+ * Generate a short title from a user prompt.
+ * Uses a lightweight LLM call to summarize the prompt into a concise title.
+ */
+export async function generateTitle(
+  prompt: string,
+  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
+  language?: string
+): Promise<string> {
+  const apiKey =
+    modelConfig?.apiKey ||
+    process.env.ANTHROPIC_AUTH_TOKEN ||
+    process.env.ANTHROPIC_API_KEY ||
+    '';
+
+  const baseURL =
+    modelConfig?.baseUrl || process.env.ANTHROPIC_BASE_URL || undefined;
+
+  const model = modelConfig?.model || process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
+
+  if (!apiKey) {
+    // Fallback: truncate the prompt
+    return prompt.slice(0, 30) + (prompt.length > 30 ? '...' : '');
+  }
+
+  const client = new Anthropic({ apiKey, baseURL });
+
+  const langHint = language?.startsWith('zh') ? '请用中文回复。' : '';
+
+  try {
+    const requestParams: Record<string, unknown> = {
+      model,
+      max_tokens: 50,
+      system: `Generate a very short title (max 20 characters) that summarizes the user's request. Output ONLY the title, no quotes, no punctuation at the end, no explanation. ${langHint}`,
+      messages: [{ role: 'user', content: prompt }],
+    };
+
+    const isAnthropicModel =
+      model.startsWith('claude-') || model.includes('claude');
+    if (isAnthropicModel) {
+      requestParams.thinking = { type: 'disabled' };
+    }
+
+    const response = await (client.messages.create as Function)(requestParams);
+
+    const title = (response.content as Array<{ type: string; text?: string }>)
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text || '')
+      .join('')
+      .trim();
+
+    logger.info('[ChatService] Generated title:', { prompt: prompt.slice(0, 50), title });
+    return title || prompt.slice(0, 30);
+  } catch (error) {
+    logger.error('[ChatService] Title generation failed:', error);
+    return prompt.slice(0, 30) + (prompt.length > 30 ? '...' : '');
+  }
+}
