@@ -1,62 +1,65 @@
 /**
  * Lightweight Chat Service
  *
- * Directly calls the Anthropic Messages API for simple conversational queries,
+ * Directly calls the LLM API for simple conversational queries,
  * bypassing the Claude Agent SDK to avoid CLI subprocess, tools, and thinking mode overhead.
+ *
+ * Supports both Anthropic (native SDK) and OpenAI-compatible APIs (fetch).
  */
 
 import Anthropic from '@anthropic-ai/sdk';
 
 import type { AgentMessage, ConversationMessage } from '@/core/agent/types';
+import { getConfig } from '@/config/loader';
 import { createLogger } from '@/shared/utils/logger';
 
 const logger = createLogger('ChatService');
 
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
 
-/**
- * Run a lightweight chat using the Anthropic Messages API directly.
- * Yields AgentMessage-compatible events for SSE streaming.
- */
-export async function* runChat(
-  prompt: string,
-  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
-  language?: string,
-  conversation?: ConversationMessage[],
-  abortController?: AbortController
-): AsyncGenerator<AgentMessage> {
-  // Resolve API key: modelConfig > env vars
-  const apiKey =
+function isAnthropicModel(model: string): boolean {
+  return model.startsWith('claude-') || model.includes('claude');
+}
+
+function resolveConfig(modelConfig?: { apiKey?: string; baseUrl?: string; model?: string }) {
+  // 1. Use explicit modelConfig if provided
+  // 2. Fall back to environment variables
+  // 3. Fall back to app config (config.json / provider manager)
+  let apiKey =
     modelConfig?.apiKey ||
     process.env.ANTHROPIC_AUTH_TOKEN ||
     process.env.ANTHROPIC_API_KEY ||
     '';
-
-  const baseURL =
+  let baseURL =
     modelConfig?.baseUrl || process.env.ANTHROPIC_BASE_URL || undefined;
+  let model = modelConfig?.model || process.env.ANTHROPIC_MODEL || '';
 
-  const model = modelConfig?.model || process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
-
+  // If still no API key, try the app config loader
   if (!apiKey) {
-    yield { type: 'error', message: 'No API key configured. Please set up your API key in Settings.' };
-    yield { type: 'done' };
-    return;
+    try {
+      const appConfig = getConfig();
+      const agentConfig = appConfig.providers?.agent?.config as
+        | { apiKey?: string; baseUrl?: string; model?: string }
+        | undefined;
+      if (agentConfig) {
+        apiKey = agentConfig.apiKey || '';
+        baseURL = baseURL || agentConfig.baseUrl || undefined;
+        model = model || agentConfig.model || '';
+      }
+    } catch {
+      // Config loader not initialized yet, ignore
+    }
   }
 
-  logger.info('[ChatService] Starting chat:', {
-    model,
-    hasBaseURL: !!baseURL,
-    hasConversation: !!(conversation && conversation.length > 0),
-    promptLength: prompt.length,
-  });
+  if (!model) {
+    model = DEFAULT_MODEL;
+  }
 
-  const client = new Anthropic({
-    apiKey,
-    baseURL,
-  });
+  return { apiKey, baseURL, model };
+}
 
-  // Build system prompt
-  let systemPrompt = 'You are a helpful assistant. Be concise and direct in your responses.';
+function buildSystemPrompt(base: string, language?: string): string {
+  let systemPrompt = base;
   if (language) {
     const langMap: Record<string, string> = {
       'zh-CN': 'Chinese (Simplified)',
@@ -68,8 +71,182 @@ export async function* runChat(
     const langName = langMap[language] || language;
     systemPrompt += ` Please respond in ${langName}.`;
   }
+  return systemPrompt;
+}
 
-  // Build messages array from conversation history
+// ============================================================================
+// OpenAI-compatible streaming (for non-Anthropic models via proxy)
+// ============================================================================
+
+async function* runOpenAICompatibleChat(
+  messages: Array<{ role: string; content: string }>,
+  systemPrompt: string,
+  apiKey: string,
+  baseURL: string | undefined,
+  model: string,
+  abortController?: AbortController
+): AsyncGenerator<AgentMessage> {
+  // Derive the OpenAI-compatible base URL from the Anthropic-style baseURL
+  // e.g. "https://openrouter.ai/api/v1" -> use as-is, append /chat/completions
+  // Most proxies support /v1/chat/completions
+  let endpoint: string;
+  if (baseURL) {
+    const base = baseURL.replace(/\/+$/, '');
+    // If already ends with /v1, just append /chat/completions
+    if (base.endsWith('/v1')) {
+      endpoint = `${base}/chat/completions`;
+    } else {
+      endpoint = `${base}/v1/chat/completions`;
+    }
+  } else {
+    endpoint = 'https://api.openai.com/v1/chat/completions';
+  }
+
+  const openaiMessages = [
+    { role: 'system', content: systemPrompt },
+    ...messages,
+  ];
+
+  logger.info('[ChatService] OpenAI-compatible request:', { endpoint, model });
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: openaiMessages,
+      max_tokens: 4096,
+      stream: true,
+    }),
+    signal: abortController?.signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`${response.status} ${errorText}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data: ')) continue;
+      const data = trimmed.slice(6);
+      if (data === '[DONE]') continue;
+
+      try {
+        const parsed = JSON.parse(data);
+        const content = parsed.choices?.[0]?.delta?.content;
+        if (content) {
+          yield { type: 'text', content };
+        }
+      } catch {
+        // skip unparseable chunks
+      }
+    }
+  }
+
+  yield { type: 'done' };
+}
+
+async function openAICompatibleCreate(
+  messages: Array<{ role: string; content: string }>,
+  systemPrompt: string,
+  apiKey: string,
+  baseURL: string | undefined,
+  model: string,
+  maxTokens: number
+): Promise<string> {
+  let endpoint: string;
+  if (baseURL) {
+    const base = baseURL.replace(/\/+$/, '');
+    endpoint = base.endsWith('/v1')
+      ? `${base}/chat/completions`
+      : `${base}/v1/chat/completions`;
+  } else {
+    endpoint = 'https://api.openai.com/v1/chat/completions';
+  }
+
+  const openaiMessages = [
+    { role: 'system', content: systemPrompt },
+    ...messages,
+  ];
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: openaiMessages,
+      max_tokens: maxTokens,
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content?.trim() || '';
+}
+
+// ============================================================================
+// Main chat function
+// ============================================================================
+
+/**
+ * Run a lightweight chat using the appropriate API.
+ * - Anthropic models: uses Anthropic SDK
+ * - Other models: uses OpenAI-compatible fetch
+ */
+export async function* runChat(
+  prompt: string,
+  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
+  language?: string,
+  conversation?: ConversationMessage[],
+  abortController?: AbortController
+): AsyncGenerator<AgentMessage> {
+  const { apiKey, baseURL, model } = resolveConfig(modelConfig);
+
+  if (!apiKey) {
+    yield { type: 'error', message: 'No API key configured. Please set up your API key in Settings.' };
+    yield { type: 'done' };
+    return;
+  }
+
+  logger.info('[ChatService] Starting chat:', {
+    model,
+    hasBaseURL: !!baseURL,
+    isAnthropic: isAnthropicModel(model),
+    hasConversation: !!(conversation && conversation.length > 0),
+    promptLength: prompt.length,
+  });
+
+  const systemPrompt = buildSystemPrompt(
+    'You are a helpful assistant. Be concise and direct in your responses.',
+    language
+  );
+
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
   if (conversation && conversation.length > 0) {
     for (const msg of conversation) {
@@ -78,8 +255,28 @@ export async function* runChat(
   }
   messages.push({ role: 'user', content: prompt });
 
+  // Non-Anthropic models: use OpenAI-compatible API
+  if (!isAnthropicModel(model)) {
+    try {
+      yield* runOpenAICompatibleChat(messages, systemPrompt, apiKey, baseURL, model, abortController);
+    } catch (error) {
+      if (abortController?.signal.aborted) {
+        logger.info('[ChatService] Chat aborted by user');
+        yield { type: 'done' };
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('[ChatService] OpenAI-compatible chat error:', errorMessage);
+      yield { type: 'error', message: errorMessage };
+      yield { type: 'done' };
+    }
+    return;
+  }
+
+  // Anthropic models: use Anthropic SDK
+  const client = new Anthropic({ apiKey, baseURL });
+
   try {
-    // Build request params - explicitly disable thinking for fast chat
     const requestParams: Record<string, unknown> = {
       model,
       max_tokens: 4096,
@@ -87,20 +284,12 @@ export async function* runChat(
       messages,
     };
 
-    // Models like claude-sonnet-4 require explicit thinking configuration.
-    // Disable it for fast chat to avoid "thinking type should be enabled or disabled" errors.
-    // Only add for known Anthropic models; third-party APIs may not support this parameter.
-    const isAnthropicModel =
-      model.startsWith('claude-') || model.includes('claude');
-    if (isAnthropicModel) {
-      requestParams.thinking = { type: 'disabled' };
-    }
+    requestParams.thinking = { type: 'disabled' };
 
     const stream = client.messages.stream(
       requestParams as Parameters<typeof client.messages.stream>[0]
     );
 
-    // Handle abort
     if (abortController) {
       abortController.signal.addEventListener('abort', () => {
         stream.abort();
@@ -116,7 +305,6 @@ export async function* runChat(
       }
     }
 
-    // Get final message for usage stats
     const finalMessage = await stream.finalMessage();
     logger.info('[ChatService] Chat completed:', {
       inputTokens: finalMessage.usage.input_tokens,
@@ -138,6 +326,10 @@ export async function* runChat(
   }
 }
 
+// ============================================================================
+// Title generation
+// ============================================================================
+
 /**
  * Generate a short title from a user prompt.
  * Uses a lightweight LLM call to summarize the prompt into a concise title.
@@ -147,47 +339,46 @@ export async function generateTitle(
   modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
   language?: string
 ): Promise<string> {
-  const apiKey =
-    modelConfig?.apiKey ||
-    process.env.ANTHROPIC_AUTH_TOKEN ||
-    process.env.ANTHROPIC_API_KEY ||
-    '';
-
-  const baseURL =
-    modelConfig?.baseUrl || process.env.ANTHROPIC_BASE_URL || undefined;
-
-  const model = modelConfig?.model || process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
+  const { apiKey, baseURL, model } = resolveConfig(modelConfig);
 
   if (!apiKey) {
-    // Fallback: truncate the prompt
     return prompt.slice(0, 30) + (prompt.length > 30 ? '...' : '');
   }
 
-  const client = new Anthropic({ apiKey, baseURL });
-
   const langHint = language?.startsWith('zh') ? '请用中文回复。' : '';
+  const systemPrompt = `Generate a very short title (max 20 characters) that summarizes the user's request. Output ONLY the title, no quotes, no punctuation at the end, no explanation. ${langHint}`;
 
   try {
-    const requestParams: Record<string, unknown> = {
-      model,
-      max_tokens: 50,
-      system: `Generate a very short title (max 20 characters) that summarizes the user's request. Output ONLY the title, no quotes, no punctuation at the end, no explanation. ${langHint}`,
-      messages: [{ role: 'user', content: prompt }],
-    };
+    let title: string;
 
-    const isAnthropicModel =
-      model.startsWith('claude-') || model.includes('claude');
-    if (isAnthropicModel) {
-      requestParams.thinking = { type: 'disabled' };
+    if (!isAnthropicModel(model)) {
+      // Non-Anthropic: OpenAI-compatible
+      title = await openAICompatibleCreate(
+        [{ role: 'user', content: prompt }],
+        systemPrompt,
+        apiKey,
+        baseURL,
+        model,
+        50
+      );
+    } else {
+      // Anthropic: native SDK
+      const client = new Anthropic({ apiKey, baseURL });
+      const requestParams: Record<string, unknown> = {
+        model,
+        max_tokens: 50,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: prompt }],
+        thinking: { type: 'disabled' },
+      };
+
+      const response = await (client.messages.create as Function)(requestParams);
+      title = (response.content as Array<{ type: string; text?: string }>)
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text || '')
+        .join('')
+        .trim();
     }
-
-    const response = await (client.messages.create as Function)(requestParams);
-
-    const title = (response.content as Array<{ type: string; text?: string }>)
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text || '')
-      .join('')
-      .trim();
 
     logger.info('[ChatService] Generated title:', { prompt: prompt.slice(0, 50), title });
     return title || prompt.slice(0, 30);

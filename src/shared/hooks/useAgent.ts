@@ -1805,9 +1805,13 @@ export function useAgent(): UseAgentReturn {
         // If Claude Code is not available and no model is configured, the backend will return an error.
 
         // Fast chat detection: short text, no attachments, no file/code intent
+        // Only use fast chat when modelConfig is available (custom provider with API key).
+        // Default provider has no API key on the backend chat service — it relies on
+        // Claude Code CLI which has its own config, so we must fall through to the agent endpoint.
         const shouldUseFastChat =
-          mode === 'chat' ||
-          (mode !== 'task' && !hasImages && isFastChatQuery(prompt));
+          modelConfig &&
+          (mode === 'chat' ||
+            (mode !== 'task' && !hasImages && isFastChatQuery(prompt)));
 
         if (shouldUseFastChat) {
           console.log('[useAgent] Using fast chat for simple query, mode:', mode);
@@ -2462,9 +2466,11 @@ export function useAgent(): UseAgentReturn {
         }
 
         // Fast chat detection for follow-up messages
+        // Only use fast chat when modelConfig is available (see runAgent comment for details)
         const shouldUseFastChat =
-          mode === 'chat' ||
-          (mode !== 'task' && !hasImages && isFastChatQuery(reply));
+          modelConfig &&
+          (mode === 'chat' ||
+            (mode !== 'task' && !hasImages && isFastChatQuery(reply)));
 
         if (shouldUseFastChat) {
           console.log('[useAgent] continueConversation: Using fast chat, mode:', mode);
