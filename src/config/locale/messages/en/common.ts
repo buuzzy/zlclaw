@@ -29,6 +29,10 @@ export default {
   // Task actions
   favorite: 'Add to favorites',
   unfavorite: 'Remove from favorites',
+  rename: 'Rename',
+  renameTask: 'Rename Task',
+  renameTaskDescription: 'Set a new title for this task',
+  taskTitle: 'Title',
   deleteTask: 'Delete task',
   deleteTaskConfirm: 'Are you sure you want to delete this task?',
   deleteTaskDescription:

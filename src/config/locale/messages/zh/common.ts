@@ -29,6 +29,10 @@ export default {
   // 任务操作
   favorite: '收藏',
   unfavorite: '取消收藏',
+  rename: '重命名',
+  renameTask: '重命名任务',
+  renameTaskDescription: '为这个任务设置一个新标题',
+  taskTitle: '标题',
   deleteTask: '删除任务',
   deleteTaskConfirm: '确定要删除这个任务吗？',
   deleteTaskDescription: '此操作无法撤销，任务中的所有消息将被永久删除。',
