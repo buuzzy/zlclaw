@@ -86,6 +86,8 @@ export default {
   modelDescription: '配置默认模型和供应商',
   defaultModel: '默认模型',
   defaultModelDescription: 'Agent 工作模型',
+  defaultModelHint: '此模型将会用于测试',
+  selectDefaultModel: '请先选择一个 Default Model',
   providers: '供应商',
   defaultEnv: '默认 (环境变量)',
   useEnvModel: '使用环境变量配置',
@@ -99,6 +101,7 @@ export default {
   configured: '已配置',
   notConfigured: '未配置',
   addProvider: '添加供应商',
+  searchProviders: '搜索供应商',
   addCustomModel: '添加自定义模型',
   deleteProvider: '删除供应商',
   providerName: '名称',
@@ -119,8 +122,8 @@ export default {
   maxHistoryTokensDescription: '对话历史的最大 Token 数量（0 = 不限制）',
 
   // Provider Detection
-  detectConfig: '检测配置',
-  detecting: '检测中...',
+  detectConfig: '测试连接',
+  detecting: '测试中...',
   success: '成功',
   failed: '失败',
   connectionSuccess: '连接成功！配置有效',

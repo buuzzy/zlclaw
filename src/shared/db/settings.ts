@@ -15,6 +15,7 @@ export interface AIProvider {
   baseUrl: string;
   enabled: boolean;
   models: string[];
+  defaultModel?: string;
   // Extended fields for UI
   icon?: string;
   apiKeyUrl?: string;
