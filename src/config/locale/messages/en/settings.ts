@@ -88,6 +88,8 @@ export default {
   modelDescription: 'Configure default model and providers',
   defaultModel: 'Default Model',
   defaultModelDescription: 'Agent working model',
+  defaultModelHint: 'This model will be used for testing',
+  selectDefaultModel: 'Please select a Default Model first',
   providers: 'Providers',
   defaultEnv: 'Default (Environment)',
   useEnvModel: 'Use environment variables',
@@ -101,6 +103,7 @@ export default {
   configured: 'Configured',
   notConfigured: 'Not Configured',
   addProvider: 'Add Provider',
+  searchProviders: 'Search providers',
   addCustomModel: 'Add Custom Model',
   deleteProvider: 'Delete Provider',
   providerName: 'Name',
@@ -123,8 +126,8 @@ export default {
     'Maximum tokens for conversation history (0 = unlimited)',
 
   // Provider Detection
-  detectConfig: 'Detect Configuration',
-  detecting: 'Detecting...',
+  detectConfig: 'Test Connection',
+  detecting: 'Testing...',
   success: 'Success',
   failed: 'Failed',
   connectionSuccess: 'Connection successful! Configuration valid',

@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react';
 import { API_BASE_URL } from '@/config';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   Check,
   ExternalLink,
+  MoreHorizontal,
   Plus,
   RefreshCw,
-  Settings,
+  Search,
+  Settings2,
   Trash2,
   X,
 } from 'lucide-react';
@@ -21,24 +24,19 @@ import {
   providerDefaultModels,
   providerIcons,
 } from '../constants';
-import type { AIProvider, ModelSubTab, SettingsTabProps } from '../types';
+import type { AIProvider, SettingsTabProps } from '../types';
 
 // Get suggested models for a provider
 function getSuggestedModels(provider: AIProvider): string[] {
-  // First check by provider ID
   if (providerDefaultModels[provider.id]) {
     return providerDefaultModels[provider.id];
   }
-
-  // Then check custom provider models by name (case-insensitive)
   const providerNameLower = provider.name.toLowerCase();
   for (const [key, models] of Object.entries(customProviderModels)) {
     if (providerNameLower.includes(key.toLowerCase())) {
       return models;
     }
   }
-
-  // Fall back to default
   return providerDefaultModels.default || [];
 }
 
@@ -51,11 +49,104 @@ const openExternalUrl = async (url: string) => {
   }
 };
 
+type MainTab = 'providers' | 'settings';
+
+// Provider Card component
+function ProviderCard({
+  provider,
+  onConfigure,
+  onDelete,
+  onToggle,
+  isBuiltIn,
+}: {
+  provider: AIProvider;
+  onConfigure: () => void;
+  onDelete: () => void;
+  onToggle: (enabled: boolean) => void;
+  isBuiltIn: boolean;
+}) {
+  const { t } = useLanguage();
+  const [showMenu, setShowMenu] = useState(false);
+
+  return (
+    <div className="border-border bg-background hover:border-foreground/20 relative flex flex-col rounded-xl border p-4 transition-colors">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="bg-muted text-muted-foreground relative flex size-7 items-center justify-center rounded text-xs font-medium">
+            {providerIcons[provider.id] ||
+              provider.name.charAt(0).toUpperCase()}
+            {provider.apiKey && (
+              <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-500" />
+            )}
+          </span>
+          <span className="text-foreground text-sm font-medium">
+            {provider.name}
+          </span>
+        </div>
+        <Switch
+          checked={provider.enabled}
+          onChange={onToggle}
+          disabled={!provider.apiKey}
+        />
+      </div>
+
+      <p className="text-muted-foreground mb-4 flex-1 text-xs">
+        {provider.apiKey
+          ? `${provider.models?.length || 0} ${t.settings.models?.toLowerCase() || 'models'}`
+          : t.settings.notConfigured}
+      </p>
+
+      <div className="border-border flex items-center justify-end border-t pt-3">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onConfigure}
+            className="text-muted-foreground hover:bg-accent hover:text-foreground rounded p-1.5 transition-colors"
+            title={t.settings.modelSettings}
+          >
+            <Settings2 className="size-4" />
+          </button>
+          {!isBuiltIn && (
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="text-muted-foreground hover:bg-accent hover:text-foreground rounded p-1.5 transition-colors"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+              {showMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowMenu(false)}
+                  />
+                  <div className="border-border bg-popover absolute right-0 bottom-full z-20 mb-1 min-w-max rounded-lg border py-1 shadow-lg">
+                    <button
+                      onClick={() => {
+                        onDelete();
+                        setShowMenu(false);
+                      }}
+                      className="hover:bg-destructive/10 text-destructive flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors"
+                    >
+                      <Trash2 className="size-3.5 shrink-0" />
+                      {t.settings.deleteProvider}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ModelSettings({
   settings,
   onSettingsChange,
 }: SettingsTabProps) {
-  const [activeSubTab, setActiveSubTab] = useState<ModelSubTab>('settings');
+  const [mainTab, setMainTab] = useState<MainTab>('providers');
+  const [editingProvider, setEditingProvider] = useState<string | null>(null);
   const [showAddProvider, setShowAddProvider] = useState(false);
   const [newProvider, setNewProvider] = useState({
     name: '',
@@ -66,6 +157,7 @@ export function ModelSettings({
   const [showApiKey, setShowApiKey] = useState(false);
   const [newModelName, setNewModelName] = useState('');
   const [showAddModel, setShowAddModel] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { t, tt } = useLanguage();
 
   // Detect connection states for "Add Provider" form
@@ -79,6 +171,19 @@ export function ModelSettings({
     'idle' | 'loading' | 'success' | 'error'
   >('idle');
   const [editDetectMessage, setEditDetectMessage] = useState('');
+
+  const selectedProvider = settings.providers.find(
+    (p) => p.id === editingProvider
+  );
+
+  // Reset edit detect status when switching providers
+  useEffect(() => {
+    setEditDetectStatus('idle');
+    setEditDetectMessage('');
+    setShowApiKey(false);
+    setShowAddModel(false);
+    setNewModelName('');
+  }, [editingProvider]);
 
   // Function to detect if API configuration is valid (for Add Provider form)
   const handleDetectConnection = async () => {
@@ -101,9 +206,7 @@ export function ModelSettings({
 
       const response = await fetch(`${API_BASE_URL}/providers/detect`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           baseUrl: newProvider.baseUrl,
           apiKey: newProvider.apiKey,
@@ -119,13 +222,11 @@ export function ModelSettings({
 
       if (data.success) {
         setDetectStatus('success');
-        setDetectMessage(t.settings.connectionSuccess);
+        setDetectMessage('');
         setTimeout(() => setDetectStatus('idle'), 3000);
       } else {
         setDetectStatus('error');
-        // Use local translation for common errors, otherwise use API message
-        const errorMessage = data.error || t.settings.connectionFailed;
-        setDetectMessage(errorMessage);
+        setDetectMessage(data.error || t.settings.connectionFailed);
         setTimeout(() => setDetectStatus('idle'), 5000);
       }
     } catch (error) {
@@ -140,7 +241,7 @@ export function ModelSettings({
     }
   };
 
-  // Function to detect if API configuration is valid (for Edit Provider panel)
+  // Function to detect connection (for Edit Provider dialog)
   const handleEditDetectConnection = async () => {
     if (!selectedProvider?.baseUrl || !selectedProvider?.apiKey) {
       setEditDetectStatus('error');
@@ -149,17 +250,25 @@ export function ModelSettings({
       return;
     }
 
+    if (!selectedProvider?.defaultModel) {
+      setEditDetectStatus('error');
+      setEditDetectMessage(t.settings.selectDefaultModel);
+      setTimeout(() => setEditDetectStatus('idle'), 3000);
+      return;
+    }
+
     setEditDetectStatus('loading');
     setEditDetectMessage('');
 
     try {
-      const testModel = selectedProvider.models?.[0] || 'gpt-3.5-turbo';
+      const testModel =
+        selectedProvider.defaultModel ||
+        selectedProvider.models?.[0] ||
+        'gpt-3.5-turbo';
 
       const response = await fetch(`${API_BASE_URL}/providers/detect`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           baseUrl: selectedProvider.baseUrl,
           apiKey: selectedProvider.apiKey,
@@ -175,13 +284,11 @@ export function ModelSettings({
 
       if (data.success) {
         setEditDetectStatus('success');
-        setEditDetectMessage(t.settings.connectionSuccess);
+        setEditDetectMessage('');
         setTimeout(() => setEditDetectStatus('idle'), 3000);
       } else {
         setEditDetectStatus('error');
-        // Use API error message or fallback
-        const errorMessage = data.error || t.settings.connectionFailed;
-        setEditDetectMessage(errorMessage);
+        setEditDetectMessage(data.error || t.settings.connectionFailed);
         setTimeout(() => setEditDetectStatus('idle'), 5000);
       }
     } catch (error) {
@@ -196,29 +303,24 @@ export function ModelSettings({
     }
   };
 
-  // Reset edit detect status when switching providers
-  useEffect(() => {
-    setEditDetectStatus('idle');
-    setEditDetectMessage('');
-  }, [activeSubTab]);
-
   // Get all available models from enabled providers
   const availableModels = settings.providers
     .filter((p) => p.enabled && p.apiKey)
     .flatMap((p) => p.models.map((m) => ({ provider: p, model: m })));
 
   // Sort providers: enabled first, then configured, then others
-  const sortedProviders = [...settings.providers].sort((a, b) => {
-    if (a.enabled && a.apiKey && !(b.enabled && b.apiKey)) return -1;
-    if (b.enabled && b.apiKey && !(a.enabled && a.apiKey)) return 1;
-    if (a.apiKey && !b.apiKey) return -1;
-    if (b.apiKey && !a.apiKey) return 1;
-    return 0;
-  });
-
-  const selectedProvider = settings.providers.find(
-    (p) => p.id === activeSubTab
-  );
+  const sortedProviders = [...settings.providers]
+    .filter(
+      (p) =>
+        !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (a.enabled && a.apiKey && !(b.enabled && b.apiKey)) return -1;
+      if (b.enabled && b.apiKey && !(a.enabled && a.apiKey)) return 1;
+      if (a.apiKey && !b.apiKey) return -1;
+      if (b.apiKey && !a.apiKey) return 1;
+      return 0;
+    });
 
   const handleProviderUpdate = (
     providerId: string,
@@ -244,6 +346,7 @@ export function ModelSettings({
       .map((m) => m.trim())
       .filter((m) => m);
 
+    const defaultModel = models[0] || '';
     const provider: AIProvider = {
       id,
       name: newProvider.name,
@@ -251,6 +354,7 @@ export function ModelSettings({
       baseUrl: newProvider.baseUrl,
       enabled: true,
       models: models.length > 0 ? models : ['default'],
+      defaultModel,
     };
 
     onSettingsChange({
@@ -260,7 +364,7 @@ export function ModelSettings({
 
     setNewProvider({ name: '', baseUrl: '', apiKey: '', models: '' });
     setShowAddProvider(false);
-    setActiveSubTab(id);
+    setEditingProvider(id);
   };
 
   const handleDeleteProvider = (providerId: string) => {
@@ -276,223 +380,96 @@ export function ModelSettings({
     }
 
     onSettingsChange(newSettings);
-    setActiveSubTab('settings');
+    if (editingProvider === providerId) {
+      setEditingProvider(null);
+    }
   };
 
   return (
-    <div className="-m-6 flex h-[calc(100%+48px)]">
-      {/* Left Panel - Sub Navigation */}
-      <div className="border-border flex w-52 flex-col border-r">
-        {/* Model Settings Tab */}
-        <div className="space-y-0.5 p-2">
-          <button
-            onClick={() => {
-              setActiveSubTab('settings');
-              setShowAddProvider(false);
-            }}
-            className={cn(
-              'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-200',
-              activeSubTab === 'settings' && !showAddProvider
-                ? 'bg-accent text-accent-foreground font-medium'
-                : 'text-foreground/70 hover:bg-accent/50 hover:text-foreground'
-            )}
-          >
-            <Settings className="size-4" />
-            <span className="flex-1 text-left">{t.settings.modelSettings}</span>
-          </button>
-        </div>
-
-        {/* Providers Section */}
-        <div className="border-border border-t">
-          <div className="text-muted-foreground flex items-center px-4 py-2 text-xs font-medium">
-            {t.settings.providers}
-          </div>
-          <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
-            {sortedProviders.map((provider) => (
-              <button
-                key={provider.id}
-                onClick={() => {
-                  setActiveSubTab(provider.id);
-                  setShowAddProvider(false);
-                }}
-                className={cn(
-                  'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors duration-200',
-                  activeSubTab === provider.id && !showAddProvider
-                    ? 'bg-accent text-accent-foreground font-medium'
-                    : 'text-foreground/70 hover:bg-accent/50 hover:text-foreground'
-                )}
-              >
-                <span className="bg-muted text-muted-foreground relative flex size-6 items-center justify-center rounded text-xs font-medium">
-                  {providerIcons[provider.id] ||
-                    provider.name.charAt(0).toUpperCase()}
-                  {provider.apiKey && (
-                    <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-500" />
-                  )}
-                </span>
-                <span className="flex-1 text-left">{provider.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Add/Remove Buttons */}
-        <div className="border-border mt-auto flex items-center gap-1 border-t p-2">
-          <button
-            onClick={() => setShowAddProvider(true)}
-            className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-7 items-center justify-center rounded transition-colors"
-            title={t.settings.addProvider}
-          >
-            <Plus className="size-4" />
-          </button>
-          {selectedProvider &&
-            !defaultProviderIds.includes(selectedProvider.id) && (
-              <button
-                onClick={() => handleDeleteProvider(selectedProvider.id)}
-                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive flex size-7 items-center justify-center rounded transition-colors"
-                title={t.settings.deleteProvider}
-              >
-                <Trash2 className="size-4" />
-              </button>
-            )}
-        </div>
-      </div>
-
-      {/* Right Panel - Content */}
-      <div className="flex-1 overflow-y-auto">
-        {showAddProvider ? (
-          /* Add Provider Form */
-          <div className="p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-foreground text-base font-medium">
-                {t.settings.addProvider}
-              </h3>
-              <button
-                onClick={() => setShowAddProvider(false)}
-                className="hover:bg-muted rounded p-1"
-              >
-                <X className="text-muted-foreground size-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.providerName}
-                </label>
-                <input
-                  type="text"
-                  value={newProvider.name}
-                  onChange={(e) =>
-                    setNewProvider({ ...newProvider, name: e.target.value })
-                  }
-                  placeholder="Claude"
-                  className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.apiKey}
-                </label>
-                <input
-                  type="password"
-                  value={newProvider.apiKey}
-                  onChange={(e) => {
-                    setNewProvider({
-                      ...newProvider,
-                      apiKey: e.target.value,
-                    });
-                    setDetectStatus('idle');
-                    setDetectMessage('');
-                  }}
-                  placeholder={t.settings.enterApiKey}
-                  className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.apiBaseUrl}
-                </label>
-                <input
-                  type="text"
-                  value={newProvider.baseUrl}
-                  onChange={(e) =>
-                    setNewProvider({ ...newProvider, baseUrl: e.target.value })
-                  }
-                  placeholder="https://api.example.com/v1"
-                  className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.models}
-                </label>
-                <input
-                  type="text"
-                  value={newProvider.models}
-                  onChange={(e) =>
-                    setNewProvider({ ...newProvider, models: e.target.value })
-                  }
-                  placeholder={t.settings.modelsPlaceholder || 'e.g. gpt-4o'}
-                  className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                />
-              </div>
-
-              {/* Detect Button */}
-              <button
-                type="button"
-                onClick={handleDetectConnection}
-                disabled={detectStatus === 'loading'}
-                className={cn(
-                  'border-border hover:bg-accent hover:text-accent-foreground text-muted-foreground flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                  detectStatus === 'success' &&
-                    'border-emerald-500 bg-emerald-500 text-white hover:border-emerald-600 hover:bg-emerald-600',
-                  detectStatus === 'error' &&
-                    'border-red-500 bg-red-500 text-white hover:border-red-600 hover:bg-red-600'
-                )}
-              >
-                <RefreshCw
-                  className={cn(
-                    'size-4',
-                    detectStatus === 'loading' && 'animate-spin'
-                  )}
-                />
-                {detectStatus === 'loading'
-                  ? t.settings.detecting
-                  : detectStatus === 'success'
-                    ? t.settings.success
-                    : detectStatus === 'error'
-                      ? t.settings.failed
-                      : t.settings.detectConfig}
-              </button>
-              {detectMessage && (
-                <p
-                  className={cn(
-                    'text-xs font-medium',
-                    detectStatus === 'success'
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-red-600 dark:text-red-400'
-                  )}
-                >
-                  {detectMessage}
-                </p>
+    <>
+      <div className="-m-6 flex h-[calc(100%+48px)] flex-col">
+        {/* Tab Bar */}
+        <div className="border-border shrink-0 border-b px-6">
+          <div className="flex items-center gap-6">
+            <button
+              onClick={() => setMainTab('providers')}
+              className={cn(
+                'relative py-4 text-sm font-medium transition-colors',
+                mainTab === 'providers'
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
               )}
-
-              <button
-                onClick={handleAddProvider}
-                disabled={!newProvider.name || !newProvider.baseUrl}
-                className="bg-primary text-primary-foreground hover:bg-primary/90 mt-4 h-10 w-full rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {t.settings.add}
-              </button>
-            </div>
+            >
+              {t.settings.providers}
+              {mainTab === 'providers' && (
+                <span className="bg-foreground absolute bottom-0 left-0 h-0.5 w-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setMainTab('settings')}
+              className={cn(
+                'relative py-4 text-sm font-medium transition-colors',
+                mainTab === 'settings'
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {t.settings.title}
+              {mainTab === 'settings' && (
+                <span className="bg-foreground absolute bottom-0 left-0 h-0.5 w-full" />
+              )}
+            </button>
           </div>
-        ) : activeSubTab === 'settings' ? (
-          /* Model Settings Panel */
-          <div className="p-6">
-            <div className="space-y-6">
+        </div>
+
+        {/* Content Area */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {mainTab === 'providers' ? (
+            <div className="flex h-full flex-col">
+              {/* Top bar with Search and Add button */}
+              <div className="bg-background sticky top-0 z-10 flex shrink-0 items-center justify-between gap-4 px-6 pt-6 pb-4">
+                <div className="relative">
+                  <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={
+                      t.settings.searchProviders || 'Search providers'
+                    }
+                    className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-9 w-64 rounded-lg border py-2 pr-3 pl-9 text-sm focus:ring-2 focus:outline-none"
+                  />
+                </div>
+                <button
+                  onClick={() => setShowAddProvider(true)}
+                  className="bg-foreground text-background hover:bg-foreground/90 flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
+                >
+                  <Plus className="size-4" />
+                  {t.settings.addProvider}
+                </button>
+              </div>
+
+              {/* Provider Grid */}
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+                <div className="grid grid-cols-2 gap-4">
+                  {sortedProviders.map((provider) => (
+                    <ProviderCard
+                      key={provider.id}
+                      provider={provider}
+                      onConfigure={() => setEditingProvider(provider.id)}
+                      onDelete={() => handleDeleteProvider(provider.id)}
+                      onToggle={(enabled) =>
+                        handleProviderUpdate(provider.id, { enabled })
+                      }
+                      isBuiltIn={defaultProviderIds.includes(provider.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Settings Tab Content */
+            <div className="space-y-6 p-6">
               <div>
                 <p className="text-muted-foreground text-sm">
                   {t.settings.modelDescription}
@@ -535,15 +512,6 @@ export function ModelSettings({
                   </p>
                 )}
               </div>
-
-              {/* Add Custom Model Button */}
-              <button
-                onClick={() => setShowAddProvider(true)}
-                className="text-primary hover:text-primary/80 inline-flex items-center gap-1.5 text-sm"
-              >
-                <Plus className="size-4" />
-                {t.settings.addCustomModel}
-              </button>
 
               {/* Conversation History Settings */}
               <div className="space-y-4">
@@ -601,328 +569,486 @@ export function ModelSettings({
                 </div>
               </div>
             </div>
-          </div>
-        ) : selectedProvider ? (
-          /* Provider Details Panel */
-          <div className="p-6">
+          )}
+        </div>
+      </div>
+
+      {/* Add Provider Dialog */}
+      <DialogPrimitive.Root
+        open={showAddProvider}
+        onOpenChange={setShowAddProvider}
+      >
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/60" />
+          <DialogPrimitive.Content className="bg-background border-border fixed top-1/2 left-1/2 z-[100] flex max-h-[85vh] w-[500px] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border shadow-2xl focus:outline-none">
             {/* Header */}
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={selectedProvider.name}
-                  onChange={(e) =>
-                    handleProviderUpdate(selectedProvider.id, {
-                      name: e.target.value,
-                    })
-                  }
-                  className="text-foreground hover:border-input focus:border-primary w-40 border-b border-transparent bg-transparent text-base font-medium transition-colors outline-none"
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <div
-                    className={cn(
-                      'size-2 rounded-full',
-                      selectedProvider.apiKey ? 'bg-emerald-500' : 'bg-gray-300'
-                    )}
-                  />
-                  <span className="text-muted-foreground text-xs">
-                    {selectedProvider.apiKey
-                      ? t.settings.configured
-                      : t.settings.notConfigured}
-                  </span>
-                </div>
-                <Switch
-                  checked={selectedProvider.enabled}
-                  onChange={(checked) =>
-                    handleProviderUpdate(selectedProvider.id, {
-                      enabled: checked,
-                    })
-                  }
-                  disabled={!selectedProvider.apiKey}
-                />
-              </div>
+            <div className="border-border shrink-0 border-b px-6 py-4">
+              <DialogPrimitive.Title className="text-foreground text-lg font-semibold">
+                {t.settings.addProvider}
+              </DialogPrimitive.Title>
+              <DialogPrimitive.Close className="text-muted-foreground hover:text-foreground absolute top-4 right-4 rounded-sm transition-opacity focus:outline-none">
+                <X className="size-5" />
+              </DialogPrimitive.Close>
             </div>
 
-            <div className="space-y-6">
-              {/* API Key */}
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.apiKey}
-                </label>
-                <div className="relative">
+            {/* Content */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+              <div className="space-y-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-foreground block text-sm font-medium">
+                    {t.settings.providerName}
+                  </label>
                   <input
-                    type={showApiKey ? 'text' : 'password'}
-                    value={selectedProvider.apiKey}
+                    type="text"
+                    value={newProvider.name}
+                    onChange={(e) =>
+                      setNewProvider({ ...newProvider, name: e.target.value })
+                    }
+                    placeholder="Claude"
+                    className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-foreground block text-sm font-medium">
+                    {t.settings.apiBaseUrl}
+                  </label>
+                  <input
+                    type="text"
+                    value={newProvider.baseUrl}
+                    onChange={(e) =>
+                      setNewProvider({
+                        ...newProvider,
+                        baseUrl: e.target.value,
+                      })
+                    }
+                    placeholder="https://api.example.com/v1"
+                    className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-foreground block text-sm font-medium">
+                    {t.settings.apiKey}
+                  </label>
+                  <input
+                    type="password"
+                    value={newProvider.apiKey}
                     onChange={(e) => {
-                      handleProviderUpdate(selectedProvider.id, {
+                      setNewProvider({
+                        ...newProvider,
                         apiKey: e.target.value,
                       });
-                      setEditDetectStatus('idle');
-                      setEditDetectMessage('');
+                      setDetectStatus('idle');
+                      setDetectMessage('');
                     }}
                     placeholder={t.settings.enterApiKey}
-                    className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border pr-10 pl-3 text-sm focus:ring-2 focus:outline-none"
+                    className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
-                  >
-                    {showApiKey ? (
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                        <line x1="1" y1="1" x2="23" y2="23" />
-                      </svg>
-                    ) : (
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                    )}
-                  </button>
                 </div>
-                {providerApiKeyUrls[selectedProvider.id] && (
-                  <button
-                    onClick={() =>
-                      openExternalUrl(providerApiKeyUrls[selectedProvider.id])
-                    }
-                    className="text-primary hover:text-primary/80 inline-flex cursor-pointer items-center gap-1 text-xs"
-                  >
-                    {t.settings.getApiKey}
-                    <ExternalLink className="size-3" />
-                  </button>
-                )}
-              </div>
 
-              {/* API Base URL */}
-              <div className="flex flex-col gap-2">
-                <label className="text-foreground block text-sm font-medium">
-                  {t.settings.apiBaseUrl}
-                </label>
-                <input
-                  type="text"
-                  value={selectedProvider.baseUrl}
-                  onChange={(e) =>
-                    handleProviderUpdate(selectedProvider.id, {
-                      baseUrl: e.target.value,
-                    })
-                  }
-                  placeholder={t.settings.apiBaseUrl}
-                  className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                />
-              </div>
-
-              {/* Models */}
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-2">
                   <label className="text-foreground block text-sm font-medium">
-                    {t.settings.models || '模型'}
+                    {t.settings.defaultModel}
                   </label>
-                  <button
-                    onClick={() => setShowAddModel(true)}
-                    className="text-primary hover:text-primary/80 inline-flex items-center gap-1 text-xs"
-                  >
-                    <Plus className="size-3" />
-                    {t.settings.addModel || '添加模型'}
-                  </button>
-                </div>
-
-                {/* Model List */}
-                <div className="space-y-2">
-                  {(selectedProvider.models || []).map((model, index) => (
-                    <div
-                      key={index}
-                      className="bg-muted/50 flex items-center gap-2 rounded-lg px-3 py-2"
-                    >
-                      <Check className="size-4 flex-shrink-0 text-emerald-500" />
-                      <span className="text-foreground flex-1 truncate text-sm">
-                        {model}
-                      </span>
-                      <button
-                        onClick={() => {
-                          const newModels = selectedProvider.models.filter(
-                            (_, i) => i !== index
-                          );
-                          handleProviderUpdate(selectedProvider.id, {
-                            models:
-                              newModels.length > 0 ? newModels : ['default'],
-                          });
-                        }}
-                        className="text-muted-foreground hover:text-destructive flex-shrink-0 p-1"
-                        title={t.settings.deleteModel || '删除模型'}
-                      >
-                        <X className="size-3.5" />
-                      </button>
-                    </div>
-                  ))}
-
-                  {/* Add Model Input */}
-                  {showAddModel && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={newModelName}
-                        onChange={(e) => setNewModelName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && newModelName.trim()) {
-                            const currentModels = selectedProvider.models || [];
-                            if (!currentModels.includes(newModelName.trim())) {
-                              handleProviderUpdate(selectedProvider.id, {
-                                models: [...currentModels, newModelName.trim()],
-                              });
-                            }
-                            setNewModelName('');
-                            setShowAddModel(false);
-                          } else if (e.key === 'Escape') {
-                            setNewModelName('');
-                            setShowAddModel(false);
-                          }
-                        }}
-                        placeholder={
-                          t.settings.enterModelName || '输入模型名称'
-                        }
-                        className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-9 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
-                        autoFocus
-                      />
-                      <button
-                        onClick={() => {
-                          if (newModelName.trim()) {
-                            const currentModels = selectedProvider.models || [];
-                            if (!currentModels.includes(newModelName.trim())) {
-                              handleProviderUpdate(selectedProvider.id, {
-                                models: [...currentModels, newModelName.trim()],
-                              });
-                            }
-                            setNewModelName('');
-                            setShowAddModel(false);
-                          }
-                        }}
-                        disabled={!newModelName.trim()}
-                        className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-lg px-3 text-sm disabled:opacity-50"
-                      >
-                        {t.settings.add || '添加'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setNewModelName('');
-                          setShowAddModel(false);
-                        }}
-                        className="text-muted-foreground hover:text-foreground p-1"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Suggested Models */}
-                  {!showAddModel &&
-                    getSuggestedModels(selectedProvider).filter(
-                      (model) =>
-                        !(selectedProvider.models || []).includes(model)
-                    ).length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-muted-foreground text-xs">
-                          {t.settings.suggestedModels || '推荐模型'}
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {getSuggestedModels(selectedProvider)
-                            .filter(
-                              (model) =>
-                                !(selectedProvider.models || []).includes(model)
-                            )
-                            .slice(0, 4)
-                            .map((model) => (
-                              <button
-                                key={model}
-                                onClick={() => {
-                                  const currentModels =
-                                    selectedProvider.models || [];
-                                  if (!currentModels.includes(model)) {
-                                    handleProviderUpdate(selectedProvider.id, {
-                                      models: [...currentModels, model],
-                                    });
-                                  }
-                                }}
-                                className="bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-full px-3 py-1 text-xs transition-colors"
-                              >
-                                + {model}
-                              </button>
-                            ))}
-                        </div>
-                      </div>
-                    )}
+                  <input
+                    type="text"
+                    value={newProvider.models}
+                    onChange={(e) =>
+                      setNewProvider({ ...newProvider, models: e.target.value })
+                    }
+                    placeholder={t.settings.modelsPlaceholder || 'e.g. gpt-4o'}
+                    className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                  />
                 </div>
 
                 {/* Detect Button */}
                 <button
                   type="button"
-                  onClick={handleEditDetectConnection}
-                  disabled={editDetectStatus === 'loading'}
+                  onClick={handleDetectConnection}
+                  disabled={detectStatus === 'loading'}
                   className={cn(
                     'border-border hover:bg-accent hover:text-accent-foreground text-muted-foreground flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                    editDetectStatus === 'success' &&
+                    detectStatus === 'success' &&
                       'border-emerald-500 bg-emerald-500 text-white hover:border-emerald-600 hover:bg-emerald-600',
-                    editDetectStatus === 'error' &&
+                    detectStatus === 'error' &&
                       'border-red-500 bg-red-500 text-white hover:border-red-600 hover:bg-red-600'
                   )}
                 >
                   <RefreshCw
                     className={cn(
                       'size-4',
-                      editDetectStatus === 'loading' && 'animate-spin'
+                      detectStatus === 'loading' && 'animate-spin'
                     )}
                   />
-                  {editDetectStatus === 'loading'
+                  {detectStatus === 'loading'
                     ? t.settings.detecting
-                    : editDetectStatus === 'success'
+                    : detectStatus === 'success'
                       ? t.settings.success
-                      : editDetectStatus === 'error'
+                      : detectStatus === 'error'
                         ? t.settings.failed
                         : t.settings.detectConfig}
                 </button>
-                {editDetectMessage && (
+                {detectMessage && (
                   <p
                     className={cn(
                       'text-xs font-medium',
-                      editDetectStatus === 'success'
+                      detectStatus === 'success'
                         ? 'text-emerald-600 dark:text-emerald-400'
                         : 'text-red-600 dark:text-red-400'
                     )}
                   >
-                    {editDetectMessage}
+                    {detectMessage}
                   </p>
                 )}
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-            {t.settings.selectProvider}
-          </div>
-        )}
-      </div>
-    </div>
+
+            {/* Footer */}
+            <div className="border-border shrink-0 border-t px-6 py-4">
+              <button
+                onClick={handleAddProvider}
+                disabled={!newProvider.name || !newProvider.baseUrl}
+                className="bg-foreground text-background hover:bg-foreground/90 flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {t.settings.add}
+              </button>
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
+
+      {/* Edit Provider Dialog */}
+      <DialogPrimitive.Root
+        open={!!editingProvider && !!selectedProvider}
+        onOpenChange={(open) => {
+          if (!open) setEditingProvider(null);
+        }}
+      >
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/60" />
+          <DialogPrimitive.Content className="bg-background border-border fixed top-1/2 left-1/2 z-[100] flex max-h-[85vh] w-[500px] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border shadow-2xl focus:outline-none">
+            {selectedProvider && (
+              <>
+                {/* Header */}
+                <div className="border-border shrink-0 border-b px-6 py-4">
+                  <DialogPrimitive.Title className="text-foreground text-lg font-semibold">
+                    {t.settings.modelSettings}
+                  </DialogPrimitive.Title>
+                  <DialogPrimitive.Close className="text-muted-foreground hover:text-foreground absolute top-4 right-4 rounded-sm transition-opacity focus:outline-none">
+                    <X className="size-5" />
+                  </DialogPrimitive.Close>
+                </div>
+
+                {/* Content */}
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+                  <div className="space-y-5">
+                    {/* Provider Name */}
+                    <div className="flex flex-col gap-2">
+                      <label className="text-foreground block text-sm font-medium">
+                        {t.settings.providerName}
+                      </label>
+
+                      <input
+                        type="text"
+                        value={selectedProvider.name}
+                        onChange={(e) =>
+                          handleProviderUpdate(selectedProvider.id, {
+                            name: e.target.value,
+                          })
+                        }
+                        placeholder={t.settings.providerName}
+                        className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* API Base URL */}
+                    <div className="flex flex-col gap-2">
+                      <label className="text-foreground block text-sm font-medium">
+                        {t.settings.apiBaseUrl}
+                      </label>
+                      <input
+                        type="text"
+                        value={selectedProvider.baseUrl}
+                        onChange={(e) =>
+                          handleProviderUpdate(selectedProvider.id, {
+                            baseUrl: e.target.value,
+                          })
+                        }
+                        placeholder={t.settings.apiBaseUrl}
+                        className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* API Key */}
+                    <div className="flex flex-col gap-2">
+                      <label className="text-foreground block text-sm font-medium">
+                        {t.settings.apiKey}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showApiKey ? 'text' : 'password'}
+                          value={selectedProvider.apiKey}
+                          onChange={(e) => {
+                            handleProviderUpdate(selectedProvider.id, {
+                              apiKey: e.target.value,
+                            });
+                            setEditDetectStatus('idle');
+                            setEditDetectMessage('');
+                          }}
+                          placeholder={t.settings.enterApiKey}
+                          className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border pr-10 pl-3 text-sm focus:ring-2 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowApiKey(!showApiKey)}
+                          className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                        >
+                          {showApiKey ? (
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                              <line x1="1" y1="1" x2="23" y2="23" />
+                            </svg>
+                          ) : (
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                      {providerApiKeyUrls[selectedProvider.id] && (
+                        <button
+                          onClick={() =>
+                            openExternalUrl(
+                              providerApiKeyUrls[selectedProvider.id]
+                            )
+                          }
+                          className="text-primary hover:text-primary/80 inline-flex cursor-pointer items-center gap-1 text-xs"
+                        >
+                          {t.settings.getApiKey}
+                          <ExternalLink className="size-3" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Default Model */}
+                    <div className="flex flex-col gap-2">
+                      <label className="text-foreground block text-sm font-medium">
+                        {t.settings.defaultModel}
+                      </label>
+                      <select
+                        value={selectedProvider.defaultModel || ''}
+                        onChange={(e) =>
+                          handleProviderUpdate(selectedProvider.id, {
+                            defaultModel: e.target.value,
+                          })
+                        }
+                        className="border-input bg-background text-foreground focus:ring-ring h-10 w-full appearance-none rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                      >
+                        <option value="">--</option>
+                        {(selectedProvider.models || []).map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-muted-foreground text-xs">
+                        {t.settings.defaultModelHint}
+                      </p>
+                    </div>
+
+                    {/* Models */}
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-foreground block text-sm font-medium">
+                          {t.settings.models || 'Models'}
+                        </label>
+                        <button
+                          onClick={() => setShowAddModel(true)}
+                          className="text-primary hover:text-primary/80 inline-flex items-center gap-1 text-xs"
+                        >
+                          <Plus className="size-3" />
+                          {t.settings.addModel || 'Add Model'}
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {(selectedProvider.models || []).map((model, index) => (
+                          <div
+                            key={index}
+                            className="bg-muted/50 flex items-center gap-2 rounded-lg px-3 py-2"
+                          >
+                            <Check className="size-4 flex-shrink-0 text-emerald-500" />
+                            <span className="text-foreground flex-1 truncate text-sm">
+                              {model}
+                            </span>
+                            <button
+                              onClick={() => {
+                                const newModels =
+                                  selectedProvider.models.filter(
+                                    (_, i) => i !== index
+                                  );
+                                handleProviderUpdate(selectedProvider.id, {
+                                  models: newModels,
+                                });
+                              }}
+                              className="text-muted-foreground hover:text-destructive flex-shrink-0 p-1"
+                              title={t.settings.deleteModel || 'Delete model'}
+                            >
+                              <X className="size-3.5" />
+                            </button>
+                          </div>
+                        ))}
+
+                        {/* Add Model Input */}
+                        {showAddModel && (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={newModelName}
+                              onChange={(e) => setNewModelName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && newModelName.trim()) {
+                                  const currentModels =
+                                    selectedProvider.models || [];
+                                  if (
+                                    !currentModels.includes(newModelName.trim())
+                                  ) {
+                                    handleProviderUpdate(selectedProvider.id, {
+                                      models: [
+                                        ...currentModels,
+                                        newModelName.trim(),
+                                      ],
+                                    });
+                                  }
+                                  setNewModelName('');
+                                  setShowAddModel(false);
+                                } else if (e.key === 'Escape') {
+                                  setNewModelName('');
+                                  setShowAddModel(false);
+                                }
+                              }}
+                              placeholder={
+                                t.settings.enterModelName || 'Model name'
+                              }
+                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-9 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => {
+                                if (newModelName.trim()) {
+                                  const currentModels =
+                                    selectedProvider.models || [];
+                                  if (
+                                    !currentModels.includes(newModelName.trim())
+                                  ) {
+                                    handleProviderUpdate(selectedProvider.id, {
+                                      models: [
+                                        ...currentModels,
+                                        newModelName.trim(),
+                                      ],
+                                    });
+                                  }
+                                  setNewModelName('');
+                                  setShowAddModel(false);
+                                }
+                              }}
+                              disabled={!newModelName.trim()}
+                              className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-lg px-3 text-sm disabled:opacity-50"
+                            >
+                              {t.settings.add || 'Add'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setNewModelName('');
+                                setShowAddModel(false);
+                              }}
+                              className="text-muted-foreground hover:text-foreground p-1"
+                            >
+                              <X className="size-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Detect Button */}
+                    <button
+                      type="button"
+                      onClick={handleEditDetectConnection}
+                      disabled={editDetectStatus === 'loading'}
+                      className={cn(
+                        'border-border hover:bg-accent hover:text-accent-foreground text-muted-foreground flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                        editDetectStatus === 'success' &&
+                          'border-emerald-500 bg-emerald-500 text-white hover:border-emerald-600 hover:bg-emerald-600',
+                        editDetectStatus === 'error' &&
+                          'border-red-500 bg-red-500 text-white hover:border-red-600 hover:bg-red-600'
+                      )}
+                    >
+                      <RefreshCw
+                        className={cn(
+                          'size-4',
+                          editDetectStatus === 'loading' && 'animate-spin'
+                        )}
+                      />
+                      {editDetectStatus === 'loading'
+                        ? t.settings.detecting
+                        : editDetectStatus === 'success'
+                          ? t.settings.success
+                          : editDetectStatus === 'error'
+                            ? t.settings.failed
+                            : t.settings.detectConfig}
+                    </button>
+                    {editDetectMessage && (
+                      <p
+                        className={cn(
+                          'text-xs font-medium',
+                          editDetectStatus === 'success'
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-red-600 dark:text-red-400'
+                        )}
+                      >
+                        {editDetectMessage}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Footer */}
+            <div className="border-border shrink-0 border-t px-6 py-4">
+              <button
+                onClick={() => setEditingProvider(null)}
+                className="bg-foreground text-background hover:bg-foreground/90 flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition-colors"
+              >
+                {t.settings.mcpSave}
+              </button>
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
+    </>
   );
 }
