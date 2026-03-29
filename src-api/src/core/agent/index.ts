@@ -7,6 +7,7 @@ import { claudePlugin } from '@/extensions/agent/claude';
 import { codexPlugin } from '@/extensions/agent/codex';
 import { deepagentsPlugin } from '@/extensions/agent/deepagents';
 import { kimiPlugin } from '@/extensions/agent/kimi';
+import { piPlugin } from '@/extensions/agent/pi';
 
 /**
  * Agent SDK Abstraction Layer
@@ -95,6 +96,13 @@ export {
   createKimiAgent,
   kimiPlugin,
 } from '@/extensions/agent/kimi';
+
+export {
+  PiAgent,
+  createPiAgent,
+  piPlugin,
+} from '@/extensions/agent/pi';
+
 /**
  * All built-in agent plugins
  */
@@ -103,6 +111,7 @@ export const builtinAgentPlugins: AgentPlugin[] = [
   codexPlugin,
   deepagentsPlugin,
   kimiPlugin,
+  piPlugin,
 ];
 
 /**

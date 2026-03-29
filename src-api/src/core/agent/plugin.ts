@@ -268,7 +268,60 @@ export const DEEPAGENTS_METADATA: AgentProviderMetadata = {
 };
  
 
-/**   
+/**
+ * JSON Schema for Pi agent configuration
+ */
+export const PI_CONFIG_SCHEMA = {
+  type: 'object',
+  properties: {
+    apiKey: {
+      type: 'string',
+      description: 'API key for the LLM provider',
+    },
+    baseUrl: {
+      type: 'string',
+      description: 'Custom API base URL',
+    },
+    model: {
+      type: 'string',
+      default: DEFAULT_AGENT_MODEL,
+      description: 'Model to use',
+    },
+    workDir: {
+      type: 'string',
+      default: DEFAULT_WORK_DIR,
+      description: 'Working directory for file operations',
+    },
+  },
+};
+
+/**
+ * Metadata for built-in Pi agent
+ */
+export const PI_METADATA: AgentProviderMetadata = {
+  type: 'pi',
+  name: 'Pi Agent',
+  version: '1.0.0',
+  description:
+    'Pi SDK embedded agent runtime. No external binary required. Supports Anthropic, OpenAI, Google and more.',
+  configSchema: PI_CONFIG_SCHEMA,
+  builtin: true,
+  supportsPlan: true,
+  supportsStreaming: true,
+  supportsSandbox: false,
+  supportedModels: [
+    'claude-sonnet-4-20250514',
+    'claude-opus-4-20250514',
+    'claude-3-5-sonnet-20241022',
+    'gpt-4o',
+    'gpt-4-turbo',
+    'gemini-2.0-flash',
+  ],
+  defaultModel: 'claude-sonnet-4-20250514',
+  tags: ['pi', 'sdk', 'embedded', 'multi-provider'],
+};
+
+/**
  * Metadata for built-in Kimi agent
  */
 export const KIMI_METADATA: AgentProviderMetadata = {
