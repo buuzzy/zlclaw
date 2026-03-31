@@ -3,7 +3,7 @@
   "version": "0.1.19",
   "type": "module",
   "scripts": {
-    "postinstall": "node scripts/patch-mcp-sdk.mjs",
+    "postinstall": "node scripts/patch-deps.mjs",
     "dev": "node --import tsx --watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
