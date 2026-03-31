@@ -454,7 +454,7 @@ User's request (answer this AFTER reading the images):
 
     const queryOptions: Options = {
       cwd: sessionCwd,
-      tools: { type: 'preset', preset: 'claude_code' },
+      // open-agent-sdk uses built-in tools by default (no preset needed)
       allowedTools: options?.allowedTools || ALLOWED_TOOLS,
       settingSources,
       permissionMode: 'bypassPermissions',
@@ -621,7 +621,7 @@ User's request (answer this AFTER reading the images):
 
     const queryOptions: Options = {
       cwd: sessionCwd,
-      tools: { type: 'preset', preset: 'claude_code' },
+      // open-agent-sdk uses built-in tools by default (no preset needed)
       allowedTools: options.allowedTools || ALLOWED_TOOLS,
       settingSources: execSettingSources,
       permissionMode: 'bypassPermissions',
