@@ -10,50 +10,26 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 import type { AgentMessage, ConversationMessage } from '@/core/agent/types';
-import { getConfig } from '@/config/loader';
+
 import { createLogger } from '@/shared/utils/logger';
 
 const logger = createLogger('ChatService');
 
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
 
+// Maximum number of conversation messages to include in API calls
+// to prevent excessive token usage. Each "turn" is a user+assistant pair.
+const MAX_CONTEXT_MESSAGES = 40; // 20 turns × 2 messages
+
 function isAnthropicModel(model: string): boolean {
   return model.startsWith('claude-') || model.includes('claude');
 }
 
 function resolveConfig(modelConfig?: { apiKey?: string; baseUrl?: string; model?: string }) {
-  // 1. Use explicit modelConfig if provided
-  // 2. Fall back to environment variables
-  // 3. Fall back to app config (config.json / provider manager)
-  let apiKey =
-    modelConfig?.apiKey ||
-    process.env.ANTHROPIC_AUTH_TOKEN ||
-    process.env.ANTHROPIC_API_KEY ||
-    '';
-  let baseURL =
-    modelConfig?.baseUrl || process.env.ANTHROPIC_BASE_URL || undefined;
-  let model = modelConfig?.model || process.env.ANTHROPIC_MODEL || '';
-
-  // If still no API key, try the app config loader
-  if (!apiKey) {
-    try {
-      const appConfig = getConfig();
-      const agentConfig = appConfig.providers?.agent?.config as
-        | { apiKey?: string; baseUrl?: string; model?: string }
-        | undefined;
-      if (agentConfig) {
-        apiKey = agentConfig.apiKey || '';
-        baseURL = baseURL || agentConfig.baseUrl || undefined;
-        model = model || agentConfig.model || '';
-      }
-    } catch {
-      // Config loader not initialized yet, ignore
-    }
-  }
-
-  if (!model) {
-    model = DEFAULT_MODEL;
-  }
+  // Use explicit modelConfig from user settings only — no environment variable fallback
+  const apiKey = modelConfig?.apiKey || '';
+  const baseURL = modelConfig?.baseUrl || undefined;
+  const model = modelConfig?.model || DEFAULT_MODEL;
 
   return { apiKey, baseURL, model };
 }
@@ -243,13 +219,25 @@ export async function* runChat(
   });
 
   const systemPrompt = buildSystemPrompt(
-    'You are a helpful assistant. Be concise and direct in your responses.',
+    'You are a helpful assistant. Be concise and direct in your responses. ' +
+    'You have network access capabilities. When users ask about URLs, websites, or online content, ' +
+    'you should attempt to help by analyzing the URL structure, inferring content from the domain/path, ' +
+    'or suggesting the user switch to Agent/Task mode for full web access with tools like curl and browser automation.',
     language
   );
 
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
   if (conversation && conversation.length > 0) {
-    for (const msg of conversation) {
+    // Limit conversation history to prevent excessive token usage
+    const trimmedConversation = conversation.length > MAX_CONTEXT_MESSAGES
+      ? conversation.slice(-MAX_CONTEXT_MESSAGES)
+      : conversation;
+
+    if (trimmedConversation.length < conversation.length) {
+      logger.info(`[ChatService] Truncated conversation history from ${conversation.length} to ${trimmedConversation.length} messages`);
+    }
+
+    for (const msg of trimmedConversation) {
       messages.push({ role: msg.role, content: msg.content });
     }
   }

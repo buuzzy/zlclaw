@@ -1,8 +1,9 @@
 {
   "name": "workany-api",
-  "version": "0.1.19",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
+    "postinstall": "node scripts/patch-deps.mjs",
     "dev": "node --import tsx --watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
@@ -17,11 +18,11 @@
     "format": "prettier --write ."
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.69",
-    "@anthropic-ai/sandbox-runtime": "^0.0.28",
     "@anthropic-ai/sdk": "^0.78.0",
+    "@codeany/open-agent-sdk": "^0.2.1",
     "@hono/node-server": "^1.14.1",
     "@modelcontextprotocol/sdk": "^1.25.2",
+    "color-diff-napi": "file:stubs/color-diff-napi",
     "hono": "^4.7.10",
     "nanoid": "^5.1.6",
     "react-router-dom": "^7.12.0",
