@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
-    "@codeany/open-agent-sdk": "link:../../open-agent-sdk-typescript",
+    "@codeany/open-agent-sdk": "^0.2.1",
     "@hono/node-server": "^1.14.1",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "color-diff-napi": "file:stubs/color-diff-napi",
