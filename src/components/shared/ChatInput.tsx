@@ -32,6 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ContextUsageRing } from './ContextUsageRing';
 
 export type ChatMode = 'auto' | 'chat' | 'task';
 
@@ -75,6 +76,12 @@ export interface ChatInputProps {
   categoryTag?: CategoryTag;
   /** Default mode for the mode selector */
   defaultMode?: ChatMode;
+  /** Current token usage for context window display */
+  currentTokens?: number;
+  /** Context window limit (default: 200000) */
+  contextLimit?: number;
+  /** Show context usage ring (default: true for 'reply' variant, false for 'home') */
+  showContextRing?: boolean;
 }
 
 // Generate unique ID for attachments
@@ -127,6 +134,9 @@ export function ChatInput({
   onExternalValueConsumed,
   categoryTag,
   defaultMode = 'auto',
+  currentTokens = 0,
+  contextLimit = 200000,
+  showContextRing = variant === 'reply',
 }: ChatInputProps) {
   const { t } = useLanguage();
   const [value, setValue] = useState('');
@@ -689,8 +699,16 @@ export function ChatInput({
           )}
         </div>
 
-        {/* Submit/Stop Button */}
+        {/* Context Usage Ring + Submit/Stop Button */}
         <div className="flex items-center gap-1">
+          {showContextRing && !isHome && (
+            <ContextUsageRing
+              currentTokens={currentTokens}
+              contextLimit={contextLimit}
+              interactive
+              className="shrink-0"
+            />
+          )}
           {isRunning ? (
             <button
               type="button"

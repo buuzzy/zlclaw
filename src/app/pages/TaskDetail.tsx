@@ -12,6 +12,7 @@ import {
   deleteTask,
   getAllTasks,
   getFilesByTaskId,
+  getSettings,
   updateTask,
   type LibraryFile,
   type Task,
@@ -21,6 +22,7 @@ import {
   type AgentMessage,
   type MessageAttachment,
 } from '@/shared/hooks/useAgent';
+import { useChannelSync } from '@/shared/hooks/useChannelSync';
 import { useVitePreview } from '@/shared/hooks/useVitePreview';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
@@ -40,6 +42,8 @@ import {
   hasValidSearchResults,
   type Artifact,
 } from '@/components/artifacts';
+import { ArtifactRenderer } from '@/components/htui/ArtifactRenderer';
+import { extractArtifacts } from '@/shared/lib/artifactParser';
 import { Logo } from '@/components/common/logo';
 import {
   Dialog,
@@ -125,6 +129,44 @@ function TaskDetailContent() {
     backgroundTasks,
     generatedTitle,
   } = useAgent();
+  // Context window detection by model name
+  const CONTEXT_WINDOWS: Array<[RegExp, number]> = [
+    [/opus.*1m|1m.*opus/i, 1000000],
+    [/opus/i, 200000],
+    [/sonnet/i, 200000],
+    [/haiku/i, 200000],
+    [/gpt-4o/i, 128000],
+    [/gpt-4-turbo/i, 128000],
+    [/gpt-4$/i, 8192],
+    [/gpt-3/i, 16384],
+    [/deepseek/i, 128000],
+    [/qwen/i, 131072],
+    [/glm/i, 128000],
+  ];
+
+  function estimateContextWindow(model?: string): number {
+    if (!model) return 200000;
+    for (const [pattern, size] of CONTEXT_WINDOWS) {
+      if (pattern.test(model)) return size;
+    }
+    return 200000; // default
+  }
+
+  // Calculate current token usage from conversation
+  function calculateCurrentTokens(): number {
+    return messages.reduce((total, msg) => {
+      // Estimate: 1 token ≈ 4 characters
+      const tokenCount = Math.ceil((msg.content?.length || 0) / 4);
+      return total + tokenCount;
+    }, 0);
+  }
+
+  // Get context limit from model config
+  function getContextLimit(): number {
+    const settings = getSettings();
+    const model = settings?.defaultModel;
+    return estimateContextWindow(model);
+  }
   const { toggleLeft, setLeftOpen } = useSidebar();
   const [hasStarted, setHasStarted] = useState(false);
   const isInitializingRef = useRef(false); // Prevent double initialization in Strict Mode
@@ -524,7 +566,7 @@ function TaskDetailContent() {
           dbFiles.forEach((file: LibraryFile) => {
             // Skip websearch - we extract these from messages with full output content
             // Check both type and path pattern (search:// is used for WebSearch results)
-            if (file.type === 'websearch' || file.path?.startsWith('search://'))
+            if (file.path?.startsWith('search://'))
               return;
             // Skip if we already have this file from Write tool
             if (file.path && !seenPaths.has(file.path)) {
@@ -626,29 +668,29 @@ function TaskDetailContent() {
   }, []);
 
   // Load all tasks for sidebar
-  useEffect(() => {
-    async function loadAllTasks() {
-      try {
-        const dbTasks = await getAllTasks();
-        setAllTasks((prev) => {
-          // Preserve current task if it exists in prev but not in database yet
-          // This handles the race condition where optimistic update added the task
-          // but database hasn't persisted it yet
-          const currentTaskInPrev = prev.find((t) => t.id === taskId);
-          const taskExistsInDb = dbTasks.some((t) => t.id === taskId);
+  const reloadAllTasks = useCallback(async () => {
+    try {
+      const dbTasks = await getAllTasks();
+      setAllTasks((prev) => {
+        const currentTaskInPrev = prev.find((t) => t.id === taskId);
+        const taskExistsInDb = dbTasks.some((t) => t.id === taskId);
 
-          if (currentTaskInPrev && !taskExistsInDb) {
-            // Keep the optimistic task at the beginning
-            return [currentTaskInPrev, ...dbTasks];
-          }
-          return dbTasks;
-        });
-      } catch (error) {
-        console.error('Failed to load tasks:', error);
-      }
+        if (currentTaskInPrev && !taskExistsInDb) {
+          return [currentTaskInPrev, ...dbTasks];
+        }
+        return dbTasks;
+      });
+    } catch (error) {
+      console.error('Failed to load tasks:', error);
     }
-    loadAllTasks();
-  }, [task, taskId]);
+  }, [taskId]);
+
+  useEffect(() => {
+    reloadAllTasks();
+  }, [task, reloadAllTasks]);
+
+  // Sync channel conversations into local task list
+  useChannelSync(reloadAllTasks);
 
   // Update UI immediately when a generated title arrives
   useEffect(() => {
@@ -1014,6 +1056,9 @@ function TaskDetailContent() {
                   onSubmit={handleReply}
                   onStop={stopAgent}
                   defaultMode={initialMode}
+                  currentTokens={calculateCurrentTokens()}
+                  contextLimit={getContextLimit()}
+                  showContextRing
                 />
               </div>
             </div>
@@ -1576,82 +1621,91 @@ function MessageItem({
   }
 
   if (message.type === 'text') {
+    const { cleanText, artifacts: extractedArtifacts } = extractArtifacts(
+      message.content || ''
+    );
+
     return (
       <div className="flex min-w-0 flex-col gap-3">
         <Logo />
-        <div className="prose prose-sm text-foreground max-w-none min-w-0 flex-1 overflow-hidden">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              pre: ({ children }: any) => (
-                <pre className="bg-muted max-w-full overflow-x-auto rounded-lg p-4">
-                  {children}
-                </pre>
-              ),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              code: ({ className, children, ...props }: any) => {
-                const isInline = !className;
-                if (isInline) {
+        {cleanText.trim() && (
+          <div className="prose prose-sm text-foreground max-w-none min-w-0 flex-1 overflow-hidden">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                pre: ({ children }: any) => (
+                  <pre className="bg-muted max-w-full overflow-x-auto rounded-lg p-4">
+                    {children}
+                  </pre>
+                ),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                code: ({ className, children, ...props }: any) => {
+                  const isInline = !className;
+                  if (isInline) {
+                    return (
+                      <code
+                        className="bg-muted rounded px-1.5 py-0.5 text-sm"
+                        {...props}
+                      >
+                        {children}
+                      </code>
+                    );
+                  }
                   return (
-                    <code
-                      className="bg-muted rounded px-1.5 py-0.5 text-sm"
-                      {...props}
-                    >
+                    <code className={className} {...props}>
                       {children}
                     </code>
                   );
-                }
-                return (
-                  <code className={className} {...props}>
-                    {children}
-                  </code>
-                );
-              },
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              a: ({ children, href }: any) => (
-                <a
-                  href={href}
-                  onClick={async (e) => {
-                    e.preventDefault();
-                    if (href) {
-                      try {
-                        const { openUrl } =
-                          await import('@tauri-apps/plugin-opener');
-                        await openUrl(href);
-                      } catch {
-                        window.open(href, '_blank');
+                },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                a: ({ children, href }: any) => (
+                  <a
+                    href={href}
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      if (href) {
+                        try {
+                          const { openUrl } =
+                            await import('@tauri-apps/plugin-opener');
+                          await openUrl(href);
+                        } catch {
+                          window.open(href, '_blank');
+                        }
                       }
-                    }
-                  }}
-                  className="text-primary cursor-pointer hover:underline"
-                >
-                  {children}
-                </a>
-              ),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              table: ({ children }: any) => (
-                <div className="overflow-x-auto">
-                  <table className="border-border border-collapse border">
+                    }}
+                    className="text-primary cursor-pointer hover:underline"
+                  >
                     {children}
-                  </table>
-                </div>
-              ),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              th: ({ children }: any) => (
-                <th className="border-border bg-muted border px-3 py-2 text-left">
-                  {children}
-                </th>
-              ),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              td: ({ children }: any) => (
-                <td className="border-border border px-3 py-2">{children}</td>
-              ),
-            }}
-          >
-            {message.content || ''}
-          </ReactMarkdown>
-        </div>
+                  </a>
+                ),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                table: ({ children }: any) => (
+                  <div className="overflow-x-auto">
+                    <table className="border-border border-collapse border">
+                      {children}
+                    </table>
+                  </div>
+                ),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                th: ({ children }: any) => (
+                  <th className="border-border bg-muted border px-3 py-2 text-left">
+                    {children}
+                  </th>
+                ),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                td: ({ children }: any) => (
+                  <td className="border-border border px-3 py-2">
+                    {children}
+                  </td>
+                ),
+              }}
+            >
+              {cleanText}
+            </ReactMarkdown>
+          </div>
+        )}
+        <ArtifactRenderer artifacts={extractedArtifacts} />
       </div>
     );
   }
@@ -1782,7 +1836,7 @@ function ErrorMessage({ message }: { message: string }) {
   if (isCustomApiError) {
     const parts = message.split('|');
     const baseUrl = parts[1] || '';
-    const logPath = parts[2] || '~/.workany/logs/workany.log';
+    const logPath = parts[2] || '~/.htclaw/logs/htclaw.log';
     const errorMessage = (
       t.common.errors.customApiError ||
       'Custom API ({baseUrl}) may not be compatible with Claude Code SDK. Please check the API configuration or try a different provider. Log file: {logPath}'
@@ -1807,7 +1861,7 @@ function ErrorMessage({ message }: { message: string }) {
   // Check if this is an internal error (format: __INTERNAL_ERROR__|logPath)
   const isInternalError = message.startsWith('__INTERNAL_ERROR__|');
   if (isInternalError) {
-    const logPath = message.split('|')[1] || '~/.workany/logs/workany.log';
+    const logPath = message.split('|')[1] || '~/.htclaw/logs/htclaw.log';
     const errorMessage = (
       t.common.errors.internalError ||
       'Internal server error. Please check log file: {logPath}'
