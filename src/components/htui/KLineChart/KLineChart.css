@@ -1,0 +1,77 @@
+.kline-chart {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  width: 100%;
+}
+
+.kline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.kline-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kline-code {
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.kline-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* K-type switcher */
+.kline-type-switcher {
+  display: flex;
+  gap: 4px;
+}
+
+.ktype-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: default;
+  transition: all 0.15s;
+}
+
+.ktype-btn.active {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  background: rgba(6, 182, 212, 0.1);
+}
+
+/* MA legend */
+.kline-legend {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
+.ma-tag {
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Chart container */
+.kline-container {
+  width: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+}

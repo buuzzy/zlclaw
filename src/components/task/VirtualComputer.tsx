@@ -366,7 +366,7 @@ export function VirtualComputer({
     return (
       <div className="flex h-full flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         {/* Window Header */}
-        <WindowHeader title="WorkAny Computer" />
+        <WindowHeader title="HT Claw Computer" />
 
         {/* Status bar */}
         <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50/50 px-4 py-2">
@@ -424,7 +424,7 @@ export function VirtualComputer({
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       {/* Window Header */}
-      <WindowHeader title="WorkAny Computer" />
+      <WindowHeader title="HT Claw Computer" />
 
       {/* Status bar */}
       <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50/50 px-4 py-2">

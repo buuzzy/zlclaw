@@ -1,7 +1,7 @@
 /**
  * Application Constants
  *
- * Centralized configuration constants for the WorkAny API.
+ * Centralized configuration constants for the HT Claw API.
  * All hardcoded values should be defined here for easy management.
  */
 
@@ -13,10 +13,10 @@ import { join } from 'path';
 // ============================================================================
 
 /** Application name */
-export const APP_NAME = 'workany';
+export const APP_NAME = 'htclaw';
 
 /** Application data directory name (used in home directory) */
-export const APP_DIR_NAME = '.workany';
+export const APP_DIR_NAME = '.htclaw';
 
 /** Claude Code directory name (system config) */
 export const CLAUDE_DIR_NAME = '.claude';
@@ -62,9 +62,21 @@ export const MCP_CONFIG_FILE_NAME = 'mcp.json';
 
 /** Config file search paths (relative) */
 export const CONFIG_SEARCH_PATHS = [
-  './workany.config.json',
-  './config/workany.json',
+  './htclaw.config.json',
+  './config/htclaw.json',
 ];
+
+// ============================================================================
+// Third-party API Keys (bundled public / shared keys)
+// ============================================================================
+
+/**
+ * Public iwencai API key shipped with the app.
+ * This key is intentionally bundled as a convenience default for all users.
+ * Override by setting the IWENCAI_API_KEY environment variable.
+ */
+export const DEFAULT_IWENCAI_API_KEY =
+  'sk-proj-00-Ngoje6BMoBdtukiMCpAIScu_Bulvfj7mOuOTbHlKAzMQilXb21LB450MxY44KnqjLhfc8Swv630Qml7C821S5w755WuZLFaI2OWDBkRcDPhb0uDy66sVDkLm0cHbeKBLHOP4LQ';
 
 // ============================================================================
 // Default Provider Settings
@@ -119,7 +131,7 @@ export function getHomeDir(): string {
   return homedir();
 }
 
-/** Get WorkAny app data directory */
+/** Get HT Claw app data directory */
 export function getAppDir(): string {
   return join(homedir(), APP_DIR_NAME);
 }
@@ -129,7 +141,7 @@ export function getClaudeDir(): string {
   return join(homedir(), CLAUDE_DIR_NAME);
 }
 
-/** Get WorkAny skills directory */
+/** Get HT Claw skills directory */
 export function getWorkanySkillsDir(): string {
   return join(getAppDir(), SKILLS_DIR_NAME);
 }
@@ -142,12 +154,12 @@ export function getClaudeSkillsDir(): string {
 /** Get all skills directories to search */
 export function getAllSkillsDirs(): { name: string; path: string }[] {
   return [
-    { name: 'workany', path: getWorkanySkillsDir() },
+    { name: 'htclaw', path: getWorkanySkillsDir() },
     { name: 'claude', path: getClaudeSkillsDir() },
   ];
 }
 
-/** Get WorkAny MCP config path */
+/** Get HT Claw MCP config path */
 export function getWorkanyMcpConfigPath(): string {
   return join(getAppDir(), MCP_CONFIG_FILE_NAME);
 }
@@ -160,7 +172,7 @@ export function getClaudeSettingsPath(): string {
 /** Get all MCP config paths to search */
 export function getAllMcpConfigPaths(): { name: string; path: string }[] {
   return [
-    { name: 'workany', path: getWorkanyMcpConfigPath() },
+    { name: 'htclaw', path: getWorkanyMcpConfigPath() },
     { name: 'claude', path: getClaudeSettingsPath() },
   ];
 }

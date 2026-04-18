@@ -1,9 +1,9 @@
 export default {
-  title: 'Welcome to WorkAny',
+  title: 'Welcome to HT Claw',
   subtitle: "Let's make sure you have all the required tools installed",
   checking: 'Checking dependencies...',
   checkingEnvironment: 'Checking environment...',
-  redirecting: 'Entering WorkAny...',
+  redirecting: 'Entering HT Claw...',
   recheck: 'Recheck',
   skip: 'Skip',
   retry: 'Retry',

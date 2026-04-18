@@ -14,6 +14,8 @@ export type SettingsCategory =
   | 'mcp'
   | 'skills'
   | 'connector'
+  | 'cron'
+  | 'memory'
   | 'data'
   | 'about';
 
@@ -70,7 +72,7 @@ export interface MCPServerUI {
   url?: string;
   headers?: Record<string, string>;
   autoExecute?: boolean;
-  source?: 'workany' | 'claude';
+  source?: 'htclaw' | 'claude';
 }
 
 // Skill types
@@ -84,7 +86,8 @@ export interface SkillFile {
 export interface SkillInfo {
   id: string;
   name: string;
-  source: 'claude' | 'workany';
+  description?: string;
+  source: 'claude' | 'htclaw';
   path: string;
   files: SkillFile[];
   enabled: boolean;

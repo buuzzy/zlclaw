@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import ImageLogo from '@/assets/logo.png';
 import { useLanguage } from '@/shared/providers/language-provider';
 import { getVersion } from '@tauri-apps/api/app';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   Download,
   ExternalLink,
@@ -11,14 +10,7 @@ import {
   MessageSquareWarning,
 } from 'lucide-react';
 
-// Helper function to open external URLs
-const openExternalUrl = async (url: string) => {
-  try {
-    await openUrl(url);
-  } catch {
-    window.open(url, '_blank');
-  }
-};
+const noop = () => {};
 
 export function AboutSettings() {
   const { t } = useLanguage();
@@ -35,20 +27,16 @@ export function AboutSettings() {
       {/* Product Info */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <img src={ImageLogo} alt="WorkAny" className="size-16 rounded-xl" />
+          <img src={ImageLogo} alt="HT Claw" className="size-16 rounded-xl" />
           <div>
-            <h2 className="text-foreground text-xl font-bold">WorkAny</h2>
+            <h2 className="text-foreground text-xl font-bold">HT Claw</h2>
             <p className="text-muted-foreground text-sm">
               {t.settings.aiPlatform}
             </p>
           </div>
         </div>
         <button
-          onClick={() =>
-            openExternalUrl(
-              'https://workany.ai/download?utm_source=workany_desktop'
-            )
-          }
+          onClick={noop}
           className="bg-primary text-primary-foreground hover:bg-primary/90 flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
         >
           <Download className="size-4" />
@@ -82,70 +70,47 @@ export function AboutSettings() {
           <span className="text-muted-foreground text-sm">
             {t.settings.author}
           </span>
-          <button
-            onClick={() =>
-              openExternalUrl('https://idoubi.ai?utm_source=workany_desktop')
-            }
-            className="text-foreground hover:text-primary flex cursor-pointer items-center gap-1 text-sm font-medium transition-colors"
-          >
+          <span className="text-foreground flex items-center gap-1 text-sm font-medium">
             idoubi
             <ExternalLink className="size-3" />
-          </button>
+          </span>
         </div>
         <div className="border-border flex items-center justify-between rounded-lg border p-3">
           <span className="text-muted-foreground text-sm">
             {t.settings.copyright}
           </span>
-          <button
-            onClick={() =>
-              openExternalUrl('https://thinkany.ai?utm_source=workany_desktop')
-            }
-            className="text-foreground hover:text-primary flex cursor-pointer items-center gap-1 text-sm font-medium transition-colors"
-          >
-            © 2026 ThinkAny
-            <ExternalLink className="size-3" />
-          </button>
+          <span className="text-foreground flex items-center gap-1 text-sm font-medium">
+            © 2026 HT Claw
+          </span>
         </div>
         <div className="border-border flex items-center justify-between rounded-lg border p-3">
           <span className="text-muted-foreground text-sm">
             {t.settings.license}
           </span>
-          <button
-            onClick={() =>
-              openExternalUrl(
-                'https://github.com/workany-ai/workany/blob/main/LICENSE'
-              )
-            }
-            className="text-foreground hover:text-primary flex cursor-pointer items-center gap-1 text-sm font-medium transition-colors"
-          >
-            WorkAny Community License
-            <ExternalLink className="size-3" />
-          </button>
+          <span className="text-foreground flex items-center gap-1 text-sm font-medium">
+            HT Claw Community License
+          </span>
         </div>
       </div>
 
       {/* Links */}
       <div className="flex flex-wrap gap-3">
         <button
-          onClick={() =>
-            openExternalUrl('https://workany.ai?utm_source=workany_desktop')
-          }
+          onClick={noop}
           className="border-border text-foreground hover:bg-accent flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
         >
           <Globe className="size-4" />
           {t.settings.website}
         </button>
         <button
-          onClick={() =>
-            openExternalUrl('https://github.com/workany-ai/workany')
-          }
+          onClick={noop}
           className="border-border text-foreground hover:bg-accent flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
         >
           <Github className="size-4" />
           {t.settings.viewSource}
         </button>
         <button
-          onClick={() => openExternalUrl('https://discord.gg/rDSmZ8HS39')}
+          onClick={noop}
           className="border-border text-foreground hover:bg-accent flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
         >
           <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
@@ -154,7 +119,7 @@ export function AboutSettings() {
           {t.settings.joinCommunity}
         </button>
         <button
-          onClick={() => openExternalUrl('https://x.com/workanyai')}
+          onClick={noop}
           className="border-border text-foreground hover:bg-accent flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
         >
           <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
@@ -163,9 +128,7 @@ export function AboutSettings() {
           {t.settings.followUs}
         </button>
         <button
-          onClick={() =>
-            openExternalUrl('https://github.com/workany-ai/workany/issues')
-          }
+          onClick={noop}
           className="border-border text-foreground hover:bg-accent flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
         >
           <MessageSquareWarning className="size-4" />
@@ -173,19 +136,11 @@ export function AboutSettings() {
         </button>
       </div>
 
-      {/* Built with ShipAny */}
+      {/* Based on WorkAny by idoubi */}
       <div className="border-border border-t pt-4">
-        <button
-          onClick={() =>
-            openExternalUrl('https://shipany.ai?utm_source=workany_desktop')
-          }
-          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 text-sm transition-colors"
-        >
-          {t.settings.builtWith}
-          <span className="font-medium">ShipAny</span>
-          {t.settings.built}
-          <ExternalLink className="size-3" />
-        </button>
+        <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
+          Based on WorkAny by idoubi
+        </span>
       </div>
     </div>
   );

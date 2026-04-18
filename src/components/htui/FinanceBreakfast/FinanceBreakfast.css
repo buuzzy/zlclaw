@@ -1,0 +1,97 @@
+.fb-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  width: 100%;
+  max-width: 520px;
+  transition: border-color 0.2s;
+}
+
+.fb-card:hover {
+  border-color: var(--accent-primary);
+}
+
+/* Header */
+.fb-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.fb-icon {
+  font-size: 18px;
+}
+
+.fb-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fb-time {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Keywords */
+.fb-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.fb-kw-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--accent-primary);
+  border: 1px solid var(--border);
+}
+
+/* Meta row */
+.fb-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.fb-sentiment {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.fb-sentiment.positive {
+  color: var(--color-success);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.fb-sentiment.neutral {
+  color: var(--color-warning);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.fb-sentiment.negative {
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.fb-news-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Summary */
+.fb-summary {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}

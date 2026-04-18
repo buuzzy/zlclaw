@@ -24,7 +24,7 @@ import { DEFAULT_AGENT_PROVIDER } from '@/config/constants';
 import { nanoid } from 'nanoid';
 
 // ============================================================================
-// Logging - uses shared logger (writes to ~/.workany/logs/workany.log)
+// Logging - uses shared logger (writes to ~/.htclaw/logs/htclaw.log)
 // ============================================================================
 import { createLogger } from '@/shared/utils/logger';
 
@@ -75,7 +75,7 @@ export async function getAgent(config?: Partial<AgentConfig>): Promise<IAgent> {
     globalAgent = createAgent({
       provider: currentProvider as any,
       ...(config || {}),
-      workDir: config?.workDir || '~/.workany'
+      workDir: config?.workDir || '~/.htclaw'
     });
   }
   return globalAgent;

@@ -200,7 +200,7 @@ export interface Settings {
   mcpConfigPath: string;
   mcpEnabled: boolean; // Enable MCP mounting during agent conversations
   mcpUserDirEnabled: boolean; // Enable loading MCP servers from user directory (claude config)
-  mcpAppDirEnabled: boolean; // Enable loading MCP servers from app directory (workany config)
+  mcpAppDirEnabled: boolean; // Enable loading MCP servers from app directory (htclaw config)
 
   // Skills settings
   skillsPath: string;
@@ -221,8 +221,8 @@ export interface Settings {
   defaultAgentRuntime: string; // Default agent runtime ID
 
   // Conversation History settings
-  maxConversationTurns: number; // Maximum conversation turns to keep in history (default: 20)
-  maxHistoryTokens: number; // Maximum tokens for conversation history (default: 2000)
+  maxConversationTurns: number; // Maximum conversation turns to keep in history (default: 50)
+  maxHistoryTokens: number; // Maximum tokens for conversation context (default: 12000, auto-compaction when exceeded)
 
   // General settings
   theme: 'light' | 'dark' | 'system';
@@ -295,7 +295,7 @@ export const defaultProviders: AIProvider[] = [
     models: ['claude-sonnet-4-5-20250929'],
     apiType: 'anthropic-messages',
     icon: '3',
-    apiKeyUrl: 'https://302.ai/?utm_source=workany_desktop',
+    apiKeyUrl: 'https://302.ai/?utm_source=htclaw_desktop',
     canDelete: true,
   },
   {
@@ -392,7 +392,7 @@ export const customProviderModels: Record<string, string[]> = {
 
 // Default settings
 // Note: Path values are placeholders that get resolved at initialization
-// to platform-specific paths (e.g., ~/Library/Application Support/workany on macOS)
+// to platform-specific paths (e.g., ~/.htclaw on macOS/Linux)
 export const defaultSettings: Settings = {
   profile: {
     nickname: 'Guest User',
@@ -415,15 +415,15 @@ export const defaultSettings: Settings = {
   defaultSandboxProvider: 'codex', // Default to Codex sandbox, fallback to native
   agentRuntimes: defaultAgentRuntimes,
   defaultAgentRuntime: 'codeany', // Default to CodeAny Agent
-  maxConversationTurns: 20, // Default: 20 conversation turns
-  maxHistoryTokens: 2000, // Default: 2000 tokens for history
+  maxConversationTurns: 50, // Default: 50 conversation turns
+  maxHistoryTokens: 12000, // Default: 12000 tokens for history (auto-compaction when exceeded)
   theme: 'system',
   accentColor: 'orange',
   backgroundStyle: 'default',
   language: '', // Empty string triggers system language detection on first run
 };
 
-const DB_NAME = 'sqlite:workany.db';
+const DB_NAME = 'sqlite:htclaw.db';
 
 // Check if running in Tauri environment synchronously
 function isTauriSync(): boolean {
@@ -527,7 +527,7 @@ export async function getSettingsAsync(): Promise<Settings> {
 
   // Fallback to localStorage for browser mode
   try {
-    const stored = localStorage.getItem('workany_settings');
+    const stored = localStorage.getItem('htclaw_settings');
     if (stored) {
       const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
       // Migration: Add missing default providers
@@ -550,7 +550,7 @@ export async function getSettingsAsync(): Promise<Settings> {
       settingsCache = loadedSettings;
       return loadedSettings;
     } else {
-      console.log('[Settings] localStorage has no workany_settings');
+      console.log('[Settings] localStorage has no htclaw_settings');
     }
   } catch (error) {
     console.error('[Settings] Failed to load from localStorage:', error);
@@ -573,7 +573,7 @@ export function getSettings(): Settings {
 
   // Try localStorage first for immediate sync access
   try {
-    const stored = localStorage.getItem('workany_settings');
+    const stored = localStorage.getItem('htclaw_settings');
     if (stored) {
       const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
       // Migration: Add missing default providers
@@ -633,7 +633,7 @@ export async function saveSettingsAsync(settings: Settings): Promise<void> {
 
   // Also save to localStorage as fallback
   try {
-    localStorage.setItem('workany_settings', JSON.stringify(settings));
+    localStorage.setItem('htclaw_settings', JSON.stringify(settings));
   } catch (error) {
     console.error('[Settings] Failed to save to localStorage:', error);
   }
@@ -651,7 +651,7 @@ export function saveSettings(settings: Settings): void {
 
   // Save to localStorage immediately for sync access
   try {
-    localStorage.setItem('workany_settings', JSON.stringify(settings));
+    localStorage.setItem('htclaw_settings', JSON.stringify(settings));
     console.log('[Settings] Saved to localStorage successfully');
   } catch (error) {
     console.error('[Settings] Failed to save to localStorage:', error);
@@ -709,6 +709,26 @@ export async function initializeSettings(): Promise<Settings> {
   ) {
     await saveSettingsAsync(settings);
   }
+
+  // Auto-sync model configuration with backend on startup
+  // This ensures channel adapters (WeChat, Feishu) have access to the model config
+  // Use a delayed retry since backend may not be ready immediately
+  const syncWithRetry = async (retries = 3, delay = 2000) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        await syncSettingsWithBackend();
+        console.log('[Settings] Auto-synced model config with backend on startup');
+        return;
+      } catch {
+        if (i < retries - 1) {
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
+    }
+    console.warn('[Settings] Could not auto-sync with backend after retries');
+  };
+  // Fire and forget — don't block app rendering
+  syncWithRetry().catch(() => {});
 
   return settings;
 }
@@ -823,16 +843,40 @@ export function getDefaultAIProvider(): AIProvider | undefined {
 /**
  * Check if a model provider with API key is configured.
  * Returns true if a non-default provider with an API key is selected.
+ * Auto-fixes: if defaultProvider is unset but a valid provider exists, selects it.
  */
 export function isModelConfigured(): boolean {
   const settings = getSettings();
+
   if (!settings.defaultProvider || settings.defaultProvider === 'default') {
+    const validProvider = settings.providers.find(
+      (p) => p.enabled && p.apiKey
+    );
+    if (validProvider) {
+      settings.defaultProvider = validProvider.id;
+      settings.defaultModel = validProvider.defaultModel || validProvider.models?.[0] || '';
+      saveSettings(settings);
+      return true;
+    }
     return false;
   }
+
   const provider = settings.providers.find(
     (p) => p.id === settings.defaultProvider
   );
-  return !!(provider && provider.apiKey);
+  if (provider && provider.apiKey) return true;
+
+  // Fallback: defaultProvider is set but its apiKey is missing (e.g. user configured a
+  // different provider without updating the default selection). Auto-find any enabled
+  // provider that has an apiKey and promote it to defaultProvider.
+  const validProvider = settings.providers.find((p) => p.enabled && p.apiKey);
+  if (validProvider) {
+    settings.defaultProvider = validProvider.id;
+    settings.defaultModel = validProvider.defaultModel || validProvider.models?.[0] || '';
+    saveSettings(settings);
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -842,8 +886,19 @@ export function isModelConfigured(): boolean {
 export async function syncSettingsWithBackend(): Promise<void> {
   const settings = getSettings();
 
-  // Get the selected AI provider's configuration
-  const aiProvider = getDefaultAIProvider();
+  // Get the selected AI provider's configuration.
+  // Fallback: if defaultProvider has no apiKey, find any enabled provider with one.
+  let aiProvider = getDefaultAIProvider();
+  if (!aiProvider?.apiKey) {
+    const fallback = settings.providers.find((p) => p.enabled && p.apiKey);
+    if (fallback) {
+      aiProvider = fallback;
+      // Also fix defaultProvider so future syncs are correct
+      settings.defaultProvider = fallback.id;
+      settings.defaultModel = fallback.defaultModel || fallback.models?.[0] || settings.defaultModel;
+      saveSettings(settings);
+    }
+  }
 
   // Build agent config with model information
   const agentConfig: Record<string, unknown> = {
@@ -860,6 +915,9 @@ export async function syncSettingsWithBackend(): Promise<void> {
     }
     if (settings.defaultModel) {
       agentConfig.model = settings.defaultModel;
+    }
+    if (aiProvider.apiType) {
+      agentConfig.apiType = aiProvider.apiType;
     }
   }
 
@@ -926,7 +984,7 @@ export async function saveSettingItem(
 
   // Also save to localStorage
   try {
-    localStorage.setItem(`workany_${key}`, value);
+    localStorage.setItem(`htclaw_${key}`, value);
   } catch (error) {
     console.error(`[Settings] Failed to save ${key} to localStorage:`, error);
   }
@@ -954,7 +1012,7 @@ export async function getSettingItem(key: string): Promise<string | null> {
 
   // Fallback to localStorage
   try {
-    return localStorage.getItem(`workany_${key}`);
+    return localStorage.getItem(`htclaw_${key}`);
   } catch {
     return null;
   }
@@ -989,7 +1047,7 @@ export async function clearAllSettings(): Promise<void> {
   try {
     const keys = Object.keys(localStorage);
     for (const key of keys) {
-      if (key.startsWith('workany')) {
+      if (key.startsWith('htclaw') || key.startsWith('workany')) {
         localStorage.removeItem(key);
       }
     }

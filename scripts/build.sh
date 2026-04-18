@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# WorkAny Build Script
-# Usage: ./scripts/build.sh [platform] [--with-claude]
+# HT Claw Build Script
+# Usage: ./scripts/build.sh [platform] [--with-cli]
 # Platforms: linux, windows, mac-intel, mac-arm, all
 # Options:
-#   --with-claude  Bundle Claude Code CLI as a sidecar (for users without Node.js environment)
+#   --with-cli  Bundle CLI tools as a sidecar
 
 set -e
 
@@ -85,7 +85,7 @@ build_api_sidecar() {
             ;;
         x86_64-pc-windows-gnu)
             # Cross-compile Windows binary using pkg (same as MSVC, just different output name)
-            pnpm bundle && pnpm exec pkg dist/bundle.cjs --targets node20-win-x64 --output dist/workany-api-x86_64-pc-windows-gnu.exe --options expose-gc
+            pnpm bundle && pnpm exec pkg dist/bundle.cjs --targets node20-win-x64 --output dist/htclaw-api-x86_64-pc-windows-gnu.exe --options expose-gc
             ;;
         x86_64-apple-darwin)
             pnpm run build:binary:mac-intel
@@ -185,7 +185,7 @@ bundle_cli_tools() {
     fi
 
     # Cache directory for Node.js downloads
-    local cache_dir="$HOME/.workany/cache"
+    local cache_dir="$HOME/.htclaw/cache"
     local cached_node="$cache_dir/${node_filename}/node${node_ext}"
     mkdir -p "$cache_dir"
 
@@ -263,7 +263,10 @@ bundle_cli_tools() {
     npm install @anthropic-ai/claude-code @openai/codex --registry="${NPM_REGISTRY:-https://registry.npmmirror.com}" 2>&1 | tail -15
 
     # Verify installations
-    if [ ! -f "node_modules/@anthropic-ai/claude-code/cli.js" ]; then
+    # Claude Code v2+ ships native binary via postinstall; cli-wrapper.cjs is the Node.js fallback.
+    # We use cli-wrapper.cjs (invoked via bundled Node.js) to avoid downloading the 200MB native binary.
+    if [ ! -f "node_modules/@anthropic-ai/claude-code/cli-wrapper.cjs" ] && \
+       [ ! -f "node_modules/@anthropic-ai/claude-code/cli.js" ]; then
         log_error "Claude Code installation failed"
         cd "$PROJECT_ROOT"
         return 1
@@ -419,13 +422,83 @@ bundle_cli_tools() {
     cd "$PROJECT_ROOT"
 
     # Create launcher scripts for both CLIs
-    create_cli_launcher "$output_dir" "$node_platform" "claude" "@anthropic-ai/claude-code/cli.js" "$target"
+    # Claude Code v2+ uses cli-wrapper.cjs (Node.js fallback) instead of native binary.
+    # If cli-wrapper.cjs is present, use it via bundled Node.js; else fall back to cli.js.
+    if [ -f "$bundle_dir/node_modules/@anthropic-ai/claude-code/cli-wrapper.cjs" ]; then
+        create_cli_launcher "$output_dir" "$node_platform" "claude" "@anthropic-ai/claude-code/cli-wrapper.cjs" "$target"
+    else
+        create_cli_launcher "$output_dir" "$node_platform" "claude" "@anthropic-ai/claude-code/cli.js" "$target"
+    fi
     create_cli_launcher "$output_dir" "$node_platform" "codex" "@openai/codex/bin/codex.js" "$target"
 
     # Verify
     local bundle_size=$(du -sh "$bundle_dir" 2>/dev/null | cut -f1)
     log_info "CLI bundling completed for $target"
     log_info "Bundle size: $bundle_size (shared Node.js + both CLIs)"
+}
+
+# Launcher for Claude Code v2+ which ships as a precompiled binary (bin/claude.exe)
+# Instead of calling `node cli.js`, we directly exec the binary from the bundle.
+create_claude_binary_launcher() {
+    local output_dir="$1"
+    local node_platform="$2"
+    local target="$3"
+
+    local output_name="claude"
+    if [ "$node_platform" = "win" ]; then
+        output_name="claude.cmd"
+        cat > "$output_dir/$output_name" << BATCH_EOF
+@echo off
+setlocal
+set "SCRIPT_DIR=%~dp0"
+set "BUNDLE_DIR=%SCRIPT_DIR%cli-bundle"
+if not exist "%BUNDLE_DIR%\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe" set "BUNDLE_DIR=%SCRIPT_DIR%..\\Resources\\cli-bundle"
+"%BUNDLE_DIR%\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe" %*
+BATCH_EOF
+    else
+        cat > "$output_dir/$output_name" << 'SHELL_EOF'
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+for DIR in "$SCRIPT_DIR/cli-bundle" "$SCRIPT_DIR/../Resources/_up_/src-api/dist/cli-bundle" "$SCRIPT_DIR/../Resources/cli-bundle"; do
+    if [ -f "$DIR/node_modules/@anthropic-ai/claude-code/bin/claude.exe" ]; then
+        exec "$DIR/node_modules/@anthropic-ai/claude-code/bin/claude.exe" "$@"
+    fi
+done
+
+echo "Error: Claude Code binary not found in cli-bundle" >&2
+exit 1
+SHELL_EOF
+        chmod +x "$output_dir/$output_name"
+    fi
+
+    # Create target-specific copy (Tauri adds target triple suffix to externalBin)
+    local target_suffix=""
+    case "$target" in
+        x86_64-unknown-linux-gnu|x86_64-pc-windows-msvc|x86_64-pc-windows-gnu|x86_64-apple-darwin|aarch64-apple-darwin)
+            target_suffix="-$target"
+            ;;
+        current)
+            local os_name=$(uname -s)
+            local arch=$(uname -m)
+            case "$os_name" in
+                Darwin)
+                    target_suffix=$([ "$arch" = "arm64" ] && echo "-aarch64-apple-darwin" || echo "-x86_64-apple-darwin")
+                    ;;
+                Linux)
+                    target_suffix="-x86_64-unknown-linux-gnu"
+                    ;;
+            esac
+            ;;
+    esac
+
+    if [ -n "$target_suffix" ]; then
+        local target_launcher="$output_dir/claude${target_suffix}"
+        [ "$node_platform" = "win" ] && target_launcher="$output_dir/claude${target_suffix}.cmd"
+        cp "$output_dir/$output_name" "$target_launcher"
+        chmod +x "$target_launcher" 2>/dev/null || true
+        log_info "Created Claude binary launcher: $target_launcher"
+    fi
 }
 
 # Helper function to create launcher scripts
@@ -705,7 +778,7 @@ build_windows() {
 
     log_info "Windows build completed!"
     if [ "$target" = "x86_64-pc-windows-gnu" ]; then
-        log_info "Output: src-tauri/target/$target/release/workany.exe"
+        log_info "Output: src-tauri/target/$target/release/HT Claw.exe"
         log_info "Note: MSI/NSIS installers require building on Windows"
     else
         log_info "Output: src-tauri/target/$target/release/bundle/"
@@ -770,14 +843,14 @@ sign_cli_bundle_in_app() {
     local app_bundle=""
     case "$target" in
         aarch64-apple-darwin|x86_64-apple-darwin)
-            app_bundle="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/macos/WorkAny.app"
+            app_bundle="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/macos/HT Claw.app"
             ;;
         current)
             local arch=$(uname -m)
             if [ "$arch" = "arm64" ]; then
-                app_bundle="$PROJECT_ROOT/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/WorkAny.app"
+                app_bundle="$PROJECT_ROOT/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/HT Claw.app"
             else
-                app_bundle="$PROJECT_ROOT/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/WorkAny.app"
+                app_bundle="$PROJECT_ROOT/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/HT Claw.app"
             fi
             ;;
         *)
@@ -867,17 +940,17 @@ notarize_app() {
     local app_path=""
     case "$target" in
         aarch64-apple-darwin)
-            app_path="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/macos/WorkAny.app"
+            app_path="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/macos/HT Claw.app"
             ;;
         x86_64-apple-darwin)
-            app_path="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/macos/WorkAny.app"
+            app_path="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/macos/HT Claw.app"
             ;;
         current)
             local arch=$(uname -m)
             if [ "$arch" = "arm64" ]; then
-                app_path="$PROJECT_ROOT/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/WorkAny.app"
+                app_path="$PROJECT_ROOT/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/HT Claw.app"
             else
-                app_path="$PROJECT_ROOT/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/WorkAny.app"
+                app_path="$PROJECT_ROOT/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/HT Claw.app"
             fi
             ;;
         *)
@@ -950,14 +1023,14 @@ recreate_dmg() {
 
     case "$target" in
         aarch64-apple-darwin)
-            app_path="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/macos/WorkAny.app"
+            app_path="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/macos/HT Claw.app"
             dmg_dir="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/dmg"
-            dmg_name="WorkAny_${version}_aarch64.dmg"
+            dmg_name="HTClaw_${version}_aarch64.dmg"
             ;;
         x86_64-apple-darwin)
-            app_path="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/macos/WorkAny.app"
+            app_path="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/macos/HT Claw.app"
             dmg_dir="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/dmg"
-            dmg_name="WorkAny_${version}_x64.dmg"
+            dmg_name="HTClaw_${version}_x64.dmg"
             ;;
         *)
             log_warn "DMG recreation not needed for $target"
@@ -980,10 +1053,10 @@ recreate_dmg() {
     ln -s /Applications "$temp_dir/Applications"
 
     # Hide .app extension in Finder
-    SetFile -a E "$temp_dir/WorkAny.app" 2>/dev/null || true
+    SetFile -a E "$temp_dir/HT Claw.app" 2>/dev/null || true
 
     log_info "Creating DMG with Applications shortcut..."
-    hdiutil create -volname WorkAny -srcfolder "$temp_dir" -ov -format UDZO "$dmg_dir/$dmg_name"
+    hdiutil create -volname "HT Claw" -srcfolder "$temp_dir" -ov -format UDZO "$dmg_dir/$dmg_name"
 
     # Clean up temp directory
     rm -rf "$temp_dir"
@@ -1114,7 +1187,7 @@ build_current() {
 
 # Show help
 show_help() {
-    echo "WorkAny Build Script"
+    echo "HT Claw Build Script"
     echo ""
     echo "Usage: ./scripts/build.sh [platform] [options]"
     echo ""

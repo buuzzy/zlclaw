@@ -16,7 +16,7 @@ const root = resolve(__dirname, '..');
 const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
 const platformMap = { darwin: 'apple-darwin', linux: 'unknown-linux-gnu', win32: 'pc-windows-msvc' };
 const triple = `${arch}-${platformMap[process.platform]}`;
-const binaryName = `workany-api-${triple}${process.platform === 'win32' ? '.exe' : ''}`;
+const binaryName = `htclaw-api-${triple}${process.platform === 'win32' ? '.exe' : ''}`;
 const binaryPath = resolve(root, 'src-api/dist', binaryName);
 
 if (existsSync(binaryPath)) {

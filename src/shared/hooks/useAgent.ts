@@ -47,34 +47,88 @@ function getPreferredLanguage(): string | undefined {
 /**
  * Detect if a prompt is a simple conversational query that can use the fast chat path.
  * Returns true for greetings, simple questions, etc.
- * Returns false for task-oriented prompts that need agent capabilities.
+ * Returns false for task-oriented prompts that need agent capabilities (tools/skills).
  */
 function isFastChatQuery(prompt: string): boolean {
   const trimmed = prompt.trim();
-  // Long prompts are likely task descriptions
   if (trimmed.length > 200) return false;
-  // URLs require agent mode for web access (curl, CDP, etc.)
   if (/https?:\/\//.test(trimmed)) return false;
-  // Check for task-oriented keywords
+  // Slash commands must always go through the agent endpoint (not fast chat)
+  // because they emit session_action / compact_result events that fast chat ignores
+  if (/^\/[a-z]/.test(trimmed)) return false;
+
+  const lower = trimmed.toLowerCase();
+
+  // Financial queries ALWAYS need the Agent (require skill/tool calls)
+  const financeKeywords = [
+    // Quotes & prices
+    '行情', '股价', '报价', '价格', '多少钱', '涨跌', '涨幅', '跌幅',
+    '涨停', '跌停', '换手', '成交', '量能', '资金',
+    // K-line / charts
+    'k线', 'kline', '走势', '趋势', '日线', '周线', '月线',
+    // Company / stock
+    '股票', '个股', '基金', '指数', '板块', '概念',
+    '沪深', '上证', '深证', '创业板', '科创板', '北交所',
+    '港股', '美股', '恒生', '纳斯达克', '道琼斯',
+    // Financial data
+    '财务', '财报', '营收', '净利', '利润', '毛利', '负债', '市盈率', 'pe', 'pb',
+    '研报', '公告', '分红', '配股', '增发',
+    // Fund
+    '净值', '基金经理', '持仓', '重仓',
+    // Macro
+    'gdp', 'cpi', 'pmi', '宏观', '利率', '汇率',
+    // News
+    '财经', '新闻', '资讯', '早报', '快讯',
+    // Specific stock names/codes (common patterns)
+    '茅台', '宁德', '比亚迪', '腾讯', '阿里',
+  ];
+
+  if (financeKeywords.some((kw) => lower.includes(kw))) return false;
+
+  // General task-oriented keywords
   const taskKeywords = [
-    // File operations
     '创建', '生成', '写入', '删除', '修改', '编辑', '保存',
     'create', 'generate', 'write', 'delete', 'modify', 'edit', 'save',
-    // Development
     '开发', '构建', '部署', '编译', '运行', '安装',
     'develop', 'build', 'deploy', 'compile', 'run', 'install',
-    // File paths
     '文件', '文件夹', '目录', 'file', 'folder', 'directory', 'path',
-    // Code
     '代码', '脚本', '函数', 'code', 'script', 'function',
-    // Analysis
     '分析', '扫描', '搜索', '查找', 'analyze', 'scan', 'search', 'find',
-    // Web
     '网站', '网页', '爬取', '联网', '访问', '打开', '下载',
     'website', 'webpage', 'scrape', 'fetch', 'browse', 'download', 'visit',
   ];
-  const lower = trimmed.toLowerCase();
+
   return !taskKeywords.some((kw) => lower.includes(kw));
+}
+
+/**
+ * Detect if a prompt is a simple financial query that should skip the plan phase
+ * and go directly to execution (needs tools but doesn't need a multi-step plan).
+ */
+function isDirectExecuteQuery(prompt: string): boolean {
+  const trimmed = prompt.trim();
+  if (trimmed.length > 300) return false;
+
+  const lower = trimmed.toLowerCase();
+
+  const directPatterns = [
+    // Simple quote queries
+    '行情', '股价', '报价', '价格', '多少钱', '现在多少',
+    '涨跌', '涨幅', '跌幅', '涨了', '跌了',
+    // K-line / chart
+    'k线', 'kline', '走势', '日线', '周线',
+    // Simple lookups
+    '最新价', '收盘价', '开盘价', '换手率', '成交量',
+    '市盈率', '市净率', 'pe', 'pb',
+    // Fund NAV
+    '净值',
+    // Quick news
+    '新闻', '资讯', '快讯', '早报',
+    // Short question forms
+    '怎么样', '什么情况', '表现如何',
+  ];
+
+  return directPatterns.some((p) => lower.includes(p));
 }
 
 console.log(
@@ -359,7 +413,9 @@ export interface AgentMessage {
     | 'user'
     | 'permission_request'
     | 'plan'
-    | 'direct_answer';
+    | 'direct_answer'
+    | 'session_action'
+    | 'compact_result';
   content?: string;
   name?: string;
   id?: string; // tool_use id
@@ -379,6 +435,10 @@ export interface AgentMessage {
   plan?: TaskPlan;
   // Attachments for user messages (images, files)
   attachments?: MessageAttachment[];
+  // session_action fields (/new, /reset)
+  action?: string;
+  // compact_result fields
+  conversation?: Array<{ role: string; content: string }>;
 }
 
 export interface PlanStep {
@@ -770,12 +830,13 @@ function buildConversationHistory(
     history.push({ role: 'user', content: initialPrompt });
   }
 
-  // Process messages to build conversation
+  // Process messages to build conversation, including tool results
+  // so the Agent can reference previous data lookups in follow-up questions.
   let currentAssistantContent = '';
+  const pendingToolNames = new Map<string, string>();
 
   for (const msg of messages) {
     if (msg.type === 'user') {
-      // Before adding user message, flush any accumulated assistant content
       if (currentAssistantContent) {
         history.push({
           role: 'assistant',
@@ -784,7 +845,6 @@ function buildConversationHistory(
         currentAssistantContent = '';
       }
 
-      // Extract image paths from attachments if present
       const imagePaths = msg.attachments
         ?.filter((a) => a.type === 'image' && a.path)
         .map((a) => a.path as string);
@@ -796,15 +856,21 @@ function buildConversationHistory(
           imagePaths && imagePaths.length > 0 ? imagePaths : undefined,
       });
     } else if (msg.type === 'text') {
-      // Accumulate assistant text
       currentAssistantContent += (msg.content || '') + '\n';
     } else if (msg.type === 'tool_use') {
-      // Include tool use as part of assistant's response
+      const toolId = (msg as { id?: string }).id || msg.toolUseId || `tool_${Date.now()}`;
+      if (msg.name) pendingToolNames.set(toolId, msg.name);
       currentAssistantContent += `[Used tool: ${msg.name}]\n`;
+    } else if (msg.type === 'tool_result') {
+      const toolName = (msg.toolUseId && pendingToolNames.get(msg.toolUseId)) || 'tool';
+      const output = msg.output || '';
+      if (output) {
+        const truncated = output.length > 800 ? output.slice(0, 800) + '...' : output;
+        currentAssistantContent += `[${toolName} result]: ${truncated}\n`;
+      }
     }
   }
 
-  // Flush remaining assistant content
   if (currentAssistantContent) {
     history.push({
       role: 'assistant',
@@ -919,8 +985,15 @@ export function useAgent(): UseAgentReturn {
     // Set this as the active task
     activeTaskIdRef.current = id;
 
-    // Note: Background restoration and running state is handled by loadMessages
-    // Don't set isRunning here - let loadMessages determine the correct state
+    // Pre-emptively restore running state if this task is in the background.
+    // This eliminates the brief "idle" flash that would otherwise appear between
+    // this synchronous step and the async loadMessages() call that follows.
+    const preCheckBgTask = getBackgroundTask(id);
+    if (preCheckBgTask && preCheckBgTask.isRunning && !preCheckBgTask.abortController.signal.aborted) {
+      setIsRunning(true);
+      isRunningRef.current = true;
+      setPhase('executing');
+    }
 
     try {
       const task = await getTask(id);
@@ -1009,8 +1082,10 @@ export function useAgent(): UseAgentReturn {
         const pollingTaskId = id;
         let lastMessageCount = 0;
         let stuckCount = 0; // Count how many polls without new messages
-        // Long timeout for stuck detection - tools like Bash can take minutes
-        const MAX_STUCK_COUNT = 300; // Stop after 5 minutes of no progress
+        // Long timeout for stuck detection - tools like Bash can take many minutes
+        // The DB status check (completed/error/stopped) is the primary termination path.
+        // This counter is only a last-resort safety net for truly hung tasks.
+        const MAX_STUCK_COUNT = 1800; // Stop after 30 minutes of no progress
 
         refreshIntervalRef.current = setInterval(async () => {
           const isStillActive = activeTaskIdRef.current === pollingTaskId;
@@ -1309,7 +1384,7 @@ export function useAgent(): UseAgentReturn {
           // Restore plan if task is not completed/stopped and has incomplete steps
           if (hasIncompleteSteps && !taskIsCompleted && !taskIsStopped) {
             console.log('[useAgent] Restoring plan awaiting approval for task:', id, {
-              planSteps: planSteps.map((s) => ({ title: s.title, status: s.status })),
+              planSteps: planSteps.map((s) => ({ description: s.description, status: s.status })),
             });
             setPlan(lastPlanMessage.plan);
             setPhase('awaiting_approval');
@@ -1460,6 +1535,56 @@ export function useAgent(): UseAgentReturn {
                 if (isActive && data.permission) {
                   setPendingPermission(data.permission);
                   setMessages((prev) => [...prev, data]);
+                }
+              } else if (data.type === 'session_action') {
+                // /new or /reset: clear current session messages
+                if (isActive && (data.action === 'new' || data.action === 'reset')) {
+                  console.log(`[useAgent] Session action: ${data.action}`);
+                  try {
+                    const { deleteMessagesByTaskId } = await import('@/shared/db');
+                    await deleteMessagesByTaskId(currentTaskId);
+                    setMessages([]);
+                    // Also delete from backend channel-store so useChannelSync
+                    // won't re-populate the cleared messages within 3 seconds
+                    fetch(`${AGENT_SERVER_URL}/channels/conversations/${currentTaskId}`, { method: 'DELETE' }).catch(() => {});
+                    // Mark as deleted in sessionStorage so sync ignores it even if backend still has it
+                    const { markChannelTaskDeleted } = await import('@/shared/hooks/useChannelSync');
+                    markChannelTaskDeleted(currentTaskId);
+                  } catch (err) {
+                    console.error('[useAgent] Failed to clear messages:', err);
+                  }
+                }
+              } else if (data.type === 'compact_result' && data.conversation) {
+                // Legacy: /compact command replace (no longer used, kept for compat)
+                if (isActive) {
+                  console.log('[useAgent] Compact result received, replacing conversation with', (data.conversation as unknown[]).length, 'messages');
+                  // Replace messages in DB: delete old messages and insert compacted ones
+                  try {
+                    const { deleteMessagesByTaskId, createMessage } = await import('@/shared/db');
+                    await deleteMessagesByTaskId(currentTaskId);
+                    const compactedConv = data.conversation as Array<{ role: string; content: string }>;
+                    for (const msg of compactedConv) {
+                      await createMessage({
+                        task_id: currentTaskId,
+                        type: msg.role === 'user' ? 'user' : 'text',
+                        content: msg.content,
+                      });
+                    }
+                    // Reload messages in UI (map DB Message → AgentMessage to align types)
+                    const { getMessagesByTaskId } = await import('@/shared/db');
+                    const freshMessages = await getMessagesByTaskId(currentTaskId);
+                    const agentMsgs: AgentMessage[] = freshMessages.map((msg) => ({
+                      type: msg.type as AgentMessage['type'],
+                      content: msg.content ?? undefined,
+                      name: msg.tool_name ?? undefined,
+                      output: msg.tool_output ?? undefined,
+                      toolUseId: msg.tool_use_id ?? undefined,
+                      subtype: msg.subtype as AgentMessage['subtype'],
+                    }));
+                    setMessages(agentMsgs);
+                  } catch (err) {
+                    console.error('[useAgent] Failed to apply compact result:', err);
+                  }
                 }
               } else {
                 // UI update only for active task
@@ -1933,6 +2058,53 @@ export function useAgent(): UseAgentReturn {
             console.error('Failed to save fast chat response:', dbError);
           }
 
+          return currentTaskId;
+        }
+
+        // Direct execute: simple financial queries skip the plan phase
+        if (!hasImages && isDirectExecuteQuery(prompt)) {
+          console.log('[useAgent] Simple financial query, skipping plan → direct execute');
+          setPhase('executing');
+
+          try {
+            const allRefs = [...savedFileRefs];
+            await createMessage({
+              task_id: currentTaskId,
+              type: 'user',
+              content: prompt,
+              attachments: allRefs.length > 0 ? JSON.stringify(allRefs) : undefined,
+            });
+          } catch (error) {
+            console.error('Failed to save user message:', error);
+          }
+
+          const workDir = computedSessionFolder || (await getAppDataDir());
+          const sandboxConfig = getSandboxConfig();
+          const skillsConfig = getSkillsConfig();
+          const language = getPreferredLanguage();
+          const mcpConfig = getMcpConfig();
+
+          const response = await fetchWithRetry(`${AGENT_SERVER_URL}/agent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: augmentedPrompt,
+              workDir,
+              taskId: currentTaskId,
+              modelConfig,
+              sandboxConfig,
+              skillsConfig,
+              mcpConfig,
+              language,
+            }),
+            signal: abortController.signal,
+          });
+
+          if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+          }
+
+          await processStream(response, currentTaskId, abortController);
           return currentTaskId;
         }
 

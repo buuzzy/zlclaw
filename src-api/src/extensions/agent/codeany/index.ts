@@ -14,6 +14,8 @@ import {
 } from '@codeany/open-agent-sdk';
 import type { AgentOptions as SdkAgentOptions } from '@codeany/open-agent-sdk';
 
+import { refreshSkillsForPrompt } from '@/shared/skills/predictor';
+
 import {
   BaseAgent,
   buildLanguageInstruction,
@@ -43,8 +45,11 @@ import {
   DEFAULT_API_PORT,
   DEFAULT_WORK_DIR,
 } from '@/config/constants';
+import { getHTClawSystemPrompt } from '@/config/prompt-loader';
+import { appendDailyMemory } from '@/shared/memory/daily-writer';
 import { loadMcpServers, type McpServerConfig } from '@/shared/mcp/loader';
 import { createLogger, LOG_FILE_PATH } from '@/shared/utils/logger';
+import { stripHashSuffix } from '@/shared/utils/url';
 
 const logger = createLogger('CodeAnyAgent');
 
@@ -197,6 +202,17 @@ export class CodeAnyAgent extends BaseAgent {
     return !!(this.config.baseUrl && this.config.apiKey);
   }
 
+  private looksLikeError(output: string): boolean {
+    if (!output || output.length < 10) return false;
+    const lower = output.toLowerCase();
+    const errorPatterns = [
+      'error:', 'exception:', 'traceback', 'econnrefused',
+      'etimedout', 'enotfound', 'status_code', 'failed to',
+      'permission denied', '401', '403', '500', '502', '503',
+    ];
+    return errorPatterns.some(p => lower.includes(p)) && output.length < 500;
+  }
+
   private buildSdkOptions(
     sessionCwd: string,
     options?: AgentOptions,
@@ -221,7 +237,7 @@ export class CodeAnyAgent extends BaseAgent {
       sdkOpts.apiKey = this.config.apiKey;
     }
     if (this.config.baseUrl) {
-      sdkOpts.baseURL = this.config.baseUrl;
+      sdkOpts.baseURL = stripHashSuffix(this.config.baseUrl);
     }
 
     // Set allowed tools
@@ -235,63 +251,55 @@ export class CodeAnyAgent extends BaseAgent {
     return sdkOpts;
   }
 
-  private estimateTokenCount(text: string): number {
-    return Math.ceil(text.length / 4);
-  }
-
-  private formatConversationHistory(conversation?: ConversationMessage[]): string {
+  /**
+   * Build conversation context using the Context Assembler.
+   * Supports disk-persisted sessions and automatic compaction.
+   */
+  private async buildConversationContext(
+    sessionId: string,
+    conversation?: ConversationMessage[]
+  ): Promise<string> {
     if (!conversation || conversation.length === 0) return '';
 
-    const maxHistoryTokens = this.config.providerConfig?.maxHistoryTokens as number || 2000;
-    const minMessagesToKeep = 3;
+    try {
+      const { assembleContext } = await import('@/shared/context/assembler');
+      const maxContextTokens = (this.config.providerConfig?.maxHistoryTokens as number) || 12000;
 
-    const allFormattedMessages = conversation.map((msg) => {
+      const result = await assembleContext(sessionId, conversation, {
+        maxContextTokens,
+      });
+
+      if (result.compacted) {
+        logger.info(`[CodeAny ${sessionId}] Context compacted: ${result.estimatedTokens} tokens, ${result.recentMessageCount} recent messages kept`);
+      }
+
+      return result.context;
+    } catch (err) {
+      logger.warn(`[CodeAny ${sessionId}] Context assembly failed, falling back:`, err);
+      return this.formatConversationHistoryFallback(conversation);
+    }
+  }
+
+  /**
+   * Fallback: simple truncation (used when assembler fails).
+   */
+  private formatConversationHistoryFallback(conversation: ConversationMessage[]): string {
+    const maxTokens = (this.config.providerConfig?.maxHistoryTokens as number) || 12000;
+    const parts: string[] = [];
+    let budget = maxTokens;
+
+    for (let i = conversation.length - 1; i >= 0 && budget > 0; i--) {
+      const msg = conversation[i];
       const role = msg.role === 'user' ? 'User' : 'Assistant';
-      let messageContent = `${role}: ${msg.content}`;
-      if (msg.imagePaths && msg.imagePaths.length > 0) {
-        const imageRefs = msg.imagePaths.map((p, i) => `  - Image ${i + 1}: ${p}`).join('\n');
-        messageContent += `\n[Attached images:\n${imageRefs}\nUse Read tool to view these images if needed]`;
-      }
-      return messageContent;
-    });
-
-    const messageTokens = allFormattedMessages.map(msg => ({
-      content: msg,
-      tokens: this.estimateTokenCount(msg)
-    }));
-
-    let totalTokens = 0;
-    const selectedMessages: string[] = [];
-    const startIndex = Math.max(0, messageTokens.length - minMessagesToKeep);
-
-    for (let i = messageTokens.length - 1; i >= startIndex; i--) {
-      const message = messageTokens[i];
-      if (totalTokens + message.tokens <= maxHistoryTokens) {
-        selectedMessages.unshift(message.content);
-        totalTokens += message.tokens;
-      } else {
-        break;
-      }
+      const line = `${role}: ${msg.content}`;
+      const tokens = Math.ceil(line.length / 4);
+      if (budget - tokens < 0 && parts.length >= 2) break;
+      parts.unshift(line);
+      budget -= tokens;
     }
 
-    for (let i = startIndex - 1; i >= 0; i--) {
-      const message = messageTokens[i];
-      if (totalTokens + message.tokens <= maxHistoryTokens) {
-        selectedMessages.unshift(message.content);
-        totalTokens += message.tokens;
-      } else {
-        break;
-      }
-    }
-
-    if (selectedMessages.length === 0) return '';
-
-    const formattedMessages = selectedMessages.join('\n\n');
-    const truncationNotice = conversation.length > selectedMessages.length
-      ? `\n\n[Note: Showing ${selectedMessages.length} of ${conversation.length} messages.]`
-      : '';
-
-    return `## Previous Conversation Context\n\n${formattedMessages}${truncationNotice}\n\n---\n## Current Request\n`;
+    if (parts.length === 0) return '';
+    return `## Previous Conversation Context\n\n${parts.join('\n\n')}\n\n---\n## Current Request\n`;
   }
 
   private sanitizeText(text: string): string {
@@ -345,11 +353,13 @@ export class CodeAnyAgent extends BaseAgent {
     }
 
     if (msg.type === 'tool_result' && msg.result) {
+      const output = msg.result.output ?? '';
+      const isError = !!(msg.result as any).is_error || this.looksLikeError(output);
       yield {
         type: 'tool_result',
         toolUseId: msg.result.tool_use_id ?? '',
-        output: msg.result.output ?? '',
-        isError: false,
+        output,
+        isError,
       };
     }
 
@@ -380,38 +390,39 @@ export class CodeAnyAgent extends BaseAgent {
 
     const sentTextHashes = new Set<string>();
     const sentToolIds = new Set<string>();
+    // Accumulates assistant reply text for daily memory write
+    const assistantTextParts: string[] = [];
 
     const sandboxOpts: SandboxOptions | undefined = options?.sandbox?.enabled
       ? { enabled: true, image: options.sandbox.image, apiEndpoint: options.sandbox.apiEndpoint || SANDBOX_API_URL }
       : undefined;
 
-    // Handle image attachments
-    let imageInstruction = '';
+    // Save images to disk so they can be referenced in the text prompt
+    // (The SDK's query() accepts string only; multimodal arrays are not supported)
+    let imagePaths: string[] = [];
     if (options?.images && options.images.length > 0) {
-      const imagePaths = await saveImagesToDisk(options.images, sessionCwd);
+      imagePaths = await saveImagesToDisk(options.images, sessionCwd);
       if (imagePaths.length > 0) {
-        imageInstruction = `
-## MANDATORY IMAGE ANALYSIS - DO THIS FIRST
-
-The user has attached ${imagePaths.length} image file(s):
-${imagePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}
-
-**YOUR FIRST ACTION MUST BE:** Use the Read tool to view each image file listed above.
-
-**CRITICAL:** DO NOT respond until you have READ and SEEN the actual image content.
-
----
-User's request (answer this AFTER reading the images):
-`;
+        logger.info(`[CodeAny] Saved ${imagePaths.length} image(s) to disk`);
       }
     }
 
-    const conversationContext = this.formatConversationHistory(options?.conversation);
+    // Use taskId as persistent context key (stable across turns); fall back to session.id
+    const contextSessionId = options?.taskId || session.id;
+    const conversationContext = await this.buildConversationContext(contextSessionId, options?.conversation);
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
+    const htclawSystemPrompt = await getHTClawSystemPrompt(prompt);
 
-    const enhancedPrompt = imageInstruction
-      ? imageInstruction + languageInstruction + prompt + '\n\n' + getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext
-      : getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext + languageInstruction + prompt;
+    const textPrompt = htclawSystemPrompt + getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext + languageInstruction + prompt;
+
+    // Build the final prompt: always a string (images referenced by file path)
+    let finalPrompt: string;
+    if (imagePaths.length > 0) {
+      finalPrompt = textPrompt + `\n\n[Attached image file(s) saved to disk: ${imagePaths.join(', ')}]`;
+      logger.info(`[CodeAny] Using text prompt with ${imagePaths.length} image path(s) appended`);
+    } else {
+      finalPrompt = textPrompt;
+    }
 
     // Load MCP servers
     const userMcpServers = await loadMcpServers(options?.mcpConfig as McpConfig | undefined);
@@ -429,12 +440,22 @@ User's request (answer this AFTER reading the images):
     logger.info(`[CodeAny ${session.id}] ========== AGENT START ==========`);
     logger.info(`[CodeAny ${session.id}] Model: ${this.config.model || '(default)'}`);
     logger.info(`[CodeAny ${session.id}] Custom API: ${this.isUsingCustomApi()}`);
-    logger.info(`[CodeAny ${session.id}] Prompt length: ${enhancedPrompt.length} chars`);
+    logger.info(`[CodeAny ${session.id}] Prompt length: ${finalPrompt.length} chars`);
+    logger.info(`[CodeAny ${session.id}] Images (disk): ${imagePaths.length > 0 ? `yes (${imagePaths.length} files)` : 'no'}`);
+
+    // Dynamically swap in only the skills relevant to this prompt
+    // so the model context stays lean each turn.
+    await refreshSkillsForPrompt(prompt);
 
     try {
-      for await (const message of query({ prompt: enhancedPrompt, options: sdkOpts })) {
+      for await (const message of query({ prompt: finalPrompt, options: sdkOpts })) {
         if (session.abortController.signal.aborted) break;
-        yield* this.processMessage(message, session.id, sentTextHashes, sentToolIds);
+        for (const msg of this.processMessage(message, session.id, sentTextHashes, sentToolIds)) {
+          if (msg.type === 'text' && (msg as any).content) {
+            assistantTextParts.push((msg as any).content);
+          }
+          yield msg;
+        }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -461,6 +482,12 @@ User's request (answer this AFTER reading the images):
         yield { type: 'error', message: `__INTERNAL_ERROR__|${LOG_FILE_PATH}` };
       }
     } finally {
+      // Persist this turn to daily memory (fire-and-forget)
+      const assistantReply = assistantTextParts.join('\n').trim();
+      if (assistantReply) {
+        appendDailyMemory(typeof prompt === 'string' ? prompt : JSON.stringify(prompt), assistantReply);
+      }
+
       this.sessions.delete(session.id);
       yield { type: 'done' };
     }
@@ -481,7 +508,8 @@ User's request (answer this AFTER reading the images):
 
     const workspaceInstruction = `\n## CRITICAL: Output Directory\n**ALL files must be saved to: ${sessionCwd}**\n`;
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
-    const planningPrompt = workspaceInstruction + PLANNING_INSTRUCTION + languageInstruction + prompt;
+    const htclawSystemPrompt = await getHTClawSystemPrompt(prompt);
+    const planningPrompt = htclawSystemPrompt + workspaceInstruction + PLANNING_INSTRUCTION + languageInstruction + prompt;
 
     let fullResponse = '';
 
@@ -524,6 +552,10 @@ User's request (answer this AFTER reading the images):
       logger.error(`[CodeAny ${session.id}] Planning error:`, error);
       yield { type: 'error', message: error instanceof Error ? error.message : String(error) };
     } finally {
+      // Persist planning turn to daily memory (fire-and-forget)
+      if (fullResponse.trim()) {
+        appendDailyMemory(prompt, fullResponse.trim());
+      }
       yield { type: 'done' };
     }
   }
@@ -552,12 +584,16 @@ User's request (answer this AFTER reading the images):
       ? { enabled: true, image: options.sandbox.image, apiEndpoint: options.sandbox.apiEndpoint || SANDBOX_API_URL }
       : undefined;
 
+    const htclawSystemPrompt = await getHTClawSystemPrompt(options.originalPrompt);
     const executionPrompt =
+      htclawSystemPrompt +
       formatPlanForExecution(plan, sessionCwd, sandboxOpts, options.language, options.originalPrompt) +
       '\n\nOriginal request: ' + options.originalPrompt;
 
     const sentTextHashes = new Set<string>();
     const sentToolIds = new Set<string>();
+    // Accumulates assistant reply text for daily memory write
+    const assistantTextParts: string[] = [];
 
     const userMcpServers = await loadMcpServers(options.mcpConfig as McpConfig | undefined);
 
@@ -569,15 +605,31 @@ User's request (answer this AFTER reading the images):
       sdkOpts.mcpServers = userMcpServers;
     }
 
+    // Dynamically swap in only the skills relevant to this plan's original prompt
+    if (options.originalPrompt) {
+      await refreshSkillsForPrompt(options.originalPrompt);
+    }
+
     try {
       for await (const message of query({ prompt: executionPrompt, options: sdkOpts })) {
         if (session.abortController.signal.aborted) break;
-        yield* this.processMessage(message, session.id, sentTextHashes, sentToolIds);
+        for (const msg of this.processMessage(message, session.id, sentTextHashes, sentToolIds)) {
+          if (msg.type === 'text' && (msg as any).content) {
+            assistantTextParts.push((msg as any).content);
+          }
+          yield msg;
+        }
       }
     } catch (error) {
       logger.error(`[CodeAny ${session.id}] Execution error:`, error);
       yield { type: 'error', message: error instanceof Error ? error.message : String(error) };
     } finally {
+      // Persist execution turn to daily memory (fire-and-forget)
+      const assistantReply = assistantTextParts.join('\n').trim();
+      if (assistantReply && options.originalPrompt) {
+        appendDailyMemory(options.originalPrompt, assistantReply);
+      }
+
       this.deletePlan(options.planId);
       this.sessions.delete(session.id);
       yield { type: 'done' };

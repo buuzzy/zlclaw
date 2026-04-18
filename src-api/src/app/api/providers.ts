@@ -4,12 +4,17 @@
  * Provides REST endpoints for managing sandbox and agent providers.
  */
 
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { Hono } from 'hono';
 
 import { getAgentRegistry } from '@/core/agent/registry';
 import { getSandboxRegistry } from '@/core/sandbox/registry';
 import { getConfigLoader } from '@/config/loader';
 import { getProviderManager } from '@/shared/provider/manager';
+import { getConfigPath } from '@/shared/utils/paths';
+import { buildEndpointUrl } from '@/shared/utils/url';
 
 // ============================================================================
 // Constants
@@ -268,6 +273,42 @@ providersRoutes.post('/settings/sync', async (c) => {
     agentConfig: body.agentConfig,
   });
 
+  // Persist agentConfig to config.json so it survives restarts
+  // This ensures channel adapters (Feishu, WeChat) can load model config
+  // without waiting for the frontend to sync
+  if (body.agentConfig) {
+    try {
+      const configPath = getConfigPath();
+      let fileConfig: Record<string, unknown> = {};
+      try {
+        if (existsSync(configPath)) {
+          fileConfig = JSON.parse(readFileSync(configPath, 'utf-8'));
+        }
+      } catch {
+        // ignore parse errors, start fresh
+      }
+
+      fileConfig.agentConfig = {
+        apiKey: body.agentConfig.apiKey,
+        baseUrl: body.agentConfig.baseUrl,
+        model: body.agentConfig.model,
+        apiType: body.agentConfig.apiType,
+      };
+
+      // Also persist provider/model metadata for debugging
+      if (body.agentProvider) fileConfig.agentProvider = body.agentProvider;
+      if (body.defaultProvider) fileConfig.defaultProvider = body.defaultProvider;
+      if (body.defaultModel) fileConfig.defaultModel = body.defaultModel;
+
+      const dir = join(configPath, '..');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(configPath, JSON.stringify(fileConfig, null, 2), 'utf-8');
+      console.log('[ProvidersAPI] agentConfig persisted to config.json');
+    } catch (err) {
+      console.error('[ProvidersAPI] Failed to persist agentConfig:', err);
+    }
+  }
+
   console.log('[ProvidersAPI] Settings synced:', {
     agentProvider: body.agentProvider,
     defaultProvider: body.defaultProvider,
@@ -299,6 +340,7 @@ interface DetectBody {
   baseUrl: string;
   apiKey: string;
   model?: string;
+  apiType?: 'anthropic-messages' | 'openai-completions';
 }
 
 interface DetectSuccessResponse {
@@ -317,21 +359,13 @@ interface DetectErrorResponse {
 // type DetectResponse = DetectSuccessResponse | DetectErrorResponse;
 
 /**
- * Build API URL from base URL
- * Handles various base URL formats and ensures proper /v1/messages path
+ * Build API URL from base URL based on API type.
+ * Supports '#' suffix to disable automatic /v1 insertion.
  */
-function buildApiUrl(baseUrl: string): string {
-  const normalized = baseUrl.replace(/\/$/, '');
-
-  if (normalized.includes('/messages')) {
-    return normalized;
-  }
-
-  if (normalized.endsWith('/v1')) {
-    return `${normalized}/messages`;
-  }
-
-  return `${normalized}/v1/messages`;
+function buildApiUrl(baseUrl: string, apiType?: string): string {
+  const isOpenAI = apiType === 'openai-completions';
+  const suffix = isOpenAI ? '/chat/completions' : '/messages';
+  return buildEndpointUrl(baseUrl, suffix);
 }
 
 /**
@@ -345,14 +379,32 @@ providersRoutes.post('/detect', async (c) => {
     return c.json({ error: 'baseUrl and apiKey are required' }, 400);
   }
 
-  const apiUrl = buildApiUrl(body.baseUrl);
+  const apiType = body.apiType || 'anthropic-messages';
+  const apiUrl = buildApiUrl(body.baseUrl, apiType);
   const testModel = body.model || DEFAULT_TEST_MODEL;
 
   console.log('[ProvidersAPI] Detecting API connection:', {
     baseUrl: body.baseUrl,
+    apiType,
     apiUrl,
     model: testModel,
   });
+
+  const isOpenAI = apiType === 'openai-completions';
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (isOpenAI) {
+    headers['Authorization'] = `Bearer ${body.apiKey}`;
+  } else {
+    headers['x-api-key'] = body.apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+  }
+
+  const requestBody = isOpenAI
+    ? { model: testModel, messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }], max_tokens: 1, stream: false }
+    : { model: testModel, messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }], max_tokens: 1 };
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -360,16 +412,8 @@ providersRoutes.post('/detect', async (c) => {
   try {
     const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${body.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: testModel,
-        messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }],
-        max_tokens: 1,
-        stream: false,
-      }),
+      headers,
+      body: JSON.stringify(requestBody),
       signal: controller.signal,
     });
 

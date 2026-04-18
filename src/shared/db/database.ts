@@ -10,8 +10,8 @@ import type {
   UpdateTaskInput,
 } from './types';
 
-const SQLITE_DB_NAME = 'sqlite:workany.db';
-const IDB_NAME = 'workany';
+const SQLITE_DB_NAME = 'sqlite:htclaw.db';
+const IDB_NAME = 'htclaw';
 const IDB_VERSION = 2; // Bump version for sessions support
 
 // Check if running in Tauri environment synchronously

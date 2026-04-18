@@ -7,6 +7,7 @@ import {
   ChevronDown,
   FolderOpen,
   Github,
+  Layers,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -65,20 +66,31 @@ const openFolderInSystem = async (folderPath: string) => {
 // Skill card component
 function SkillCard({
   skill,
+  onToggle,
   onDelete,
 }: {
   skill: SkillInfo;
+  onToggle: (enabled: boolean) => void;
   onDelete: () => void;
 }) {
   const { t } = useLanguage();
   const [showMenu, setShowMenu] = useState(false);
 
   return (
-    <div className="border-border bg-background hover:border-foreground/20 relative flex flex-col rounded-xl border p-4 transition-colors">
-      <div className="mb-2">
-        <span className="text-foreground text-sm font-medium">
+    <div
+      className={cn(
+        'border-border bg-background hover:border-foreground/20 relative flex flex-col rounded-xl border p-4 transition-colors',
+        !skill.enabled && 'opacity-60'
+      )}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-foreground min-w-0 truncate text-sm font-medium">
           {skill.name}
         </span>
+        <Switch
+          checked={skill.enabled}
+          onChange={onToggle}
+        />
       </div>
 
       <p className="text-muted-foreground mb-4 line-clamp-2 flex-1 text-xs">
@@ -145,15 +157,58 @@ export function SkillsSettings({
   }>({ user: '', app: '' });
   const [defaultSkillsPath, setDefaultSkillsPath] = useState('');
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [disabledSkills, setDisabledSkills] = useState<Set<string>>(new Set());
+  const [needsRestart, setNeedsRestart] = useState(false);
 
   // Load default skills path on mount (platform-aware)
   useEffect(() => {
     getClaudeSkillsDir().then(setDefaultSkillsPath);
   }, []);
+
+  // Load disabled skills config from backend
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/skills/config`)
+      .then((r) => r.json())
+      .then((data: { disabledSkills?: string[] }) => {
+        if (Array.isArray(data.disabledSkills)) {
+          setDisabledSkills(new Set(data.disabledSkills));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const [showGitHubImport, setShowGitHubImport] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
   const [importing, setImporting] = useState(false);
   const { t } = useLanguage();
+
+  const handleToggleSkill = async (skillName: string, enabled: boolean) => {
+    const next = new Set(disabledSkills);
+    if (enabled) {
+      next.delete(skillName);
+    } else {
+      next.add(skillName);
+    }
+    setDisabledSkills(next);
+
+    setSkills((prev) =>
+      prev.map((s) =>
+        s.name === skillName ? { ...s, enabled } : s
+      )
+    );
+
+    setNeedsRestart(true);
+
+    try {
+      await fetch(`${API_BASE_URL}/skills/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: skillName, enabled }),
+      });
+    } catch (err) {
+      console.error('[Skills] Failed to toggle skill:', err);
+    }
+  };
 
   const isSkillConfigured = (skill: SkillInfo) => {
     return skill.files.length > 0;
@@ -184,7 +239,7 @@ export function SkillsSettings({
   const loadSkillsFromPath = async (skillsPath: string) => {
     setLoading(true);
     try {
-      // Get all skills directories (workany and claude)
+      // Get all skills directories (htclaw and claude)
       const dirsResponse = await fetch(`${API_BASE_URL}/files/skills-dir`);
       const dirsData = await dirsResponse.json();
 
@@ -200,22 +255,21 @@ export function SkillsSettings({
         }[]) {
           if (dir.name === 'claude') {
             dirs.user = dir.path;
-          } else if (dir.name === 'workany') {
+          } else if (dir.name === 'htclaw') {
             dirs.app = dir.path;
           }
         }
       }
       setSkillsDirs(dirs);
 
-      // Load skills from user directory only (claude)
+      // Load skills from all directories (claude + htclaw)
       if (dirsData.directories) {
         for (const dir of dirsData.directories as {
           name: string;
           path: string;
           exists: boolean;
         }[]) {
-          // Only load from user directory (claude), skip app directory (workany)
-          if (dir.name !== 'claude' || !dir.exists) continue;
+          if (!dir.exists) continue;
 
           try {
             const filesResponse = await fetch(`${API_BASE_URL}/files/readdir`, {
@@ -260,10 +314,10 @@ export function SkillsSettings({
                   allSkills.push({
                     id: `${dir.name}-${folder.name}`,
                     name: skillName,
-                    source: dir.name as 'claude' | 'workany',
+                    source: dir.name as 'claude' | 'htclaw',
                     path: folder.path,
                     files: folder.children || [],
-                    enabled: true,
+                    enabled: !disabledSkills.has(skillName),
                     description,
                   });
                 }
@@ -327,10 +381,10 @@ export function SkillsSettings({
                   allSkills.push({
                     id: `custom-${folder.name}`,
                     name: skillName,
-                    source: 'workany',
+                    source: 'htclaw',
                     path: folder.path,
                     files: folder.children || [],
-                    enabled: true,
+                    enabled: !disabledSkills.has(skillName),
                     description,
                   });
                 }
@@ -356,7 +410,7 @@ export function SkillsSettings({
 
   useEffect(() => {
     loadSkillsFromPath(settings.skillsPath);
-  }, [settings.skillsPath]);
+  }, [settings.skillsPath, disabledSkills]);
 
   // Initialize platform-aware default path
   useEffect(() => {
@@ -498,6 +552,13 @@ export function SkillsSettings({
               </div>
             </div>
 
+            {/* Restart hint */}
+            {needsRestart && (
+              <div className="mx-6 mt-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-xs text-yellow-600 dark:text-yellow-400">
+                Skills 配置已更改，重启应用后生效
+              </div>
+            )}
+
             {/* Skills Grid */}
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
               {filteredSkills.length === 0 ? (
@@ -512,6 +573,7 @@ export function SkillsSettings({
                     <SkillCard
                       key={skill.id}
                       skill={skill}
+                      onToggle={(enabled) => handleToggleSkill(skill.name, enabled)}
                       onDelete={() => handleDeleteSkill(skill.id)}
                     />
                   ))}

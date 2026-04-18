@@ -22,6 +22,22 @@ export default defineConfig(async () => ({
     },
   },
 
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-antd': ['antd', '@ant-design/icons'],
+          'vendor-echarts': ['echarts', 'echarts-for-react'],
+          'vendor-charts': ['lightweight-charts'],
+          'vendor-markdown': ['react-markdown', 'remark-gfm'],
+          'vendor-syntax': ['react-syntax-highlighter'],
+          'vendor-office': ['xlsx', 'jszip'],
+        },
+      },
+    },
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
