@@ -1,12 +1,15 @@
 /**
  * Context Usage Ring Component
  *
- * Displays a circular visual indicator of how much of the context window
- * is currently being used by the conversation history.
+ * A minimal ambient indicator of context window usage.
+ * Intentionally unobtrusive: stays near-invisible at low usage,
+ * only grows in visual weight as the context approaches its limit.
  *
- * - Shows as a thin ring with a percentage indicator
- * - Hover tooltip shows current usage in tokens and percentage
- * - Color changes based on usage level (green → yellow → red)
+ * - 20×20px ring — smaller than the send button
+ * - No center text: color + fill level communicate status silently
+ * - Opacity scales with urgency (0.25 → 1.0)
+ * - Hover tooltip shows exact token count and percentage
+ * - Color: green → yellow → orange → red
  */
 
 import { useState } from 'react';
@@ -23,13 +26,6 @@ export interface ContextUsageRingProps {
   className?: string;
 }
 
-/**
- * Get stroke color based on usage percentage
- * - 0-50%: Green (safe)
- * - 50-80%: Yellow (warning)
- * - 80-100%: Orange (critical)
- * - 100%+: Red (exceeded)
- */
 function getStrokeColor(percentage: number): string {
   if (percentage < 50) return '#10b981'; // emerald-500
   if (percentage < 80) return '#eab308'; // yellow-500
@@ -37,11 +33,12 @@ function getStrokeColor(percentage: number): string {
   return '#ef4444'; // red-500
 }
 
-function getTextColor(percentage: number): string {
-  if (percentage < 50) return '#059669'; // emerald-600
-  if (percentage < 80) return '#ca8a04'; // yellow-600
-  if (percentage < 100) return '#c2410c'; // orange-600
-  return '#dc2626'; // red-600
+/** Opacity scales up with urgency so the ring "appears" as context fills */
+function getOpacity(percentage: number): number {
+  if (percentage < 50) return 0.25;
+  if (percentage < 80) return 0.55;
+  if (percentage < 100) return 0.85;
+  return 1;
 }
 
 export function ContextUsageRing({
@@ -51,101 +48,70 @@ export function ContextUsageRing({
   className,
 }: ContextUsageRingProps) {
   const [showTooltip, setShowTooltip] = useState(false);
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
   const percentage = Math.min((currentTokens / contextLimit) * 100, 100);
-  const circumference = 2 * Math.PI * 18; // radius = 18
+  const radius = 8;
+  const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
-  const handleMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!interactive) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    setTooltipPosition({
-      x: rect.left + rect.width / 2,
-      y: rect.top - 10,
-    });
-    setShowTooltip(true);
-  };
-
-  const handleMouseLeave = () => {
-    setShowTooltip(false);
-  };
-
   const strokeColor = getStrokeColor(percentage);
-  const textColor = getTextColor(percentage);
+  const opacity = getOpacity(percentage);
 
   return (
     <div
       className={cn('relative flex items-center justify-center', className)}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onMouseEnter={() => interactive && setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+      style={{ opacity, transition: 'opacity 0.4s ease-out' }}
     >
-      {/* SVG Ring */}
-      <svg width="40" height="40" viewBox="0 0 40 40" className="drop-shadow-sm">
-        {/* Background ring (light gray) */}
+      {/* SVG Ring — 20×20px, no center text */}
+      <svg width="20" height="20" viewBox="0 0 20 20">
+        {/* Background track */}
         <circle
-          cx="20"
-          cy="20"
-          r="18"
+          cx="10"
+          cy="10"
+          r={radius}
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
-          className="text-slate-200 dark:text-slate-700"
+          strokeWidth="1.5"
+          className="text-slate-300 dark:text-slate-600"
         />
-
-        {/* Usage ring (colored progress) */}
+        {/* Progress arc */}
         <circle
-          cx="20"
-          cy="20"
-          r="18"
+          cx="10"
+          cy="10"
+          r={radius}
           fill="none"
           stroke={strokeColor}
-          strokeWidth="2"
+          strokeWidth="1.5"
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
-          style={{ 
-            transform: 'rotate(-90deg)', 
-            transformOrigin: '20px 20px',
-            transition: 'stroke-dashoffset 0.3s ease-out, stroke 0.3s ease-out'
+          style={{
+            transform: 'rotate(-90deg)',
+            transformOrigin: '10px 10px',
+            transition: 'stroke-dashoffset 0.3s ease-out, stroke 0.3s ease-out',
           }}
         />
-
-        {/* Center text showing percentage */}
-        <text
-          x="20"
-          y="24"
-          textAnchor="middle"
-          fontSize="12"
-          fontWeight="600"
-          fill={textColor}
-          style={{ pointerEvents: 'none' }}
-        >
-          {Math.round(percentage)}%
-        </text>
       </svg>
 
       {/* Tooltip */}
       {showTooltip && interactive && (
         <div
           className={cn(
-            'absolute z-50 px-3 py-2 text-xs font-medium text-white rounded-lg',
+            'absolute bottom-full mb-2 left-1/2 -translate-x-1/2',
+            'z-50 px-3 py-2 text-xs font-medium text-white rounded-lg',
             'bg-slate-900 dark:bg-slate-800 whitespace-nowrap pointer-events-none',
-            'animate-in fade-in duration-200'
+            'animate-in fade-in duration-150'
           )}
-          style={{
-            left: tooltipPosition.x,
-            top: tooltipPosition.y,
-            transform: 'translate(-50%, -100%)',
-          }}
         >
           <div className="font-semibold">
             {currentTokens.toLocaleString()} / {(contextLimit / 1000).toFixed(0)}K tokens
           </div>
-          <div className="text-slate-300">
+          <div className="text-slate-400">
             {Math.round(percentage)}% context used
           </div>
-          {/* Arrow pointer */}
+          {/* Arrow */}
           <div
             className="absolute left-1/2 -translate-x-1/2 top-full w-2 h-2 bg-slate-900 dark:bg-slate-800 rotate-45"
             style={{ marginTop: '-4px' }}

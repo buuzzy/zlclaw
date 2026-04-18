@@ -6,7 +6,6 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   ChevronDown,
   FileJson,
-  FolderOpen,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -205,7 +204,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
         }[]) {
           if (configInfo.name === 'claude') {
             dirs.user = configInfo.path;
-          } else if (configInfo.name === 'workany') {
+          } else if (configInfo.name === 'htclaw') {
             dirs.app = configInfo.path;
           }
 
@@ -235,7 +234,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
               url: hasUrl ? cfg.url : undefined,
               headers: hasUrl ? cfg.headers : undefined,
               autoExecute: true,
-              source: configInfo.name as 'workany' | 'claude',
+              source: configInfo.name as 'htclaw' | 'claude',
             });
           }
         }
@@ -340,7 +339,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
       for (const [name, config] of Object.entries(mcpServers)) {
         const cfg = config as Record<string, unknown>;
         const existingIndex = newServers.findIndex(
-          (s) => s.name === name && s.source === 'workany'
+          (s) => s.name === name && s.source === 'htclaw'
         );
 
         // Determine type: use explicit type if provided, otherwise default based on config
@@ -350,7 +349,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
         }
 
         const serverData: MCPServerUI = {
-          id: `workany-${name}`,
+          id: `htclaw-${name}`,
           name,
           type: serverType,
           enabled: true,
@@ -359,7 +358,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
           url: cfg.url as string | undefined,
           headers: cfg.headers as Record<string, string> | undefined,
           autoExecute: true,
-          source: 'workany',
+          source: 'htclaw',
         };
 
         if (existingIndex >= 0) {
@@ -451,7 +450,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
         };
       }
     } else {
-      const fullId = `workany-${configDialog.serverName}`;
+      const fullId = `htclaw-${configDialog.serverName}`;
       if (
         newServers.some(
           (s) => s.id === fullId || s.name === configDialog.serverName
@@ -477,7 +476,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
         url: isUrlType ? configDialog.url : undefined,
         headers: isUrlType && hasHeaders ? headersObj : undefined,
         autoExecute: true,
-        source: 'workany',
+        source: 'htclaw',
       });
     }
 

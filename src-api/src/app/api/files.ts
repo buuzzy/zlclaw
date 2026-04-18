@@ -312,7 +312,7 @@ files.post('/read', async (c) => {
 /**
  * Get all skills directories
  * GET /files/skills-dir
- * Returns paths for both ~/.workany/skills and ~/.claude/skills
+ * Returns paths for both ~/.htclaw/skills and ~/.claude/skills
  */
 files.get('/skills-dir', async (c) => {
   const skillsDirs = getAllSkillsDirs();
@@ -328,8 +328,8 @@ files.get('/skills-dir', async (c) => {
       }
     } catch {
       // Directory doesn't exist
-      if (dir.name === 'workany') {
-        // Try to create workany skills dir
+      if (dir.name !== 'claude') {
+        // Try to create app (htclaw) skills dir
         try {
           await fs.mkdir(dir.path, { recursive: true });
           results.push({ name: dir.name, path: dir.path, exists: true });

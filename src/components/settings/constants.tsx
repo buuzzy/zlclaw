@@ -6,6 +6,7 @@ import {
   providerDefaultModels,
 } from '@/shared/db/settings';
 import {
+  Clock,
   Cpu,
   Database,
   FolderOpen,
@@ -14,6 +15,7 @@ import {
   Server,
   Settings,
   Sparkles,
+  Brain,
   User,
 } from 'lucide-react';
 
@@ -31,6 +33,8 @@ export const categoryIcons: Record<
   mcp: Server,
   skills: Sparkles,
   connector: Plug,
+  cron: Clock,
+  memory: Brain,
   data: Database,
   about: Info,
 };

@@ -14,7 +14,6 @@ import {
   Loader2,
   MoreHorizontal,
   PanelLeft,
-  PanelLeftOpen,
   Pencil,
   Settings,
   Smartphone,
@@ -255,12 +254,12 @@ export function LeftSidebar({
                 <div className="flex size-9 items-center justify-center rounded-xl">
                   <img
                     src={ImageLogo}
-                    alt="WorkAny"
+                    alt="HT Claw"
                     className="text-primary size-9"
                   />
                 </div>
                 <span className="text-sidebar-foreground font-mono text-lg font-medium tracking-wide">
-                  WorkAny
+                  HT Claw
                 </span>
               </div>
               <button
@@ -479,9 +478,9 @@ export function LeftSidebar({
               >
                 {logoHovered ? (
                   // <PanelLeftOpen className="text-sidebar-foreground size-5" />
-                  <img src={ImageLogo} alt="WorkAny" className="size-9" />
+                  <img src={ImageLogo} alt="HT Claw" className="size-9" />
                 ) : (
-                  <img src={ImageLogo} alt="WorkAny" className="size-9" />
+                  <img src={ImageLogo} alt="HT Claw" className="size-9" />
                 )}
               </button>
             </div>

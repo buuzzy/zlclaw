@@ -2,15 +2,15 @@
  * Shared Logger Utility
  *
  * Provides file-based logging for debugging in distributed apps.
- * All logs are written to ~/.workany/logs/workany.log
+ * All logs are written to ~/.htclaw/logs/htclaw.log
  */
 
 import { appendFileSync, existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 
-const LOG_DIR = join(homedir(), '.workany', 'logs');
-const LOG_FILE = join(LOG_DIR, 'workany.log');
+const LOG_DIR = join(homedir(), '.htclaw', 'logs');
+const LOG_FILE = join(LOG_DIR, 'htclaw.log');
 
 function ensureLogDir() {
   try {

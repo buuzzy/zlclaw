@@ -130,7 +130,7 @@ export interface McpConfig {
   enabled: boolean;
   /** Whether to load MCP servers from user directory (claude config) */
   userDirEnabled: boolean;
-  /** Whether to load MCP servers from app directory (workany config) */
+  /** Whether to load MCP servers from app directory (htclaw config) */
   appDirEnabled: boolean;
   /** Custom MCP config file path (legacy support) */
   mcpConfigPath?: string;

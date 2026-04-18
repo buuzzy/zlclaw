@@ -87,7 +87,7 @@ export function DataSettings() {
       };
 
       const jsonString = JSON.stringify(exportData, null, 2);
-      const filename = `workany-backup-${new Date().toISOString().split('T')[0]}.json`;
+      const filename = `htclaw-backup-${new Date().toISOString().split('T')[0]}.json`;
 
       // Use Tauri native dialog
       const { save } = await import('@tauri-apps/plugin-dialog');

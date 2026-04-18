@@ -144,7 +144,7 @@ jobs:
         run: |
           cd src-api
           mkdir -p dist
-          bun build src/index.ts --compile --target=${{ matrix.bun_target }} --outfile dist/workany-api-${{ matrix.rust_target }}
+          bun build src/index.ts --compile --target=${{ matrix.bun_target }} --outfile dist/htclaw-api-${{ matrix.rust_target }}
 
       - name: Build API sidecar (Windows)
         if: steps.check.outputs.skip != 'true' && matrix.platform == 'windows'
@@ -152,7 +152,7 @@ jobs:
         run: |
           cd src-api
           mkdir -p dist
-          bun build src/index.ts --compile --target=${{ matrix.bun_target }} --outfile dist/workany-api-${{ matrix.rust_target }}.exe
+          bun build src/index.ts --compile --target=${{ matrix.bun_target }} --outfile dist/htclaw-api-${{ matrix.rust_target }}.exe
 
       - name: Bundle CLI tools (Unix)
         if: steps.check.outputs.skip != 'true' && matrix.platform != 'windows'
@@ -492,7 +492,7 @@ jobs:
         if: steps.check.outputs.skip != 'true' && matrix.platform == 'linux'
         uses: actions/upload-artifact@v4
         with:
-          name: WorkAny-${{ matrix.name }}
+          name: HTClaw-${{ matrix.name }}
           path: |
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/deb/*.deb
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/rpm/*.rpm
@@ -502,7 +502,7 @@ jobs:
         if: steps.check.outputs.skip != 'true' && matrix.platform == 'windows'
         uses: actions/upload-artifact@v4
         with:
-          name: WorkAny-${{ matrix.name }}
+          name: HTClaw-${{ matrix.name }}
           path: |
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/msi/*.msi
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/nsis/*.exe
@@ -512,7 +512,7 @@ jobs:
         if: steps.check.outputs.skip != 'true' && startsWith(matrix.platform, 'macos')
         uses: actions/upload-artifact@v4
         with:
-          name: WorkAny-${{ matrix.name }}
+          name: HTClaw-${{ matrix.name }}
           path: |
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/dmg/*.dmg
             src-tauri/target/${{ matrix.tauri_target }}/release/bundle/macos/*.app
@@ -562,7 +562,7 @@ jobs:
           draft: true
           generate_release_notes: true
           tag_name: v${{ steps.version.outputs.version }}
-          name: WorkAny v${{ steps.version.outputs.version }}
+          name: HT Claw v${{ steps.version.outputs.version }}
           files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

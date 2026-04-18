@@ -191,7 +191,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:workany.db", migrations)
+                .add_migrations("sqlite:htclaw.db", migrations)
                 .build(),
         );
 
@@ -208,12 +208,12 @@ pub fn run() {
             // In production, spawn the bundled API sidecar
             #[cfg(not(debug_assertions))]
             {
-                const API_PORT: u16 = 2620;
+                const API_PORT: u16 = 2026;
 
                 // Kill any existing process on the API port
                 kill_existing_api_process(API_PORT);
 
-                let sidecar_command = app.shell().sidecar("workany-api")
+                let sidecar_command = app.shell().sidecar("htclaw-api")
                     .unwrap()
                     .env("PORT", API_PORT.to_string())
                     .env("NODE_ENV", "production");
@@ -277,7 +277,7 @@ pub fn run() {
                         }
                     }
                     // Also try to kill by port as a fallback
-                    kill_existing_api_process(2620);
+                    kill_existing_api_process(2026);
                 }
                 #[cfg(debug_assertions)]
                 {

@@ -37,7 +37,7 @@ export function WorkplaceSettings({
 
   // Get the log file path using the correct separator
   const getLogFilePath = (workDir: string) => {
-    return `${workDir}${pathSep}logs${pathSep}workany.log`;
+    return `${workDir}${pathSep}logs${pathSep}htclaw.log`;
   };
 
   return (

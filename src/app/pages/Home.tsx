@@ -8,6 +8,8 @@ import {
   type Task,
 } from '@/shared/db';
 import type { MessageAttachment } from '@/shared/hooks/useAgent';
+import { useChannelSync, markChannelTaskDeleted } from '@/shared/hooks/useChannelSync';
+import { API_BASE_URL } from '@/config';
 import {
   subscribeToBackgroundTasks,
   type BackgroundTask,
@@ -18,7 +20,7 @@ import { useLanguage } from '@/shared/providers/language-provider';
 import { ArrowUpRight, Cog, FileText, FolderOpen } from 'lucide-react';
 
 import { LeftSidebar, SidebarProvider } from '@/components/layout';
-import { ChatInput, type CategoryTag, type ChatMode } from '@/components/shared/ChatInput';
+import { ChatInput, type ChatMode } from '@/components/shared/ChatInput';
 
 type CategoryKey = 'organizeFiles' | 'generateDocs' | 'automateTasks';
 
@@ -77,22 +79,37 @@ function HomeContent() {
   }, []);
 
   // Load tasks for sidebar
-  useEffect(() => {
-    async function loadTasks() {
-      try {
-        const allTasks = await getAllTasks();
-        setTasks(allTasks);
-      } catch (error) {
-        console.error('Failed to load tasks:', error);
-      }
+  const loadTasks = useCallback(async () => {
+    try {
+      const allTasks = await getAllTasks();
+      setTasks(allTasks);
+    } catch (error) {
+      console.error('Failed to load tasks:', error);
     }
-    loadTasks();
   }, []);
+
+  useEffect(() => {
+    loadTasks();
+    // Periodic refresh as safety net for channel sync
+    const refreshTimer = setInterval(loadTasks, 5000);
+    return () => clearInterval(refreshTimer);
+  }, [loadTasks]);
+
+  // Sync channel conversations (WeChat etc.) into local task list
+  useChannelSync(loadTasks);
 
   // Handle task deletion
   const handleDeleteTask = async (taskId: string) => {
     try {
+      // Mark as deleted so channel sync won't recreate it
+      markChannelTaskDeleted(taskId);
       await deleteTask(taskId);
+      // Also delete from backend channel store (prevents resurrection after restart)
+      try {
+        await fetch(`${API_BASE_URL}/channels/conversations/${taskId}`, { method: 'DELETE' });
+      } catch (error) {
+        console.warn('Failed to delete channel conversation:', error);
+      }
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
     } catch (error) {
       console.error('Failed to delete task:', error);

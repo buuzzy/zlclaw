@@ -16,3 +16,11 @@ export {
   type SkillMetadata,
   type SkillsConfig,
 } from './loader';
+
+export { registerFilesystemSkills } from './register';
+
+export {
+  loadAndCacheSkills,
+  refreshSkillsForPrompt,
+  getCachedSkillCount,
+} from './predictor';

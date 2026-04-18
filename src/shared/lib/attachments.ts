@@ -4,7 +4,7 @@
  * Stores attachment files in the session folder instead of database
  * to avoid bloating the database with large binary data.
  *
- * Structure: ~/.workany/sessions/{sessionId}/attachments/{filename}
+ * Structure: ~/.htclaw/sessions/{sessionId}/attachments/{filename}
  */
 
 import type { MessageAttachment } from '@/shared/hooks/useAgent';

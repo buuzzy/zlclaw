@@ -12,6 +12,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { AgentMessage, ConversationMessage } from '@/core/agent/types';
 
 import { createLogger } from '@/shared/utils/logger';
+import { buildEndpointUrl, stripHashSuffix } from '@/shared/utils/url';
 
 const logger = createLogger('ChatService');
 
@@ -67,13 +68,7 @@ async function* runOpenAICompatibleChat(
   // Most proxies support /v1/chat/completions
   let endpoint: string;
   if (baseURL) {
-    const base = baseURL.replace(/\/+$/, '');
-    // If already ends with /v1, just append /chat/completions
-    if (base.endsWith('/v1')) {
-      endpoint = `${base}/chat/completions`;
-    } else {
-      endpoint = `${base}/v1/chat/completions`;
-    }
+    endpoint = buildEndpointUrl(baseURL, '/chat/completions');
   } else {
     endpoint = 'https://api.openai.com/v1/chat/completions';
   }
@@ -150,10 +145,7 @@ async function openAICompatibleCreate(
 ): Promise<string> {
   let endpoint: string;
   if (baseURL) {
-    const base = baseURL.replace(/\/+$/, '');
-    endpoint = base.endsWith('/v1')
-      ? `${base}/chat/completions`
-      : `${base}/v1/chat/completions`;
+    endpoint = buildEndpointUrl(baseURL, '/chat/completions');
   } else {
     endpoint = 'https://api.openai.com/v1/chat/completions';
   }
@@ -262,7 +254,7 @@ export async function* runChat(
   }
 
   // Anthropic models: use Anthropic SDK
-  const client = new Anthropic({ apiKey, baseURL });
+  const client = new Anthropic({ apiKey, baseURL: baseURL ? stripHashSuffix(baseURL) : undefined });
 
   try {
     const requestParams: Record<string, unknown> = {
@@ -351,7 +343,7 @@ export async function generateTitle(
       );
     } else {
       // Anthropic: native SDK
-      const client = new Anthropic({ apiKey, baseURL });
+      const client = new Anthropic({ apiKey, baseURL: baseURL ? stripHashSuffix(baseURL) : undefined });
       const requestParams: Record<string, unknown> = {
         model,
         max_tokens: 50,

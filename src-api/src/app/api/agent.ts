@@ -12,6 +12,7 @@ import {
 } from '@/shared/services/agent';
 import { generateTitle, runChat } from '@/shared/services/chat';
 import type { AgentRequest } from '@/shared/types/agent';
+import { matchSlashCommand, executeSlashCommand } from '@/core/channel/slash-commands';
 
 const agent = new Hono();
 
@@ -198,14 +199,98 @@ agent.post('/', async (c) => {
     console.log('[AgentAPI] No images in request');
   }
 
-  if (!body.prompt) {
+  // Allow empty prompt when images are attached
+  if (!body.prompt && (!body.images || body.images.length === 0)) {
     return c.json({ error: 'prompt is required' }, 400);
+  }
+
+  const prompt = body.prompt || '请分析这张图片';
+
+  // Slash command interception (unified with channel layer)
+  const slashCmd = matchSlashCommand(prompt);
+  if (slashCmd) {
+    // /compact uses streaming SSE for progress updates
+    if (slashCmd.name === 'compact') {
+      const encoder = new TextEncoder();
+      const readable = new ReadableStream({
+        async start(controller) {
+          const send = (msg: Record<string, unknown>) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(msg)}\n\n`));
+          };
+          try {
+            const conv = body.conversation || [];
+            const convTurns = Math.floor(conv.length / 2);
+            if (convTurns < 3) {
+              send({ type: 'text', content: `⚠️ 当前对话仅 ${convTurns} 轮，无需压缩（至少需要 3 轮）。` });
+            } else {
+              const { manualCompact } = await import('@/shared/context/assembler');
+              const taskId = body.taskId || 'desktop';
+              const result = await manualCompact(taskId, conv, (progress) => {
+                send({ type: 'text', content: progress });
+              });
+              if (result.ok) {
+                const reduction = result.tokensBefore > 0
+                  ? Math.round((1 - result.tokensAfter / result.tokensBefore) * 100)
+                  : 0;
+                send({ type: 'text', content: `✅ 上下文已压缩（非破坏性，原始消息保留）\n\n📊 Token：${result.tokensBefore.toLocaleString()} → ${result.tokensAfter.toLocaleString()}（减少 ${reduction}%）\n\n${result.summary.slice(0, 300)}${result.summary.length > 300 ? '...' : ''}` });
+              } else {
+                send({ type: 'text', content: '⚠️ 压缩失败，请稍后重试。' });
+              }
+            }
+          } catch (err) {
+            send({ type: 'text', content: '⚠️ 压缩失败，请稍后重试。' });
+          }
+          send({ type: 'done' });
+          controller.close();
+        },
+      });
+      return new Response(readable, { headers: SSE_HEADERS });
+    }
+
+    // /new and /reset: return action signal for frontend to handle
+    if (slashCmd.name === 'new' || slashCmd.name === 'reset') {
+      // Clear compaction store for this task
+      try {
+        const { deleteCompaction } = await import('@/shared/context/compaction-store');
+        if (body.taskId) deleteCompaction(body.taskId);
+      } catch { /* ignore */ }
+
+      const encoder = new TextEncoder();
+      const readable = new ReadableStream({
+        start(controller) {
+          const send = (msg: Record<string, unknown>) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(msg)}\n\n`));
+          send({ type: 'text', content: slashCmd.name === 'new'
+            ? '✅ 已开启新对话。之前的上下文已清除。'
+            : '✅ 已重置会话。上下文和短期记忆已清除。' });
+          send({ type: 'session_action', action: slashCmd.name });
+          send({ type: 'done' });
+          controller.close();
+        },
+      });
+      return new Response(readable, { headers: SSE_HEADERS });
+    }
+
+    // Other slash commands: single response
+    const result = await executeSlashCommand(slashCmd, {
+      taskId: body.taskId,
+      modelConfig: body.modelConfig,
+      conversation: body.conversation,
+    });
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text', content: result })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));
+        controller.close();
+      },
+    });
+    return new Response(readable, { headers: SSE_HEADERS });
   }
 
   const session = createSession();
   const readable = createSSEStream(
     runAgent(
-      body.prompt,
+      prompt,
       session,
       body.conversation,
       body.workDir,

@@ -21,6 +21,17 @@ import { getClaudeSkillsDir, getWorkanySkillsDir } from '@/config/constants';
 export interface SkillMetadata {
   name: string;
   description: string;
+  /**
+   * Compact description (~60 chars) used as the SDK skill description.
+   * If present, this is what gets injected into the model context each round.
+   * Falls back to `description` if absent.
+   */
+  promptDescription?: string;
+  /**
+   * Comma-separated trigger keywords used for intent prediction.
+   * Example: "股价,行情,涨跌,现价,K线,均线"
+   */
+  whenToUse?: string;
   license?: string;
   author?: string;
   version?: string;
@@ -81,6 +92,12 @@ function parseSkillFrontmatter(content: string): SkillMetadata | null {
         break;
       case 'description':
         metadata.description = value;
+        break;
+      case 'promptDescription':
+        metadata.promptDescription = value;
+        break;
+      case 'whenToUse':
+        metadata.whenToUse = value;
         break;
       case 'license':
         metadata.license = value;
@@ -222,15 +239,25 @@ export function findSkill(skills: LoadedSkill[], name: string): LoadedSkill | un
  * Get the path to bundled built-in skills in the project resources
  */
 function getBuiltinSkillsSourceDir(): string {
-  // Resolve relative to this file: src/shared/skills/loader.ts -> resources/skills/
-  const thisDir = dirname(fileURLToPath(import.meta.url));
+  // In pkg binary, import.meta.url is undefined and __dirname points to /snapshot/dist/
+  // In dev (tsx), both work normally
+  let thisDir: string;
+  try {
+    thisDir = dirname(fileURLToPath(import.meta.url));
+  } catch {
+    thisDir = __dirname || process.cwd();
+  }
+
   // In dev: src-api/src/shared/skills/ -> src-api/resources/skills/
-  // In prod: dist/shared/skills/ -> resources/skills/
   const devPath = join(thisDir, '..', '..', '..', 'resources', 'skills');
   if (existsSync(devPath)) return devPath;
+  // In tsc build: dist/shared/skills/ -> resources/skills/
   const prodPath = join(thisDir, '..', '..', 'resources', 'skills');
   if (existsSync(prodPath)) return prodPath;
-  return devPath; // fallback
+  // In pkg binary: use process.cwd() as base
+  const pkgPath = join(process.cwd(), 'resources', 'skills');
+  if (existsSync(pkgPath)) return pkgPath;
+  return devPath;
 }
 
 /**
@@ -251,7 +278,7 @@ async function copyDir(src: string, dest: string): Promise<void> {
 }
 
 /**
- * Install built-in skills from project resources to ~/.workany/skills/
+ * Install built-in skills from project resources to ~/.htclaw/skills/
  * Only copies if the destination doesn't exist or is outdated.
  */
 export async function installBuiltinSkills(): Promise<void> {
@@ -305,7 +332,7 @@ export async function installBuiltinSkills(): Promise<void> {
 }
 
 /**
- * Load skills from all directories (both ~/.claude/skills/ and ~/.workany/skills/)
+ * Load skills from all directories (both ~/.claude/skills/ and ~/.htclaw/skills/)
  */
 export async function loadAllSkills(
   skillsConfig?: SkillsConfig

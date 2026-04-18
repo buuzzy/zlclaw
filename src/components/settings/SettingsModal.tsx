@@ -20,9 +20,12 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { categoryIcons } from './constants';
 import { AboutSettings } from './tabs/AboutSettings';
 import { AccountSettings } from './tabs/AccountSettings';
+import { ConnectorSettings } from './tabs/ConnectorSettings';
+import { CronSettings } from './tabs/CronSettings';
 import { DataSettings } from './tabs/DataSettings';
 import { GeneralSettings } from './tabs/GeneralSettings';
 import { MCPSettings } from './tabs/MCPSettings';
+import { MemorySettings } from './tabs/MemorySettings';
 import { ModelSettings } from './tabs/ModelSettings';
 import { SkillsSettings } from './tabs/SkillsSettings';
 import { WorkplaceSettings } from './tabs/WorkplaceSettings';
@@ -65,6 +68,9 @@ export function SettingsModal({
     'model',
     'mcp',
     'skills',
+    'connector',
+    'cron',
+    'memory',
     'data',
     'about',
   ];
@@ -113,9 +119,9 @@ export function SettingsModal({
           <div className="border-border bg-muted/30 flex w-56 flex-col border-r">
             {/* Logo Header */}
             <div className="border-border flex items-center gap-2.5 border-b px-4 py-4">
-              <img src={ImageLogo} alt="WorkAny" className="size-7" />
+              <img src={ImageLogo} alt="HT Claw" className="size-7" />
               <span className="text-foreground text-base font-semibold">
-                WorkAny
+                HT Claw
               </span>
             </div>
 
@@ -197,6 +203,12 @@ export function SettingsModal({
                   onSettingsChange={handleSettingsChange}
                 />
               )}
+
+              {activeCategory === 'connector' && <ConnectorSettings />}
+
+              {activeCategory === 'cron' && <CronSettings />}
+
+              {activeCategory === 'memory' && <MemorySettings />}
 
               {activeCategory === 'data' && <DataSettings />}
 

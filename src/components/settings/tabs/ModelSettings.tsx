@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { API_BASE_URL } from '@/config';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
+  Brain,
   Check,
   ExternalLink,
+  Loader2,
   MoreHorizontal,
   Plus,
   RefreshCw,
@@ -18,27 +20,11 @@ import {
 
 import { Switch } from '../components/Switch';
 import {
-  customProviderModels,
   defaultProviderIds,
   providerApiKeyUrls,
-  providerDefaultModels,
   providerIcons,
 } from '../constants';
 import type { AIProvider, SettingsTabProps } from '../types';
-
-// Get suggested models for a provider
-function getSuggestedModels(provider: AIProvider): string[] {
-  if (providerDefaultModels[provider.id]) {
-    return providerDefaultModels[provider.id];
-  }
-  const providerNameLower = provider.name.toLowerCase();
-  for (const [key, models] of Object.entries(customProviderModels)) {
-    if (providerNameLower.includes(key.toLowerCase())) {
-      return models;
-    }
-  }
-  return providerDefaultModels.default || [];
-}
 
 // Helper function to open external URLs
 const openExternalUrl = async (url: string) => {
@@ -50,6 +36,241 @@ const openExternalUrl = async (url: string) => {
 };
 
 type MainTab = 'providers' | 'settings';
+
+// ---------------------------------------------------------------------------
+// Embedding Config Section
+// ---------------------------------------------------------------------------
+
+interface EmbeddingStatus {
+  configured: boolean;
+  indexed: boolean;
+  chunkCount: number;
+  lastIndexedAt: string | null;
+  model: string | null;
+  sources: string[];
+  indexing: boolean;
+}
+
+interface EmbeddingConfigData {
+  configured: boolean;
+  provider?: string;
+  baseUrl?: string;
+  model?: string;
+  apiKeyMasked?: string | null;
+}
+
+function EmbeddingConfigSection() {
+  const [baseUrl, setBaseUrl] = useState('https://api.siliconflow.cn');
+  const [apiKey, setApiKey] = useState('');
+  const [model, setModel] = useState('BAAI/bge-large-zh-v1.5');
+  const [status, setStatus] = useState<EmbeddingStatus | null>(null);
+  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState('');
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [indexLoading, setIndexLoading] = useState(false);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/memory/status`);
+      const data = await res.json();
+      setStatus(data);
+    } catch { /* ignore */ }
+  }, []);
+
+  const fetchConfig = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/memory/config`);
+      const data: EmbeddingConfigData = await res.json();
+      if (data.configured) {
+        if (data.baseUrl) setBaseUrl(data.baseUrl);
+        if (data.model) setModel(data.model);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+    fetchConfig();
+  }, [fetchStatus, fetchConfig]);
+
+  const handleTest = async () => {
+    if (!baseUrl || !apiKey) return;
+    setTestStatus('loading');
+    setTestMessage('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/memory/config/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseUrl, apiKey, model }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setTestStatus('success');
+        setTestMessage(data.message);
+      } else {
+        setTestStatus('error');
+        setTestMessage(data.error || '连接失败');
+      }
+    } catch (err) {
+      setTestStatus('error');
+      setTestMessage(err instanceof Error ? err.message : '网络错误');
+    }
+    setTimeout(() => setTestStatus('idle'), 4000);
+  };
+
+  const handleSave = async () => {
+    if (!baseUrl || !apiKey) return;
+    setSaveLoading(true);
+    try {
+      await fetch(`${API_BASE_URL}/memory/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseUrl, apiKey, model }),
+      });
+      setApiKey('');
+      await fetchConfig();
+      await fetchStatus();
+    } catch { /* ignore */ }
+    setSaveLoading(false);
+  };
+
+  const handleReindex = async () => {
+    setIndexLoading(true);
+    try {
+      await fetch(`${API_BASE_URL}/memory/index`, { method: 'POST' });
+      await fetchStatus();
+    } catch { /* ignore */ }
+    setIndexLoading(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="border-border border-t pt-4">
+        <h4 className="text-foreground flex items-center gap-2 text-sm font-medium">
+          <Brain className="size-4" />
+          记忆语义检索 (Embedding)
+        </h4>
+        <p className="text-muted-foreground mt-1 text-xs">
+          配置 Embedding API 后，记忆将通过向量语义检索注入对话，而非全量注入。支持所有 OpenAI 兼容接口。
+        </p>
+      </div>
+
+      {/* Status badge */}
+      {status && (
+        <div className="border-border bg-muted/30 flex items-center gap-3 rounded-lg border p-3">
+          <div className={cn(
+            'size-2 rounded-full',
+            status.configured && status.indexed ? 'bg-emerald-500' :
+            status.configured ? 'bg-amber-500' : 'bg-zinc-400'
+          )} />
+          <div className="flex-1 text-xs">
+            {status.configured && status.indexed ? (
+              <span className="text-foreground">
+                已就绪 · {status.chunkCount} 个记忆片段 · 模型: {status.model}
+              </span>
+            ) : status.configured ? (
+              <span className="text-amber-600 dark:text-amber-400">
+                已配置，尚未建立索引
+              </span>
+            ) : (
+              <span className="text-muted-foreground">
+                未配置 — 当前使用全量记忆注入模式
+              </span>
+            )}
+          </div>
+          {status.configured && (
+            <button
+              onClick={handleReindex}
+              disabled={indexLoading || status.indexing}
+              className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs disabled:opacity-50"
+            >
+              <RefreshCw className={cn('size-3', (indexLoading || status.indexing) && 'animate-spin')} />
+              {indexLoading || status.indexing ? '索引中...' : '重建索引'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Config form */}
+      <div className="space-y-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-foreground text-xs font-medium">API Base URL</label>
+          <input
+            type="text"
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder="https://api.siliconflow.cn（无需加 /v1/embeddings）"
+            className="border-input bg-background text-foreground focus:ring-ring h-9 w-full max-w-md rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-foreground text-xs font-medium">API Key</label>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={status?.configured ? '已保存 (输入新值可覆盖)' : 'sk-...'}
+            className="border-input bg-background text-foreground focus:ring-ring h-9 w-full max-w-md rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-foreground text-xs font-medium">Model</label>
+          <input
+            type="text"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="BAAI/bge-large-zh-v1.5"
+            className="border-input bg-background text-foreground focus:ring-ring h-9 w-full max-w-md rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            onClick={handleTest}
+            disabled={testStatus === 'loading' || !apiKey}
+            className={cn(
+              'flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors disabled:opacity-50',
+              testStatus === 'success'
+                ? 'border-emerald-500 bg-emerald-500 text-white'
+                : testStatus === 'error'
+                  ? 'border-red-500 bg-red-500 text-white'
+                  : 'border-border text-foreground hover:bg-accent'
+            )}
+          >
+            {testStatus === 'loading' ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : testStatus === 'success' ? (
+              <Check className="size-3" />
+            ) : (
+              <RefreshCw className="size-3" />
+            )}
+            {testStatus === 'loading' ? '测试中...' : testStatus === 'success' ? '连接成功' : testStatus === 'error' ? '失败' : '测试连接'}
+          </button>
+
+          <button
+            onClick={handleSave}
+            disabled={saveLoading || !apiKey}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-9 items-center gap-1.5 rounded-lg px-4 text-xs font-medium transition-colors disabled:opacity-50"
+          >
+            {saveLoading ? <Loader2 className="size-3 animate-spin" /> : null}
+            保存配置
+          </button>
+        </div>
+
+        {testMessage && (
+          <p className={cn(
+            'text-xs',
+            testStatus === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+          )}>
+            {testMessage}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // Provider Card component
 function ProviderCard({
@@ -212,6 +433,7 @@ export function ModelSettings({
           baseUrl: newProvider.baseUrl,
           apiKey: newProvider.apiKey,
           model: testModel,
+          apiType: newProvider.apiType,
         }),
       });
 
@@ -251,13 +473,6 @@ export function ModelSettings({
       return;
     }
 
-    if (!selectedProvider?.defaultModel) {
-      setEditDetectStatus('error');
-      setEditDetectMessage(t.settings.selectDefaultModel);
-      setTimeout(() => setEditDetectStatus('idle'), 3000);
-      return;
-    }
-
     setEditDetectStatus('loading');
     setEditDetectMessage('');
 
@@ -274,6 +489,7 @@ export function ModelSettings({
           baseUrl: selectedProvider.baseUrl,
           apiKey: selectedProvider.apiKey,
           model: testModel,
+          apiType: selectedProvider.apiType || 'openai-completions',
         }),
       });
 
@@ -359,9 +575,13 @@ export function ModelSettings({
       apiType: newProvider.apiType,
     };
 
+    const isFirstCustomProvider = !settings.defaultProvider || settings.defaultProvider === 'default';
     onSettingsChange({
       ...settings,
       providers: [...settings.providers, provider],
+      ...(isFirstCustomProvider
+        ? { defaultProvider: id, defaultModel: defaultModel }
+        : {}),
     });
 
     setNewProvider({ name: '', baseUrl: '', apiKey: '', models: '', apiType: 'openai-completions' });
@@ -559,20 +779,23 @@ export function ModelSettings({
                   <input
                     type="number"
                     min="0"
-                    max="10000"
-                    step="100"
+                    max="32000"
+                    step="1000"
                     value={settings.maxHistoryTokens}
                     onChange={(e) => {
                       const value = parseInt(e.target.value) || 0;
                       onSettingsChange({
                         ...settings,
-                        maxHistoryTokens: Math.max(0, Math.min(10000, value)),
+                        maxHistoryTokens: Math.max(0, Math.min(32000, value)),
                       });
                     }}
                     className="border-input bg-background text-foreground focus:ring-ring h-10 w-full max-w-md rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                   />
                 </div>
               </div>
+
+              {/* Embedding / Memory Search */}
+              <EmbeddingConfigSection />
             </div>
           )}
         </div>
@@ -651,6 +874,9 @@ export function ModelSettings({
                     placeholder="https://api.example.com/v1"
                     className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                   />
+                  <p className="text-muted-foreground text-xs">
+                    末尾加 <code className="bg-muted rounded px-1">#</code> 可禁用自动附加的 API 版本路径（如 <code className="bg-muted rounded px-1">https://example.com/api#</code> → <code className="bg-muted rounded px-1">.../api/chat/completions</code>）
+                  </p>
                 </div>
 
                 <div className="flex flex-col gap-2">
