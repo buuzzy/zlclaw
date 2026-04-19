@@ -24,6 +24,7 @@ import {
 } from '@/shared/hooks/useAgent';
 import { useChannelSync } from '@/shared/hooks/useChannelSync';
 import { useVitePreview } from '@/shared/hooks/useVitePreview';
+import { extractArtifacts } from '@/shared/lib/artifactParser';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import {
@@ -42,16 +43,8 @@ import {
   hasValidSearchResults,
   type Artifact,
 } from '@/components/artifacts';
-import { ArtifactRenderer } from '@/components/htui/ArtifactRenderer';
-import { extractArtifacts } from '@/shared/lib/artifactParser';
 import { Logo } from '@/components/common/logo';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { ArtifactRenderer } from '@/components/htui/ArtifactRenderer';
 import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
 import { SettingsModal } from '@/components/settings';
 import { ChatInput, type ChatMode } from '@/components/shared/ChatInput';
@@ -60,6 +53,13 @@ import { PlanApproval } from '@/components/task/PlanApproval';
 import { QuestionInput } from '@/components/task/QuestionInput';
 import { RightSidebar } from '@/components/task/RightSidebar';
 import { ToolExecutionItem } from '@/components/task/ToolExecutionItem';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface LocationState {
   prompt?: string;
@@ -566,8 +566,7 @@ function TaskDetailContent() {
           dbFiles.forEach((file: LibraryFile) => {
             // Skip websearch - we extract these from messages with full output content
             // Check both type and path pattern (search:// is used for WebSearch results)
-            if (file.path?.startsWith('search://'))
-              return;
+            if (file.path?.startsWith('search://')) return;
             // Skip if we already have this file from Write tool
             if (file.path && !seenPaths.has(file.path)) {
               seenPaths.add(file.path);
@@ -696,9 +695,15 @@ function TaskDetailContent() {
   useEffect(() => {
     if (generatedTitle && taskId) {
       // Update current task state
-      setTask((prev) => prev && prev.id === taskId ? { ...prev, prompt: generatedTitle } : prev);
+      setTask((prev) =>
+        prev && prev.id === taskId ? { ...prev, prompt: generatedTitle } : prev
+      );
       // Update sidebar task list
-      setAllTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, prompt: generatedTitle } : t));
+      setAllTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId ? { ...t, prompt: generatedTitle } : t
+        )
+      );
     }
   }, [generatedTitle, taskId]);
 
@@ -822,7 +827,13 @@ function TaskDetailContent() {
         const sessionInfo = initialSessionId
           ? { sessionId: initialSessionId, taskIndex: initialTaskIndex }
           : undefined;
-        await runAgent(initialPrompt, taskId, sessionInfo, initialAttachments, initialMode);
+        await runAgent(
+          initialPrompt,
+          taskId,
+          sessionInfo,
+          initialAttachments,
+          initialMode
+        );
         const newTask = await loadTask(taskId);
         setTask(newTask);
       } else {
@@ -837,7 +848,11 @@ function TaskDetailContent() {
 
   // Handle reply submission from ChatInput
   const handleReply = useCallback(
-    async (text: string, messageAttachments?: MessageAttachment[], mode?: ChatMode) => {
+    async (
+      text: string,
+      messageAttachments?: MessageAttachment[],
+      mode?: ChatMode
+    ) => {
       if (
         (text.trim() ||
           (messageAttachments && messageAttachments.length > 0)) &&
@@ -1628,6 +1643,7 @@ function MessageItem({
     return (
       <div className="flex min-w-0 flex-col gap-3">
         <Logo />
+        <ArtifactRenderer artifacts={extractedArtifacts} />
         {cleanText.trim() && (
           <div className="prose prose-sm text-foreground max-w-none min-w-0 flex-1 overflow-hidden">
             <ReactMarkdown
@@ -1695,9 +1711,7 @@ function MessageItem({
                 ),
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 td: ({ children }: any) => (
-                  <td className="border-border border px-3 py-2">
-                    {children}
-                  </td>
+                  <td className="border-border border px-3 py-2">{children}</td>
                 ),
               }}
             >
@@ -1705,7 +1719,6 @@ function MessageItem({
             </ReactMarkdown>
           </div>
         )}
-        <ArtifactRenderer artifacts={extractedArtifacts} />
       </div>
     );
   }
@@ -1840,7 +1853,9 @@ function ErrorMessage({ message }: { message: string }) {
     const errorMessage = (
       t.common.errors.customApiError ||
       'Custom API ({baseUrl}) may not be compatible with Claude Code SDK. Please check the API configuration or try a different provider. Log file: {logPath}'
-    ).replace('{baseUrl}', baseUrl).replace('{logPath}', logPath);
+    )
+      .replace('{baseUrl}', baseUrl)
+      .replace('{logPath}', logPath);
 
     return (
       <div className="flex items-start gap-3 py-2">

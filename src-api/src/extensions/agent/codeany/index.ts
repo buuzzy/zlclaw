@@ -178,6 +178,8 @@ const ALLOWED_TOOLS = [
   'Task',
   'LSP',
   'TodoWrite',
+  'Agent',       // 多 Agent 并行协作（AgentTool）
+  'SendMessage', // 跨 Agent 消息传递
 ];
 
 // ============================================================================

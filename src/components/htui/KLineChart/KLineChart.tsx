@@ -1,11 +1,17 @@
-import { useEffect, useRef } from "react";
-import { createChart, CandlestickSeries, LineSeries, type IChartApi } from "lightweight-charts";
-import type { KLineChartData, KLineDataPoint } from "@/shared/types/artifact";
-import "./KLineChart.css";
+import { useEffect, useRef } from 'react';
+import type { KLineChartData, KLineDataPoint } from '@/shared/types/artifact';
+import {
+  CandlestickSeries,
+  createChart,
+  LineSeries,
+  type IChartApi,
+} from 'lightweight-charts';
+
+import './KLineChart.css';
 
 function calculateMA(
   points: KLineDataPoint[],
-  period: number,
+  period: number
 ): { time: string; value: number }[] {
   const result: { time: string; value: number }[] = [];
   for (let i = period - 1; i < points.length; i++) {
@@ -17,15 +23,15 @@ function calculateMA(
 }
 
 const MA_CONFIG = [
-  { period: 5, color: "#F59E0B", label: "MA5" },
-  { period: 10, color: "#06B6D4", label: "MA10" },
-  { period: 20, color: "#A855F7", label: "MA20" },
+  { period: 5, color: '#F59E0B', label: 'MA5' },
+  { period: 10, color: '#06B6D4', label: 'MA10' },
+  { period: 20, color: '#A855F7', label: 'MA20' },
 ] as const;
 
 const KTYPE_LABELS: Record<string, string> = {
-  day: "日K",
-  week: "周K",
-  month: "月K",
+  day: '日K',
+  week: '周K',
+  month: '月K',
 };
 
 interface KLineChartProps {
@@ -43,25 +49,25 @@ function KLineChart({ data }: KLineChartProps) {
       width: containerRef.current.clientWidth,
       height: 320,
       layout: {
-        background: { color: "#1e1e1e" },
-        textColor: "#a1a1aa",
+        background: { color: '#1e1e1e' },
+        textColor: '#a1a1aa',
       },
       grid: {
-        vertLines: { color: "#27272a" },
-        horzLines: { color: "#27272a" },
+        vertLines: { color: '#27272a' },
+        horzLines: { color: '#27272a' },
       },
       crosshair: { mode: 0 },
-      rightPriceScale: { borderColor: "#27272a" },
-      timeScale: { borderColor: "#27272a", timeVisible: false },
+      rightPriceScale: { borderColor: '#27272a' },
+      timeScale: { borderColor: '#27272a', timeVisible: false },
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#10B981",
-      downColor: "#EF4444",
-      borderUpColor: "#10B981",
-      borderDownColor: "#EF4444",
-      wickUpColor: "#10B981",
-      wickDownColor: "#EF4444",
+      upColor: '#10B981',
+      downColor: '#EF4444',
+      borderUpColor: '#10B981',
+      borderDownColor: '#EF4444',
+      wickUpColor: '#10B981',
+      wickDownColor: '#EF4444',
     });
 
     candleSeries.setData(
@@ -71,7 +77,7 @@ function KLineChart({ data }: KLineChartProps) {
         high: d.high,
         low: d.low,
         close: d.close,
-      })),
+      }))
     );
 
     for (const ma of MA_CONFIG) {
@@ -111,10 +117,10 @@ function KLineChart({ data }: KLineChartProps) {
           <span className="kline-name">{data.name}</span>
         </div>
         <div className="kline-type-switcher">
-          {(["day", "week", "month"] as const).map((t) => (
+          {(['day', 'week', 'month'] as const).map((t) => (
             <button
               key={t}
-              className={`ktype-btn ${data.ktype === t ? "active" : ""}`}
+              className={`ktype-btn ${data.ktype === t ? 'active' : ''}`}
             >
               {KTYPE_LABELS[t]}
             </button>

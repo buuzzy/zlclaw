@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '@/config';
 import {
   createSession,
   deleteTask,
@@ -8,8 +9,10 @@ import {
   type Task,
 } from '@/shared/db';
 import type { MessageAttachment } from '@/shared/hooks/useAgent';
-import { useChannelSync, markChannelTaskDeleted } from '@/shared/hooks/useChannelSync';
-import { API_BASE_URL } from '@/config';
+import {
+  markChannelTaskDeleted,
+  useChannelSync,
+} from '@/shared/hooks/useChannelSync';
 import {
   subscribeToBackgroundTasks,
   type BackgroundTask,
@@ -90,9 +93,6 @@ function HomeContent() {
 
   useEffect(() => {
     loadTasks();
-    // Periodic refresh as safety net for channel sync
-    const refreshTimer = setInterval(loadTasks, 5000);
-    return () => clearInterval(refreshTimer);
   }, [loadTasks]);
 
   // Sync channel conversations (WeChat etc.) into local task list
@@ -106,7 +106,9 @@ function HomeContent() {
       await deleteTask(taskId);
       // Also delete from backend channel store (prevents resurrection after restart)
       try {
-        await fetch(`${API_BASE_URL}/channels/conversations/${taskId}`, { method: 'DELETE' });
+        await fetch(`${API_BASE_URL}/channels/conversations/${taskId}`, {
+          method: 'DELETE',
+        });
       } catch (error) {
         console.warn('Failed to delete channel conversation:', error);
       }
@@ -165,9 +167,7 @@ function HomeContent() {
   };
 
   const categories = t.home.examplePrompts.categories;
-  const activeCategoryData = activeCategory
-    ? categories[activeCategory]
-    : null;
+  const activeCategoryData = activeCategory ? categories[activeCategory] : null;
 
   return (
     <div className="bg-sidebar flex h-screen overflow-hidden">

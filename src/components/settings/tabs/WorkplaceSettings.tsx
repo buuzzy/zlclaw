@@ -61,7 +61,9 @@ export function WorkplaceSettings({
             {settings.workDir || defaultPaths.workDir || 'Loading...'}
           </div>
           <button
-            onClick={() => openFolderInSystem(settings.workDir || defaultPaths.workDir)}
+            onClick={() =>
+              openFolderInSystem(settings.workDir || defaultPaths.workDir)
+            }
             className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
             title={t.settings.skillsOpenFolder}
           >
@@ -86,7 +88,11 @@ export function WorkplaceSettings({
             {getLogFilePath(settings.workDir || defaultPaths.workDir)}
           </div>
           <button
-            onClick={() => openFolderInSystem(getLogFilePath(settings.workDir || defaultPaths.workDir))}
+            onClick={() =>
+              openFolderInSystem(
+                getLogFilePath(settings.workDir || defaultPaths.workDir)
+              )
+            }
             className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
             title={t.settings.logFileOpen}
           >

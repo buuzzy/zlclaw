@@ -1,8 +1,9 @@
-import { useMemo } from "react";
-import { Table, Typography } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import type { DataTableData } from "@/shared/types/artifact";
-import "./DataTable.css";
+import { useMemo } from 'react';
+import type { DataTableData } from '@/shared/types/artifact';
+import { Table, Typography } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+
+import './DataTable.css';
 
 const { Title } = Typography;
 
@@ -17,14 +18,14 @@ function DataTable({ data }: DataTableProps) {
         title: col.label,
         dataIndex: col.key,
         key: col.key,
-        render: (val: unknown) => (val != null ? String(val) : "—"),
+        render: (val: unknown) => (val != null ? String(val) : '—'),
       })),
-    [data.columns],
+    [data.columns]
   );
 
   const dataSource = useMemo(
     () => data.rows.map((row, i) => ({ ...row, _key: i })),
-    [data.rows],
+    [data.rows]
   );
 
   return (
@@ -39,8 +40,10 @@ function DataTable({ data }: DataTableProps) {
         dataSource={dataSource}
         rowKey="_key"
         size="small"
-        pagination={dataSource.length > 10 ? { pageSize: 10, size: "small" } : false}
-        scroll={{ x: "max-content" }}
+        pagination={
+          dataSource.length > 10 ? { pageSize: 10, size: 'small' } : false
+        }
+        scroll={{ x: 'max-content' }}
       />
     </div>
   );

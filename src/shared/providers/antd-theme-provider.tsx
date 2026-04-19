@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ConfigProvider, theme as antdTheme } from 'antd';
+import { theme as antdTheme, ConfigProvider } from 'antd';
 
 import { useTheme } from './theme-provider';
 
@@ -18,7 +18,9 @@ export function AntdThemeProvider({ children }: { children: ReactNode }) {
   return (
     <ConfigProvider
       theme={{
-        algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        algorithm: isDark
+          ? antdTheme.darkAlgorithm
+          : antdTheme.defaultAlgorithm,
         token: {
           ...FINANCE_TOKENS,
           colorBgContainer: isDark ? '#1e1e1e' : '#ffffff',

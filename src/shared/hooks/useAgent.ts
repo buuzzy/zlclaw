@@ -62,40 +62,153 @@ function isFastChatQuery(prompt: string): boolean {
   // Financial queries ALWAYS need the Agent (require skill/tool calls)
   const financeKeywords = [
     // Quotes & prices
-    '行情', '股价', '报价', '价格', '多少钱', '涨跌', '涨幅', '跌幅',
-    '涨停', '跌停', '换手', '成交', '量能', '资金',
+    '行情',
+    '股价',
+    '报价',
+    '价格',
+    '多少钱',
+    '涨跌',
+    '涨幅',
+    '跌幅',
+    '涨停',
+    '跌停',
+    '换手',
+    '成交',
+    '量能',
+    '资金',
     // K-line / charts
-    'k线', 'kline', '走势', '趋势', '日线', '周线', '月线',
+    'k线',
+    'kline',
+    '走势',
+    '趋势',
+    '日线',
+    '周线',
+    '月线',
     // Company / stock
-    '股票', '个股', '基金', '指数', '板块', '概念',
-    '沪深', '上证', '深证', '创业板', '科创板', '北交所',
-    '港股', '美股', '恒生', '纳斯达克', '道琼斯',
+    '股票',
+    '个股',
+    '基金',
+    '指数',
+    '板块',
+    '概念',
+    '沪深',
+    '上证',
+    '深证',
+    '创业板',
+    '科创板',
+    '北交所',
+    '港股',
+    '美股',
+    '恒生',
+    '纳斯达克',
+    '道琼斯',
     // Financial data
-    '财务', '财报', '营收', '净利', '利润', '毛利', '负债', '市盈率', 'pe', 'pb',
-    '研报', '公告', '分红', '配股', '增发',
+    '财务',
+    '财报',
+    '营收',
+    '净利',
+    '利润',
+    '毛利',
+    '负债',
+    '市盈率',
+    'pe',
+    'pb',
+    '研报',
+    '公告',
+    '分红',
+    '配股',
+    '增发',
     // Fund
-    '净值', '基金经理', '持仓', '重仓',
+    '净值',
+    '基金经理',
+    '持仓',
+    '重仓',
     // Macro
-    'gdp', 'cpi', 'pmi', '宏观', '利率', '汇率',
+    'gdp',
+    'cpi',
+    'pmi',
+    '宏观',
+    '利率',
+    '汇率',
     // News
-    '财经', '新闻', '资讯', '早报', '快讯',
+    '财经',
+    '新闻',
+    '资讯',
+    '早报',
+    '快讯',
     // Specific stock names/codes (common patterns)
-    '茅台', '宁德', '比亚迪', '腾讯', '阿里',
+    '茅台',
+    '宁德',
+    '比亚迪',
+    '腾讯',
+    '阿里',
   ];
 
   if (financeKeywords.some((kw) => lower.includes(kw))) return false;
 
   // General task-oriented keywords
   const taskKeywords = [
-    '创建', '生成', '写入', '删除', '修改', '编辑', '保存',
-    'create', 'generate', 'write', 'delete', 'modify', 'edit', 'save',
-    '开发', '构建', '部署', '编译', '运行', '安装',
-    'develop', 'build', 'deploy', 'compile', 'run', 'install',
-    '文件', '文件夹', '目录', 'file', 'folder', 'directory', 'path',
-    '代码', '脚本', '函数', 'code', 'script', 'function',
-    '分析', '扫描', '搜索', '查找', 'analyze', 'scan', 'search', 'find',
-    '网站', '网页', '爬取', '联网', '访问', '打开', '下载',
-    'website', 'webpage', 'scrape', 'fetch', 'browse', 'download', 'visit',
+    '创建',
+    '生成',
+    '写入',
+    '删除',
+    '修改',
+    '编辑',
+    '保存',
+    'create',
+    'generate',
+    'write',
+    'delete',
+    'modify',
+    'edit',
+    'save',
+    '开发',
+    '构建',
+    '部署',
+    '编译',
+    '运行',
+    '安装',
+    'develop',
+    'build',
+    'deploy',
+    'compile',
+    'run',
+    'install',
+    '文件',
+    '文件夹',
+    '目录',
+    'file',
+    'folder',
+    'directory',
+    'path',
+    '代码',
+    '脚本',
+    '函数',
+    'code',
+    'script',
+    'function',
+    '分析',
+    '扫描',
+    '搜索',
+    '查找',
+    'analyze',
+    'scan',
+    'search',
+    'find',
+    '网站',
+    '网页',
+    '爬取',
+    '联网',
+    '访问',
+    '打开',
+    '下载',
+    'website',
+    'webpage',
+    'scrape',
+    'fetch',
+    'browse',
+    'download',
+    'visit',
   ];
 
   return !taskKeywords.some((kw) => lower.includes(kw));
@@ -113,19 +226,44 @@ function isDirectExecuteQuery(prompt: string): boolean {
 
   const directPatterns = [
     // Simple quote queries
-    '行情', '股价', '报价', '价格', '多少钱', '现在多少',
-    '涨跌', '涨幅', '跌幅', '涨了', '跌了',
+    '行情',
+    '股价',
+    '报价',
+    '价格',
+    '多少钱',
+    '现在多少',
+    '涨跌',
+    '涨幅',
+    '跌幅',
+    '涨了',
+    '跌了',
     // K-line / chart
-    'k线', 'kline', '走势', '日线', '周线',
+    'k线',
+    'kline',
+    '走势',
+    '日线',
+    '周线',
     // Simple lookups
-    '最新价', '收盘价', '开盘价', '换手率', '成交量',
-    '市盈率', '市净率', 'pe', 'pb',
+    '最新价',
+    '收盘价',
+    '开盘价',
+    '换手率',
+    '成交量',
+    '市盈率',
+    '市净率',
+    'pe',
+    'pb',
     // Fund NAV
     '净值',
     // Quick news
-    '新闻', '资讯', '快讯', '早报',
+    '新闻',
+    '资讯',
+    '快讯',
+    '早报',
     // Short question forms
-    '怎么样', '什么情况', '表现如何',
+    '怎么样',
+    '什么情况',
+    '表现如何',
   ];
 
   return directPatterns.some((p) => lower.includes(p));
@@ -233,7 +371,12 @@ function getModelConfig():
 
     if (!provider) return undefined;
 
-    const config: { apiKey?: string; baseUrl?: string; model?: string; apiType?: string } = {};
+    const config: {
+      apiKey?: string;
+      baseUrl?: string;
+      model?: string;
+      apiType?: string;
+    } = {};
 
     if (provider.apiKey) {
       config.apiKey = provider.apiKey;
@@ -858,14 +1001,17 @@ function buildConversationHistory(
     } else if (msg.type === 'text') {
       currentAssistantContent += (msg.content || '') + '\n';
     } else if (msg.type === 'tool_use') {
-      const toolId = (msg as { id?: string }).id || msg.toolUseId || `tool_${Date.now()}`;
+      const toolId =
+        (msg as { id?: string }).id || msg.toolUseId || `tool_${Date.now()}`;
       if (msg.name) pendingToolNames.set(toolId, msg.name);
       currentAssistantContent += `[Used tool: ${msg.name}]\n`;
     } else if (msg.type === 'tool_result') {
-      const toolName = (msg.toolUseId && pendingToolNames.get(msg.toolUseId)) || 'tool';
+      const toolName =
+        (msg.toolUseId && pendingToolNames.get(msg.toolUseId)) || 'tool';
       const output = msg.output || '';
       if (output) {
-        const truncated = output.length > 800 ? output.slice(0, 800) + '...' : output;
+        const truncated =
+          output.length > 800 ? output.slice(0, 800) + '...' : output;
         currentAssistantContent += `[${toolName} result]: ${truncated}\n`;
       }
     }
@@ -989,7 +1135,11 @@ export function useAgent(): UseAgentReturn {
     // This eliminates the brief "idle" flash that would otherwise appear between
     // this synchronous step and the async loadMessages() call that follows.
     const preCheckBgTask = getBackgroundTask(id);
-    if (preCheckBgTask && preCheckBgTask.isRunning && !preCheckBgTask.abortController.signal.aborted) {
+    if (
+      preCheckBgTask &&
+      preCheckBgTask.isRunning &&
+      !preCheckBgTask.abortController.signal.aborted
+    ) {
       setIsRunning(true);
       isRunningRef.current = true;
       setPhase('executing');
@@ -1157,7 +1307,9 @@ export function useAgent(): UseAgentReturn {
                   type: msg.type as AgentMessage['type'],
                   content: msg.content || undefined,
                   name: msg.tool_name || undefined,
-                  input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
+                  input: msg.tool_input
+                    ? JSON.parse(msg.tool_input)
+                    : undefined,
                   output: msg.tool_output || undefined,
                   toolUseId: msg.tool_use_id || undefined,
                   subtype: msg.subtype as AgentMessage['subtype'],
@@ -1374,7 +1526,11 @@ export function useAgent(): UseAgentReturn {
         const lastPlanMessage = [...agentMessages]
           .reverse()
           .find((m) => m.type === 'plan' && m.plan);
-        if (lastPlanMessage && lastPlanMessage.type === 'plan' && lastPlanMessage.plan) {
+        if (
+          lastPlanMessage &&
+          lastPlanMessage.type === 'plan' &&
+          lastPlanMessage.plan
+        ) {
           const planSteps = lastPlanMessage.plan.steps || [];
           // Check if plan has incomplete steps (pending or no status)
           const hasIncompleteSteps = planSteps.some(
@@ -1383,9 +1539,16 @@ export function useAgent(): UseAgentReturn {
 
           // Restore plan if task is not completed/stopped and has incomplete steps
           if (hasIncompleteSteps && !taskIsCompleted && !taskIsStopped) {
-            console.log('[useAgent] Restoring plan awaiting approval for task:', id, {
-              planSteps: planSteps.map((s) => ({ description: s.description, status: s.status })),
-            });
+            console.log(
+              '[useAgent] Restoring plan awaiting approval for task:',
+              id,
+              {
+                planSteps: planSteps.map((s) => ({
+                  description: s.description,
+                  status: s.status,
+                })),
+              }
+            );
             setPlan(lastPlanMessage.plan);
             setPhase('awaiting_approval');
           }
@@ -1538,17 +1701,25 @@ export function useAgent(): UseAgentReturn {
                 }
               } else if (data.type === 'session_action') {
                 // /new or /reset: clear current session messages
-                if (isActive && (data.action === 'new' || data.action === 'reset')) {
+                if (
+                  isActive &&
+                  (data.action === 'new' || data.action === 'reset')
+                ) {
                   console.log(`[useAgent] Session action: ${data.action}`);
                   try {
-                    const { deleteMessagesByTaskId } = await import('@/shared/db');
+                    const { deleteMessagesByTaskId } =
+                      await import('@/shared/db');
                     await deleteMessagesByTaskId(currentTaskId);
                     setMessages([]);
                     // Also delete from backend channel-store so useChannelSync
                     // won't re-populate the cleared messages within 3 seconds
-                    fetch(`${AGENT_SERVER_URL}/channels/conversations/${currentTaskId}`, { method: 'DELETE' }).catch(() => {});
+                    fetch(
+                      `${AGENT_SERVER_URL}/channels/conversations/${currentTaskId}`,
+                      { method: 'DELETE' }
+                    ).catch(() => {});
                     // Mark as deleted in sessionStorage so sync ignores it even if backend still has it
-                    const { markChannelTaskDeleted } = await import('@/shared/hooks/useChannelSync');
+                    const { markChannelTaskDeleted } =
+                      await import('@/shared/hooks/useChannelSync');
                     markChannelTaskDeleted(currentTaskId);
                   } catch (err) {
                     console.error('[useAgent] Failed to clear messages:', err);
@@ -1557,12 +1728,20 @@ export function useAgent(): UseAgentReturn {
               } else if (data.type === 'compact_result' && data.conversation) {
                 // Legacy: /compact command replace (no longer used, kept for compat)
                 if (isActive) {
-                  console.log('[useAgent] Compact result received, replacing conversation with', (data.conversation as unknown[]).length, 'messages');
+                  console.log(
+                    '[useAgent] Compact result received, replacing conversation with',
+                    (data.conversation as unknown[]).length,
+                    'messages'
+                  );
                   // Replace messages in DB: delete old messages and insert compacted ones
                   try {
-                    const { deleteMessagesByTaskId, createMessage } = await import('@/shared/db');
+                    const { deleteMessagesByTaskId, createMessage } =
+                      await import('@/shared/db');
                     await deleteMessagesByTaskId(currentTaskId);
-                    const compactedConv = data.conversation as Array<{ role: string; content: string }>;
+                    const compactedConv = data.conversation as Array<{
+                      role: string;
+                      content: string;
+                    }>;
                     for (const msg of compactedConv) {
                       await createMessage({
                         task_id: currentTaskId,
@@ -1572,18 +1751,24 @@ export function useAgent(): UseAgentReturn {
                     }
                     // Reload messages in UI (map DB Message → AgentMessage to align types)
                     const { getMessagesByTaskId } = await import('@/shared/db');
-                    const freshMessages = await getMessagesByTaskId(currentTaskId);
-                    const agentMsgs: AgentMessage[] = freshMessages.map((msg) => ({
-                      type: msg.type as AgentMessage['type'],
-                      content: msg.content ?? undefined,
-                      name: msg.tool_name ?? undefined,
-                      output: msg.tool_output ?? undefined,
-                      toolUseId: msg.tool_use_id ?? undefined,
-                      subtype: msg.subtype as AgentMessage['subtype'],
-                    }));
+                    const freshMessages =
+                      await getMessagesByTaskId(currentTaskId);
+                    const agentMsgs: AgentMessage[] = freshMessages.map(
+                      (msg) => ({
+                        type: msg.type as AgentMessage['type'],
+                        content: msg.content ?? undefined,
+                        name: msg.tool_name ?? undefined,
+                        output: msg.tool_output ?? undefined,
+                        toolUseId: msg.tool_use_id ?? undefined,
+                        subtype: msg.subtype as AgentMessage['subtype'],
+                      })
+                    );
                     setMessages(agentMsgs);
                   } catch (err) {
-                    console.error('[useAgent] Failed to apply compact result:', err);
+                    console.error(
+                      '[useAgent] Failed to apply compact result:',
+                      err
+                    );
                   }
                 }
               } else {
@@ -1830,9 +2015,19 @@ export function useAgent(): UseAgentReturn {
             try {
               const modelConfig = getModelConfig();
               const language = getPreferredLanguage();
-              console.log('[useAgent] Requesting title generation for prompt:', prompt.slice(0, 80));
-              console.log('[useAgent] Title request URL:', `${AGENT_SERVER_URL}/agent/title`);
-              console.log('[useAgent] Title request payload:', { prompt: prompt.slice(0, 80), hasModelConfig: !!modelConfig, language });
+              console.log(
+                '[useAgent] Requesting title generation for prompt:',
+                prompt.slice(0, 80)
+              );
+              console.log(
+                '[useAgent] Title request URL:',
+                `${AGENT_SERVER_URL}/agent/title`
+              );
+              console.log('[useAgent] Title request payload:', {
+                prompt: prompt.slice(0, 80),
+                hasModelConfig: !!modelConfig,
+                language,
+              });
               const res = await fetch(`${AGENT_SERVER_URL}/agent/title`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1849,7 +2044,11 @@ export function useAgent(): UseAgentReturn {
                 }
               } else {
                 const errorText = await res.text();
-                console.error('[useAgent] Title generation failed:', res.status, errorText);
+                console.error(
+                  '[useAgent] Title generation failed:',
+                  res.status,
+                  errorText
+                );
               }
             } catch (err) {
               console.error('[useAgent] Failed to generate title:', err);
@@ -1876,7 +2075,8 @@ export function useAgent(): UseAgentReturn {
       const hasImages = images && images.length > 0;
 
       // Save file attachments to disk and augment prompt with file paths
-      const fileAttachments = attachments?.filter((a) => a.type === 'file') || [];
+      const fileAttachments =
+        attachments?.filter((a) => a.type === 'file') || [];
       let augmentedPrompt = prompt;
       let savedFileRefs: AttachmentReference[] = [];
 
@@ -1895,7 +2095,10 @@ export function useAgent(): UseAgentReturn {
         if (saveFolder) {
           try {
             savedFileRefs = await saveAttachments(saveFolder, fileAttachments);
-            console.log('[useAgent] Saved file attachments:', savedFileRefs.map((r) => r.path));
+            console.log(
+              '[useAgent] Saved file attachments:',
+              savedFileRefs.map((r) => r.path)
+            );
             setFilesVersion((v) => v + 1);
 
             // Append file paths to prompt so the agent knows about them
@@ -1906,19 +2109,29 @@ export function useAgent(): UseAgentReturn {
           }
         } else {
           // Can't save to disk — include file content inline for small text files
-          console.warn('[useAgent] No folder available, embedding file content in prompt');
-          const fileInfo = fileAttachments.map((a) => {
-            // For text-based files, decode and include content
-            if (a.data && (a.mimeType?.startsWith('text/') || a.name.match(/\.(csv|txt|json|xml|tsv|md|log)$/i))) {
-              try {
-                const content = atob(a.data.includes(',') ? a.data.split(',')[1] : a.data);
-                return `[File: ${a.name}]\n${content}`;
-              } catch {
-                return `[File: ${a.name}] (unable to decode)`;
+          console.warn(
+            '[useAgent] No folder available, embedding file content in prompt'
+          );
+          const fileInfo = fileAttachments
+            .map((a) => {
+              // For text-based files, decode and include content
+              if (
+                a.data &&
+                (a.mimeType?.startsWith('text/') ||
+                  a.name.match(/\.(csv|txt|json|xml|tsv|md|log)$/i))
+              ) {
+                try {
+                  const content = atob(
+                    a.data.includes(',') ? a.data.split(',')[1] : a.data
+                  );
+                  return `[File: ${a.name}]\n${content}`;
+                } catch {
+                  return `[File: ${a.name}] (unable to decode)`;
+                }
               }
-            }
-            return `[File: ${a.name}] (binary file, unable to include inline)`;
-          }).join('\n\n');
+              return `[File: ${a.name}] (binary file, unable to include inline)`;
+            })
+            .join('\n\n');
           augmentedPrompt = `${prompt}\n\n${fileInfo}`;
         }
       }
@@ -1934,7 +2147,10 @@ export function useAgent(): UseAgentReturn {
         console.log('[useAgent] Valid images for API:', images?.length || 0);
         console.log('[useAgent] File attachments:', fileAttachments.length);
         console.log('[useAgent] computedSessionFolder:', computedSessionFolder);
-        console.log('[useAgent] augmentedPrompt:', augmentedPrompt.slice(0, 200));
+        console.log(
+          '[useAgent] augmentedPrompt:',
+          augmentedPrompt.slice(0, 200)
+        );
       }
 
       try {
@@ -1949,7 +2165,8 @@ export function useAgent(): UseAgentReturn {
         // Only use fast chat for anthropic-messages providers (the chat service uses Anthropic SDK directly).
         // OpenAI-format providers must go through the agent endpoint.
         const hasFileAttachments = fileAttachments.length > 0;
-        const isAnthropicApi = !modelConfig?.apiType || modelConfig.apiType === 'anthropic-messages';
+        const isAnthropicApi =
+          !modelConfig?.apiType || modelConfig.apiType === 'anthropic-messages';
         const shouldUseFastChat =
           modelConfig &&
           isAnthropicApi &&
@@ -1958,7 +2175,10 @@ export function useAgent(): UseAgentReturn {
             (mode !== 'task' && !hasImages && isFastChatQuery(prompt)));
 
         if (shouldUseFastChat) {
-          console.log('[useAgent] Using fast chat for simple query, mode:', mode);
+          console.log(
+            '[useAgent] Using fast chat for simple query, mode:',
+            mode
+          );
           setPhase('executing');
 
           const language = getPreferredLanguage();
@@ -1988,8 +2208,7 @@ export function useAgent(): UseAgentReturn {
           const decoder = new TextDecoder();
           let buffer = '';
           let fullContent = '';
-          const isActiveTask = () =>
-            activeTaskIdRef.current === currentTaskId;
+          const isActiveTask = () => activeTaskIdRef.current === currentTaskId;
 
           while (true) {
             const { done, value } = await reader.read();
@@ -2013,10 +2232,16 @@ export function useAgent(): UseAgentReturn {
                         if (last && last.type === 'text') {
                           return [
                             ...prev.slice(0, -1),
-                            { ...last, content: (last.content || '') + data.content },
+                            {
+                              ...last,
+                              content: (last.content || '') + data.content,
+                            },
                           ];
                         }
-                        return [...prev, { type: 'text', content: data.content }];
+                        return [
+                          ...prev,
+                          { type: 'text', content: data.content },
+                        ];
                       });
                     }
                   } else if (data.type === 'done') {
@@ -2044,7 +2269,8 @@ export function useAgent(): UseAgentReturn {
               task_id: currentTaskId,
               type: 'user',
               content: prompt,
-              attachments: allRefs.length > 0 ? JSON.stringify(allRefs) : undefined,
+              attachments:
+                allRefs.length > 0 ? JSON.stringify(allRefs) : undefined,
             });
             if (fullContent) {
               await createMessage({
@@ -2063,7 +2289,9 @@ export function useAgent(): UseAgentReturn {
 
         // Direct execute: simple financial queries skip the plan phase
         if (!hasImages && isDirectExecuteQuery(prompt)) {
-          console.log('[useAgent] Simple financial query, skipping plan → direct execute');
+          console.log(
+            '[useAgent] Simple financial query, skipping plan → direct execute'
+          );
           setPhase('executing');
 
           try {
@@ -2072,7 +2300,8 @@ export function useAgent(): UseAgentReturn {
               task_id: currentTaskId,
               type: 'user',
               content: prompt,
-              attachments: allRefs.length > 0 ? JSON.stringify(allRefs) : undefined,
+              attachments:
+                allRefs.length > 0 ? JSON.stringify(allRefs) : undefined,
             });
           } catch (error) {
             console.error('Failed to save user message:', error);
@@ -2126,11 +2355,9 @@ export function useAgent(): UseAgentReturn {
           // file attachments were already saved earlier)
           try {
             const allRefs: AttachmentReference[] = [...savedFileRefs];
-            const imageAttachments = attachments?.filter((a) => a.type === 'image') || [];
-            if (
-              imageAttachments.length > 0 &&
-              computedSessionFolder
-            ) {
+            const imageAttachments =
+              attachments?.filter((a) => a.type === 'image') || [];
+            if (imageAttachments.length > 0 && computedSessionFolder) {
               const imageRefs = await saveAttachments(
                 computedSessionFolder,
                 imageAttachments
@@ -2145,7 +2372,8 @@ export function useAgent(): UseAgentReturn {
               task_id: currentTaskId,
               type: 'user',
               content: prompt,
-              attachments: allRefs.length > 0 ? JSON.stringify(allRefs) : undefined,
+              attachments:
+                allRefs.length > 0 ? JSON.stringify(allRefs) : undefined,
             });
           } catch (error) {
             console.error('Failed to save user message:', error);
@@ -2194,7 +2422,8 @@ export function useAgent(): UseAgentReturn {
             task_id: currentTaskId,
             type: 'user',
             content: prompt,
-            attachments: allRefs.length > 0 ? JSON.stringify(allRefs) : undefined,
+            attachments:
+              allRefs.length > 0 ? JSON.stringify(allRefs) : undefined,
           });
         } catch (error) {
           console.error('Failed to save user message:', error);
@@ -2591,7 +2820,11 @@ export function useAgent(): UseAgentReturn {
 
   // Continue conversation with context
   const continueConversation = useCallback(
-    async (reply: string, attachments?: MessageAttachment[], mode?: 'auto' | 'chat' | 'task'): Promise<void> => {
+    async (
+      reply: string,
+      attachments?: MessageAttachment[],
+      mode?: 'auto' | 'chat' | 'task'
+    ): Promise<void> => {
       if (isRunning || !taskId) return;
 
       // Add user message to UI immediately (with attachments if any)
@@ -2677,8 +2910,10 @@ export function useAgent(): UseAgentReturn {
 
         // Fast chat detection for follow-up messages
         // Only use fast chat for anthropic-messages providers
-        const hasFileAttachments = attachments?.some((a) => a.type === 'file') || false;
-        const isAnthropicApi = !modelConfig?.apiType || modelConfig.apiType === 'anthropic-messages';
+        const hasFileAttachments =
+          attachments?.some((a) => a.type === 'file') || false;
+        const isAnthropicApi =
+          !modelConfig?.apiType || modelConfig.apiType === 'anthropic-messages';
         const shouldUseFastChat =
           modelConfig &&
           isAnthropicApi &&
@@ -2687,7 +2922,10 @@ export function useAgent(): UseAgentReturn {
             (mode !== 'task' && !hasImages && isFastChatQuery(reply)));
 
         if (shouldUseFastChat) {
-          console.log('[useAgent] continueConversation: Using fast chat, mode:', mode);
+          console.log(
+            '[useAgent] continueConversation: Using fast chat, mode:',
+            mode
+          );
           setPhase('executing');
 
           const language = getPreferredLanguage();
@@ -2738,13 +2976,23 @@ export function useAgent(): UseAgentReturn {
                     if (isActiveTask()) {
                       setMessages((prev) => {
                         const last = prev[prev.length - 1];
-                        if (last && last.type === 'text' && last !== userMessage) {
+                        if (
+                          last &&
+                          last.type === 'text' &&
+                          last !== userMessage
+                        ) {
                           return [
                             ...prev.slice(0, -1),
-                            { ...last, content: (last.content || '') + data.content },
+                            {
+                              ...last,
+                              content: (last.content || '') + data.content,
+                            },
                           ];
                         }
-                        return [...prev, { type: 'text', content: data.content }];
+                        return [
+                          ...prev,
+                          { type: 'text', content: data.content },
+                        ];
                       });
                     }
                   } else if (data.type === 'done') {

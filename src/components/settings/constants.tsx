@@ -6,6 +6,7 @@ import {
   providerDefaultModels,
 } from '@/shared/db/settings';
 import {
+  Brain,
   Clock,
   Cpu,
   Database,
@@ -15,7 +16,6 @@ import {
   Server,
   Settings,
   Sparkles,
-  Brain,
   User,
 } from 'lucide-react';
 

@@ -1,24 +1,38 @@
-import { Suspense, lazy } from 'react';
-import type { Artifact } from '@/shared/types/artifact';
+import { lazy, Suspense } from 'react';
 import type {
-  QuoteCardData,
-  KLineChartData,
-  NewsListData,
-  FinanceBreakfastData,
   AIHotNewsData,
+  Artifact,
   BarChartData,
-  LineChartData,
   DataTableData,
+  FinanceBreakfastData,
+  FinancialHealthData,
+  KLineChartData,
+  LineChartData,
+  NewsFeedData,
+  NewsListData,
+  QuoteCardData,
+  ResearchConsensusData,
+  SectorHeatmapData,
+  StockSnapshotData,
 } from '@/shared/types/artifact';
 
 const QuoteCard = lazy(() => import('./QuoteCard/QuoteCard'));
 const KLineChart = lazy(() => import('./KLineChart/KLineChart'));
 const NewsCard = lazy(() => import('./NewsCard/NewsCard'));
-const FinanceBreakfast = lazy(() => import('./FinanceBreakfast/FinanceBreakfast'));
+const FinanceBreakfast = lazy(
+  () => import('./FinanceBreakfast/FinanceBreakfast')
+);
 const AIHotNews = lazy(() => import('./AIHotNews/AIHotNews'));
 const BarChart = lazy(() => import('./BarChart/BarChart'));
 const LineChart = lazy(() => import('./LineChart/LineChart'));
 const DataTable = lazy(() => import('./DataTable/DataTable'));
+const StockSnapshot = lazy(() => import('./StockSnapshot/StockSnapshot'));
+const SectorHeatmap = lazy(() => import('./SectorHeatmap/SectorHeatmap'));
+const ResearchConsensus = lazy(
+  () => import('./ResearchConsensus/ResearchConsensus')
+);
+const FinancialHealth = lazy(() => import('./FinancialHealth/FinancialHealth'));
+const NewsFeed = lazy(() => import('./NewsFeed/NewsFeed'));
 
 interface ArtifactRendererProps {
   artifacts: Artifact[];
@@ -49,6 +63,30 @@ function renderSingleArtifact(artifact: Artifact, index: number) {
       return <LineChart key={key} data={artifact.data as LineChartData} />;
     case 'data-table':
       return <DataTable key={key} data={artifact.data as DataTableData} />;
+    case 'stock-snapshot':
+      return (
+        <StockSnapshot key={key} data={artifact.data as StockSnapshotData} />
+      );
+    case 'sector-heatmap':
+      return (
+        <SectorHeatmap key={key} data={artifact.data as SectorHeatmapData} />
+      );
+    case 'research-consensus':
+      return (
+        <ResearchConsensus
+          key={key}
+          data={artifact.data as ResearchConsensusData}
+        />
+      );
+    case 'financial-health':
+      return (
+        <FinancialHealth
+          key={key}
+          data={artifact.data as FinancialHealthData}
+        />
+      );
+    case 'news-feed':
+      return <NewsFeed key={key} data={artifact.data as NewsFeedData} />;
     default:
       return null;
   }
@@ -58,7 +96,11 @@ export function ArtifactRenderer({ artifacts }: ArtifactRendererProps) {
   if (!artifacts || artifacts.length === 0) return null;
 
   return (
-    <Suspense fallback={<div className="h-20 animate-pulse rounded-lg bg-zinc-800/50" />}>
+    <Suspense
+      fallback={
+        <div className="h-20 animate-pulse rounded-lg bg-zinc-800/50" />
+      }
+    >
       <div className="my-3 flex flex-col gap-4">
         {artifacts.map((artifact, i) => renderSingleArtifact(artifact, i))}
       </div>

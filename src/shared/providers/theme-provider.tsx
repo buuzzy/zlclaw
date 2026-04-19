@@ -5,7 +5,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { isTauri } from '@tauri-apps/api/core';
 import {
   accentColors,
   getSettings,
@@ -13,6 +12,7 @@ import {
   type AccentColor,
   type BackgroundStyle,
 } from '@/shared/db/settings';
+import { isTauri } from '@tauri-apps/api/core';
 
 async function syncTauriTheme(theme: 'light' | 'dark' | 'system') {
   if (!isTauri()) return;

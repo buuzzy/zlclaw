@@ -48,11 +48,15 @@ interface EmbeddingConfig {
 
 export function MemorySettings() {
   const [status, setStatus] = useState<MemoryStatus | null>(null);
-  const [embeddingConfig, setEmbeddingConfig] = useState<EmbeddingConfig | null>(null);
+  const [embeddingConfig, setEmbeddingConfig] =
+    useState<EmbeddingConfig | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [indexing, setIndexing] = useState(false);
   const [consolidating, setConsolidating] = useState(false);
-  const [lastAction, setLastAction] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [lastAction, setLastAction] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -84,10 +88,15 @@ export function MemorySettings() {
     setIndexing(true);
     setLastAction(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/memory/index`, { method: 'POST' });
+      const res = await fetch(`${API_BASE_URL}/memory/index`, {
+        method: 'POST',
+      });
       const data = await res.json();
       if (res.ok) {
-        setLastAction({ type: 'success', message: `重建索引完成，共 ${data.chunkCount ?? '?'} 个片段` });
+        setLastAction({
+          type: 'success',
+          message: `重建索引完成，共 ${data.chunkCount ?? '?'} 个片段`,
+        });
         await fetchStatus();
       } else {
         setLastAction({ type: 'error', message: data.error || '重建索引失败' });
@@ -103,7 +112,9 @@ export function MemorySettings() {
     setConsolidating(true);
     setLastAction(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/memory/consolidate`, { method: 'POST' });
+      const res = await fetch(`${API_BASE_URL}/memory/consolidate`, {
+        method: 'POST',
+      });
       const data = await res.json();
       if (res.ok) {
         const processed = data.processed?.join(', ') || '无';
@@ -149,7 +160,7 @@ export function MemorySettings() {
   return (
     <div className="space-y-5">
       {/* ── Index Status Card ── */}
-      <div className="border-border rounded-xl border p-4 space-y-3">
+      <div className="border-border space-y-3 rounded-xl border p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Database className="text-primary size-4" />
@@ -167,44 +178,64 @@ export function MemorySettings() {
         {status ? (
           <div className="grid grid-cols-2 gap-3">
             {/* Indexed */}
-            <div className="bg-muted/30 rounded-lg p-3 space-y-0.5">
-              <p className="text-muted-foreground text-[11px] uppercase tracking-wide">状态</p>
+            <div className="bg-muted/30 space-y-0.5 rounded-lg p-3">
+              <p className="text-muted-foreground text-[11px] tracking-wide uppercase">
+                状态
+              </p>
               <div className="flex items-center gap-1.5">
                 {status.indexing ? (
                   <>
                     <Loader2 className="size-3.5 animate-spin text-amber-500" />
-                    <span className="text-amber-600 dark:text-amber-400 text-sm font-medium">索引中…</span>
+                    <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                      索引中…
+                    </span>
                   </>
                 ) : status.indexed ? (
                   <>
                     <CheckCircle2 className="size-3.5 text-green-500" />
-                    <span className="text-green-600 dark:text-green-400 text-sm font-medium">已索引</span>
+                    <span className="text-sm font-medium text-green-600 dark:text-green-400">
+                      已索引
+                    </span>
                   </>
                 ) : (
                   <>
-                    <XCircle className="size-3.5 text-muted-foreground" />
-                    <span className="text-muted-foreground text-sm font-medium">未索引</span>
+                    <XCircle className="text-muted-foreground size-3.5" />
+                    <span className="text-muted-foreground text-sm font-medium">
+                      未索引
+                    </span>
                   </>
                 )}
               </div>
             </div>
 
             {/* Chunk count */}
-            <div className="bg-muted/30 rounded-lg p-3 space-y-0.5">
-              <p className="text-muted-foreground text-[11px] uppercase tracking-wide">片段数</p>
-              <p className="text-foreground text-sm font-medium">{status.chunkCount.toLocaleString()}</p>
+            <div className="bg-muted/30 space-y-0.5 rounded-lg p-3">
+              <p className="text-muted-foreground text-[11px] tracking-wide uppercase">
+                片段数
+              </p>
+              <p className="text-foreground text-sm font-medium">
+                {status.chunkCount.toLocaleString()}
+              </p>
             </div>
 
             {/* Model */}
-            <div className="bg-muted/30 rounded-lg p-3 space-y-0.5">
-              <p className="text-muted-foreground text-[11px] uppercase tracking-wide">嵌入模型</p>
-              <p className="text-foreground text-sm font-medium truncate">{status.model || '—'}</p>
+            <div className="bg-muted/30 space-y-0.5 rounded-lg p-3">
+              <p className="text-muted-foreground text-[11px] tracking-wide uppercase">
+                嵌入模型
+              </p>
+              <p className="text-foreground truncate text-sm font-medium">
+                {status.model || '—'}
+              </p>
             </div>
 
             {/* Last indexed */}
-            <div className="bg-muted/30 rounded-lg p-3 space-y-0.5">
-              <p className="text-muted-foreground text-[11px] uppercase tracking-wide">最近索引</p>
-              <p className="text-foreground text-sm font-medium">{formatTime(status.lastIndexedAt)}</p>
+            <div className="bg-muted/30 space-y-0.5 rounded-lg p-3">
+              <p className="text-muted-foreground text-[11px] tracking-wide uppercase">
+                最近索引
+              </p>
+              <p className="text-foreground text-sm font-medium">
+                {formatTime(status.lastIndexedAt)}
+              </p>
             </div>
           </div>
         ) : (
@@ -214,14 +245,19 @@ export function MemorySettings() {
 
       {/* ── Indexed Sources ── */}
       {status && status.sources.length > 0 && (
-        <div className="border-border rounded-xl border p-4 space-y-2.5">
+        <div className="border-border space-y-2.5 rounded-xl border p-4">
           <div className="flex items-center gap-2">
             <FileText className="text-primary size-4" />
-            <h3 className="text-foreground text-sm font-semibold">已索引文件 ({status.sources.length})</h3>
+            <h3 className="text-foreground text-sm font-semibold">
+              已索引文件 ({status.sources.length})
+            </h3>
           </div>
           <div className="space-y-1">
             {status.sources.map((src) => (
-              <div key={src} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/30">
+              <div
+                key={src}
+                className="hover:bg-muted/30 flex items-center gap-2 rounded-lg px-2 py-1.5"
+              >
                 <CheckCircle2 className="size-3 shrink-0 text-green-500" />
                 <span className="text-foreground font-mono text-xs">{src}</span>
               </div>
@@ -234,7 +270,9 @@ export function MemorySettings() {
         <div className="border-border rounded-xl border p-4">
           <div className="flex items-center gap-2">
             <FileText className="text-primary size-4" />
-            <h3 className="text-foreground text-sm font-semibold">已索引文件</h3>
+            <h3 className="text-foreground text-sm font-semibold">
+              已索引文件
+            </h3>
           </div>
           <p className="text-muted-foreground mt-2 text-sm">
             暂无已索引文件。请先配置嵌入向量，然后点击「重建索引」。
@@ -243,21 +281,46 @@ export function MemorySettings() {
       )}
 
       {/* ── Embedding Config ── */}
-      <div className="border-border rounded-xl border p-4 space-y-2.5">
+      <div className="border-border space-y-2.5 rounded-xl border p-4">
         <div className="flex items-center gap-2">
           <Sparkles className="text-primary size-4" />
-          <h3 className="text-foreground text-sm font-semibold">嵌入向量配置</h3>
+          <h3 className="text-foreground text-sm font-semibold">
+            嵌入向量配置
+          </h3>
         </div>
         {embeddingConfig?.configured ? (
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="size-3.5 text-green-500" />
-              <span className="text-green-600 dark:text-green-400 text-sm">已配置</span>
+              <span className="text-sm text-green-600 dark:text-green-400">
+                已配置
+              </span>
             </div>
             <div className="text-muted-foreground space-y-0.5 text-xs">
-              {embeddingConfig.model && <p>模型: <span className="text-foreground">{embeddingConfig.model}</span></p>}
-              {embeddingConfig.baseUrl && <p>地址: <span className="text-foreground truncate">{embeddingConfig.baseUrl}</span></p>}
-              {embeddingConfig.apiKeyMasked && <p>API Key: <span className="text-foreground font-mono">{embeddingConfig.apiKeyMasked}</span></p>}
+              {embeddingConfig.model && (
+                <p>
+                  模型:{' '}
+                  <span className="text-foreground">
+                    {embeddingConfig.model}
+                  </span>
+                </p>
+              )}
+              {embeddingConfig.baseUrl && (
+                <p>
+                  地址:{' '}
+                  <span className="text-foreground truncate">
+                    {embeddingConfig.baseUrl}
+                  </span>
+                </p>
+              )}
+              {embeddingConfig.apiKeyMasked && (
+                <p>
+                  API Key:{' '}
+                  <span className="text-foreground font-mono">
+                    {embeddingConfig.apiKeyMasked}
+                  </span>
+                </p>
+              )}
             </div>
           </div>
         ) : (
@@ -271,7 +334,7 @@ export function MemorySettings() {
       </div>
 
       {/* ── Actions ── */}
-      <div className="border-border rounded-xl border p-4 space-y-3">
+      <div className="border-border space-y-3 rounded-xl border p-4">
         <div className="flex items-center gap-2">
           <Zap className="text-primary size-4" />
           <h3 className="text-foreground text-sm font-semibold">操作</h3>
@@ -284,7 +347,7 @@ export function MemorySettings() {
             disabled={indexing || status?.indexing}
             className={cn(
               'flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors',
-              'border-border border text-foreground hover:bg-accent',
+              'border-border text-foreground hover:bg-accent border',
               (indexing || status?.indexing) && 'cursor-not-allowed opacity-50'
             )}
           >
@@ -302,7 +365,7 @@ export function MemorySettings() {
             disabled={consolidating}
             className={cn(
               'flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors',
-              'border-border border text-foreground hover:bg-accent',
+              'border-border text-foreground hover:bg-accent border',
               consolidating && 'cursor-not-allowed opacity-50'
             )}
           >

@@ -64,7 +64,9 @@ function EmbeddingConfigSection() {
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('BAAI/bge-large-zh-v1.5');
   const [status, setStatus] = useState<EmbeddingStatus | null>(null);
-  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [testStatus, setTestStatus] = useState<
+    'idle' | 'loading' | 'success' | 'error'
+  >('idle');
   const [testMessage, setTestMessage] = useState('');
   const [saveLoading, setSaveLoading] = useState(false);
   const [indexLoading, setIndexLoading] = useState(false);
@@ -74,7 +76,9 @@ function EmbeddingConfigSection() {
       const res = await fetch(`${API_BASE_URL}/memory/status`);
       const data = await res.json();
       setStatus(data);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const fetchConfig = useCallback(async () => {
@@ -85,7 +89,9 @@ function EmbeddingConfigSection() {
         if (data.baseUrl) setBaseUrl(data.baseUrl);
         if (data.model) setModel(data.model);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   useEffect(() => {
@@ -130,7 +136,9 @@ function EmbeddingConfigSection() {
       setApiKey('');
       await fetchConfig();
       await fetchStatus();
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setSaveLoading(false);
   };
 
@@ -139,7 +147,9 @@ function EmbeddingConfigSection() {
     try {
       await fetch(`${API_BASE_URL}/memory/index`, { method: 'POST' });
       await fetchStatus();
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setIndexLoading(false);
   };
 
@@ -151,18 +161,25 @@ function EmbeddingConfigSection() {
           记忆语义检索 (Embedding)
         </h4>
         <p className="text-muted-foreground mt-1 text-xs">
-          配置 Embedding API 后，记忆将通过向量语义检索注入对话，而非全量注入。支持所有 OpenAI 兼容接口。
+          配置 Embedding API
+          后，记忆将通过向量语义检索注入对话，而非全量注入。支持所有 OpenAI
+          兼容接口。
         </p>
       </div>
 
       {/* Status badge */}
       {status && (
         <div className="border-border bg-muted/30 flex items-center gap-3 rounded-lg border p-3">
-          <div className={cn(
-            'size-2 rounded-full',
-            status.configured && status.indexed ? 'bg-emerald-500' :
-            status.configured ? 'bg-amber-500' : 'bg-zinc-400'
-          )} />
+          <div
+            className={cn(
+              'size-2 rounded-full',
+              status.configured && status.indexed
+                ? 'bg-emerald-500'
+                : status.configured
+                  ? 'bg-amber-500'
+                  : 'bg-zinc-400'
+            )}
+          />
           <div className="flex-1 text-xs">
             {status.configured && status.indexed ? (
               <span className="text-foreground">
@@ -184,7 +201,12 @@ function EmbeddingConfigSection() {
               disabled={indexLoading || status.indexing}
               className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs disabled:opacity-50"
             >
-              <RefreshCw className={cn('size-3', (indexLoading || status.indexing) && 'animate-spin')} />
+              <RefreshCw
+                className={cn(
+                  'size-3',
+                  (indexLoading || status.indexing) && 'animate-spin'
+                )}
+              />
               {indexLoading || status.indexing ? '索引中...' : '重建索引'}
             </button>
           )}
@@ -194,7 +216,9 @@ function EmbeddingConfigSection() {
       {/* Config form */}
       <div className="space-y-3">
         <div className="flex flex-col gap-1.5">
-          <label className="text-foreground text-xs font-medium">API Base URL</label>
+          <label className="text-foreground text-xs font-medium">
+            API Base URL
+          </label>
           <input
             type="text"
             value={baseUrl}
@@ -210,7 +234,9 @@ function EmbeddingConfigSection() {
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder={status?.configured ? '已保存 (输入新值可覆盖)' : 'sk-...'}
+            placeholder={
+              status?.configured ? '已保存 (输入新值可覆盖)' : 'sk-...'
+            }
             className="border-input bg-background text-foreground focus:ring-ring h-9 w-full max-w-md rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
           />
         </div>
@@ -246,7 +272,13 @@ function EmbeddingConfigSection() {
             ) : (
               <RefreshCw className="size-3" />
             )}
-            {testStatus === 'loading' ? '测试中...' : testStatus === 'success' ? '连接成功' : testStatus === 'error' ? '失败' : '测试连接'}
+            {testStatus === 'loading'
+              ? '测试中...'
+              : testStatus === 'success'
+                ? '连接成功'
+                : testStatus === 'error'
+                  ? '失败'
+                  : '测试连接'}
           </button>
 
           <button
@@ -260,10 +292,14 @@ function EmbeddingConfigSection() {
         </div>
 
         {testMessage && (
-          <p className={cn(
-            'text-xs',
-            testStatus === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-          )}>
+          <p
+            className={cn(
+              'text-xs',
+              testStatus === 'success'
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-red-600 dark:text-red-400'
+            )}
+          >
             {testMessage}
           </p>
         )}
@@ -374,7 +410,9 @@ export function ModelSettings({
     baseUrl: '',
     apiKey: '',
     models: '',
-    apiType: 'openai-completions' as 'anthropic-messages' | 'openai-completions',
+    apiType: 'openai-completions' as
+      | 'anthropic-messages'
+      | 'openai-completions',
   });
   const [showApiKey, setShowApiKey] = useState(false);
   const [newModelName, setNewModelName] = useState('');
@@ -575,7 +613,8 @@ export function ModelSettings({
       apiType: newProvider.apiType,
     };
 
-    const isFirstCustomProvider = !settings.defaultProvider || settings.defaultProvider === 'default';
+    const isFirstCustomProvider =
+      !settings.defaultProvider || settings.defaultProvider === 'default';
     onSettingsChange({
       ...settings,
       providers: [...settings.providers, provider],
@@ -584,7 +623,13 @@ export function ModelSettings({
         : {}),
     });
 
-    setNewProvider({ name: '', baseUrl: '', apiKey: '', models: '', apiType: 'openai-completions' });
+    setNewProvider({
+      name: '',
+      baseUrl: '',
+      apiKey: '',
+      models: '',
+      apiType: 'openai-completions',
+    });
     setShowAddProvider(false);
     setEditingProvider(id);
   };
@@ -708,7 +753,8 @@ export function ModelSettings({
                 </p>
                 <select
                   value={
-                    settings.defaultProvider && settings.defaultProvider !== 'default'
+                    settings.defaultProvider &&
+                    settings.defaultProvider !== 'default'
                       ? `${settings.defaultProvider}:${settings.defaultModel}`
                       : availableModels.length > 0
                         ? `${availableModels[0].provider.id}:${availableModels[0].model}`
@@ -725,7 +771,9 @@ export function ModelSettings({
                   className="border-input bg-background text-foreground focus:ring-ring h-10 w-full max-w-md rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                 >
                   {availableModels.length === 0 && (
-                    <option value="">{t.settings.noModelsAvailable || 'No models available'}</option>
+                    <option value="">
+                      {t.settings.noModelsAvailable || 'No models available'}
+                    </option>
                   )}
                   {availableModels.map(({ provider, model }) => (
                     <option
@@ -847,13 +895,19 @@ export function ModelSettings({
                       onChange={(e) =>
                         setNewProvider({
                           ...newProvider,
-                          apiType: e.target.value as 'anthropic-messages' | 'openai-completions',
+                          apiType: e.target.value as
+                            | 'anthropic-messages'
+                            | 'openai-completions',
                         })
                       }
                       className="border-input bg-background text-foreground focus:ring-ring h-10 w-full appearance-none rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                     >
-                      <option value="openai-completions">OpenAI Completions</option>
-                      <option value="anthropic-messages">Anthropic Messages</option>
+                      <option value="openai-completions">
+                        OpenAI Completions
+                      </option>
+                      <option value="anthropic-messages">
+                        Anthropic Messages
+                      </option>
                     </select>
                   </div>
                 </div>
@@ -875,7 +929,16 @@ export function ModelSettings({
                     className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                   />
                   <p className="text-muted-foreground text-xs">
-                    末尾加 <code className="bg-muted rounded px-1">#</code> 可禁用自动附加的 API 版本路径（如 <code className="bg-muted rounded px-1">https://example.com/api#</code> → <code className="bg-muted rounded px-1">.../api/chat/completions</code>）
+                    末尾加 <code className="bg-muted rounded px-1">#</code>{' '}
+                    可禁用自动附加的 API 版本路径（如{' '}
+                    <code className="bg-muted rounded px-1">
+                      https://example.com/api#
+                    </code>{' '}
+                    →{' '}
+                    <code className="bg-muted rounded px-1">
+                      .../api/chat/completions
+                    </code>
+                    ）
                   </p>
                 </div>
 
@@ -1023,13 +1086,19 @@ export function ModelSettings({
                         value={selectedProvider.apiType || 'openai-completions'}
                         onChange={(e) =>
                           handleProviderUpdate(selectedProvider.id, {
-                            apiType: e.target.value as 'anthropic-messages' | 'openai-completions',
+                            apiType: e.target.value as
+                              | 'anthropic-messages'
+                              | 'openai-completions',
                           })
                         }
                         className="border-input bg-background text-foreground focus:ring-ring h-10 w-full appearance-none rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                       >
-                        <option value="openai-completions">OpenAI Completions</option>
-                        <option value="anthropic-messages">Anthropic Messages</option>
+                        <option value="openai-completions">
+                          OpenAI Completions
+                        </option>
+                        <option value="anthropic-messages">
+                          Anthropic Messages
+                        </option>
                       </select>
                     </div>
 

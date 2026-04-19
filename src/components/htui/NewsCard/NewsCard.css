@@ -88,13 +88,17 @@
 }
 
 .news-trend {
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
   font-size: 11px;
   font-weight: 500;
 }
 
-.news-trend.up { color: var(--color-success); }
-.news-trend.down { color: var(--color-danger); }
+.news-trend.up {
+  color: var(--color-success);
+}
+.news-trend.down {
+  color: var(--color-danger);
+}
 
 .news-read-time {
   font-size: 11px;

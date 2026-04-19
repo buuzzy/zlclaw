@@ -35,7 +35,8 @@ export default {
   agentRuntime: 'Agent Runtime',
   agentRuntimeDescription: 'The AI agent that executes tasks',
   runtimeCodeAnyAgent: 'CodeAny Agent',
-  runtimeCodeAnyAgentDescription: 'Open-source in-process agent runtime, no CLI binary required',
+  runtimeCodeAnyAgentDescription:
+    'Open-source in-process agent runtime, no CLI binary required',
 
   // Code Environment
   codeEnvironment: 'Code Environment',
@@ -325,7 +326,8 @@ export default {
   downloadNewVersion: 'Upgrade',
 
   // Connector / Channel
-  connectorDescription: 'Integrate external messaging channels to serve more platform users',
+  connectorDescription:
+    'Integrate external messaging channels to serve more platform users',
   connectorBeta: 'BETA',
   connectorConfigGuide: 'Setup Guide',
   wechatTitle: 'WeChat ClawBot',
@@ -371,11 +373,13 @@ export default {
   feishuSaving: 'Saving...',
   feishuSaveFailed: 'Save failed',
   feishuConnectFailed: 'Connection failed',
-  feishuFormHint: 'Create an enterprise app on Feishu Open Platform to get App ID and App Secret.',
+  feishuFormHint:
+    'Create an enterprise app on Feishu Open Platform to get App ID and App Secret.',
   feishuOpenPlatform: 'Feishu Open Platform',
   feishuSecretPlaceholder: 'Enter new App Secret (leave empty to keep current)',
   feishuCancel: 'Cancel',
-  feishuChatHint: '💡 You can also tell the assistant your App ID and App Secret in chat — it will configure automatically.',
+  feishuChatHint:
+    '💡 You can also tell the assistant your App ID and App Secret in chat — it will configure automatically.',
 
   // Cron
   cronDescription: 'Manage scheduled Agent tasks that run automatically',
@@ -389,7 +393,8 @@ export default {
   cronName: 'Job Name',
   cronNamePlaceholder: 'e.g. Daily Market Brief',
   cronPrompt: 'Prompt',
-  cronPromptPlaceholder: 'Enter the prompt to send to the Agent on each trigger…',
+  cronPromptPlaceholder:
+    'Enter the prompt to send to the Agent on each trigger…',
   cronScheduleType: 'Schedule Type',
   cronDelivery: 'Result Delivery',
   cronCancel: 'Cancel',

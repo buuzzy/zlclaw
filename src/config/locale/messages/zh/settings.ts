@@ -357,11 +357,13 @@ export default {
   feishuSaving: '保存中...',
   feishuSaveFailed: '保存失败',
   feishuConnectFailed: '连接失败',
-  feishuFormHint: '请在飞书开放平台创建企业自建应用，获取 App ID 和 App Secret。',
+  feishuFormHint:
+    '请在飞书开放平台创建企业自建应用，获取 App ID 和 App Secret。',
   feishuOpenPlatform: '飞书开放平台',
   feishuSecretPlaceholder: '输入新的 App Secret（留空保持不变）',
   feishuCancel: '取消',
-  feishuChatHint: '💡 你也可以在对话中直接告诉助手 App ID 和 App Secret，它会自动完成配置。',
+  feishuChatHint:
+    '💡 你也可以在对话中直接告诉助手 App ID 和 App Secret，它会自动完成配置。',
 
   // Cron
   cronDescription: '管理定时自动执行的 Agent 任务',

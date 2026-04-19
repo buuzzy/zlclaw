@@ -21,7 +21,7 @@
 }
 
 .quote-code {
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
   font-size: 13px;
   color: var(--text-secondary);
   font-weight: 500;
@@ -52,14 +52,18 @@
 }
 
 .quote-price {
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
   font-size: 28px;
   font-weight: 700;
   line-height: 1;
 }
 
-.quote-price.up { color: var(--color-success); }
-.quote-price.down { color: var(--color-danger); }
+.quote-price.up {
+  color: var(--color-success);
+}
+.quote-price.down {
+  color: var(--color-danger);
+}
 
 .quote-currency {
   font-size: 12px;
@@ -70,13 +74,17 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
   font-size: 14px;
   font-weight: 600;
 }
 
-.quote-change.up { color: var(--color-success); }
-.quote-change.down { color: var(--color-danger); }
+.quote-change.up {
+  color: var(--color-success);
+}
+.quote-change.down {
+  color: var(--color-danger);
+}
 
 .quote-arrow {
   font-size: 10px;
@@ -108,11 +116,15 @@
 }
 
 .cell-value {
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
   font-size: 13px;
   color: var(--text-secondary);
   font-weight: 500;
 }
 
-.cell-value.up { color: var(--color-success); }
-.cell-value.down { color: var(--color-danger); }
+.cell-value.up {
+  color: var(--color-success);
+}
+.cell-value.down {
+  color: var(--color-danger);
+}
