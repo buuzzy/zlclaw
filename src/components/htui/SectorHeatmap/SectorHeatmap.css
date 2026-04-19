@@ -1,0 +1,62 @@
+.sh-card {
+  background: var(--ht-card-bg);
+  border: 1px solid var(--ht-card-border);
+  border-radius: 12px;
+  padding: 16px;
+  max-width: 520px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sh-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sh-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.sh-date {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+/* Gradient legend */
+.sh-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sh-legend-item {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-weight: 600;
+}
+
+.sh-legend-item.down {
+  color: #ef4444;
+}
+.sh-legend-item.neutral {
+  color: var(--muted-foreground);
+}
+.sh-legend-item.up {
+  color: #10b981;
+}
+
+.sh-legend-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, #dc2626, #3f3f46);
+}
+
+.sh-legend-bar.green {
+  background: linear-gradient(to right, #3f3f46, #16a34a);
+}

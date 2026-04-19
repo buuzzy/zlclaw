@@ -68,22 +68,26 @@ interface CronJob {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatSchedule(s: CronSchedule): string {
-  if (s.type === 'cron') return `Cron: ${s.expression}${s.timezone ? ` (${s.timezone})` : ''}`;
+  if (s.type === 'cron')
+    return `Cron: ${s.expression}${s.timezone ? ` (${s.timezone})` : ''}`;
   if (s.type === 'every') {
     const ms = s.interval ?? 0;
     if (ms >= 3600000) return `每 ${ms / 3600000} 小时`;
     if (ms >= 60000) return `每 ${ms / 60000} 分钟`;
     return `每 ${ms / 1000} 秒`;
   }
-  if (s.type === 'at') return `一次性: ${s.at ? new Date(s.at).toLocaleString('zh-CN') : '-'}`;
+  if (s.type === 'at')
+    return `一次性: ${s.at ? new Date(s.at).toLocaleString('zh-CN') : '-'}`;
   return '-';
 }
 
 function formatTime(iso?: string): string {
   if (!iso) return '-';
   return new Date(iso).toLocaleString('zh-CN', {
-    month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
@@ -141,7 +145,11 @@ export function CronSettings() {
     } catch {
       // ignore
     } finally {
-      setTogglingIds((prev) => { const s = new Set(prev); s.delete(job.id); return s; });
+      setTogglingIds((prev) => {
+        const s = new Set(prev);
+        s.delete(job.id);
+        return s;
+      });
     }
   };
 
@@ -149,31 +157,46 @@ export function CronSettings() {
     if (runningIds.has(job.id)) return;
     setRunningIds((prev) => new Set(prev).add(job.id));
     try {
-      await fetch(`${API_BASE_URL}/cron/jobs/${job.id}/run`, { method: 'POST' });
+      await fetch(`${API_BASE_URL}/cron/jobs/${job.id}/run`, {
+        method: 'POST',
+      });
       // refresh after a short delay so the run record appears
       setTimeout(fetchJobs, 1500);
     } catch {
       // ignore
     } finally {
       setTimeout(() => {
-        setRunningIds((prev) => { const s = new Set(prev); s.delete(job.id); return s; });
+        setRunningIds((prev) => {
+          const s = new Set(prev);
+          s.delete(job.id);
+          return s;
+        });
       }, 1500);
     }
   };
 
   const handleDelete = async (job: CronJob) => {
     if (job.system) return;
-    if (!window.confirm(t.settings.cronDeleteConfirm.replace('{name}', job.name))) return;
+    if (
+      !window.confirm(t.settings.cronDeleteConfirm.replace('{name}', job.name))
+    )
+      return;
     setDeletingIds((prev) => new Set(prev).add(job.id));
     try {
-      const res = await fetch(`${API_BASE_URL}/cron/jobs/${job.id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/cron/jobs/${job.id}`, {
+        method: 'DELETE',
+      });
       if (res.ok) {
         setJobs((prev) => prev.filter((j) => j.id !== job.id));
       }
     } catch {
       // ignore
     } finally {
-      setDeletingIds((prev) => { const s = new Set(prev); s.delete(job.id); return s; });
+      setDeletingIds((prev) => {
+        const s = new Set(prev);
+        s.delete(job.id);
+        return s;
+      });
     }
   };
 
@@ -195,8 +218,12 @@ export function CronSettings() {
       {/* Header row */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-foreground text-base font-semibold">{t.settings.cron}</h3>
-          <p className="text-muted-foreground mt-0.5 text-sm">{t.settings.cronDescription}</p>
+          <h3 className="text-foreground text-base font-semibold">
+            {t.settings.cron}
+          </h3>
+          <p className="text-muted-foreground mt-0.5 text-sm">
+            {t.settings.cronDescription}
+          </p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
@@ -212,7 +239,10 @@ export function CronSettings() {
         <div className="flex items-start gap-2 rounded-lg bg-red-500/5 p-3">
           <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-500" />
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          <button onClick={fetchJobs} className="text-primary ml-auto text-xs hover:underline">
+          <button
+            onClick={fetchJobs}
+            className="text-primary ml-auto text-xs hover:underline"
+          >
             {t.settings.cronRetry}
           </button>
         </div>
@@ -222,7 +252,9 @@ export function CronSettings() {
       {jobs.length === 0 && !error ? (
         <div className="border-border rounded-xl border border-dashed py-12 text-center">
           <Clock className="text-muted-foreground mx-auto mb-3 size-8 opacity-40" />
-          <p className="text-muted-foreground text-sm">{t.settings.cronEmpty}</p>
+          <p className="text-muted-foreground text-sm">
+            {t.settings.cronEmpty}
+          </p>
           <button
             onClick={() => setShowCreate(true)}
             className="text-primary mt-2 text-xs hover:underline"
@@ -237,7 +269,9 @@ export function CronSettings() {
               key={job.id}
               job={job}
               expanded={expandedId === job.id}
-              onExpand={() => setExpandedId(expandedId === job.id ? null : job.id)}
+              onExpand={() =>
+                setExpandedId(expandedId === job.id ? null : job.id)
+              }
               toggling={togglingIds.has(job.id)}
               running={runningIds.has(job.id)}
               deleting={deletingIds.has(job.id)}
@@ -286,16 +320,25 @@ interface JobCardProps {
 }
 
 function JobCard({
-  job, expanded, toggling, running, deleting,
-  onExpand, onToggle, onRunNow, onDelete,
+  job,
+  expanded,
+  toggling,
+  running,
+  deleting,
+  onExpand,
+  onToggle,
+  onRunNow,
+  onDelete,
 }: JobCardProps) {
   const lastRun = job.runs?.[job.runs.length - 1];
 
   return (
-    <div className={cn(
-      'border-border bg-background rounded-xl border transition-all',
-      !job.enabled && 'opacity-60'
-    )}>
+    <div
+      className={cn(
+        'border-border bg-background rounded-xl border transition-all',
+        !job.enabled && 'opacity-60'
+      )}
+    >
       {/* Main row */}
       <div className="flex items-center gap-3 p-4">
         {/* Expand chevron */}
@@ -303,15 +346,19 @@ function JobCard({
           onClick={onExpand}
           className="text-muted-foreground hover:text-foreground shrink-0 transition-colors"
         >
-          {expanded
-            ? <ChevronDown className="size-4" />
-            : <ChevronRight className="size-4" />}
+          {expanded ? (
+            <ChevronDown className="size-4" />
+          ) : (
+            <ChevronRight className="size-4" />
+          )}
         </button>
 
         {/* Info */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-foreground truncate text-sm font-medium">{job.name}</span>
+            <span className="text-foreground truncate text-sm font-medium">
+              {job.name}
+            </span>
             {job.system && (
               <span className="inline-flex items-center gap-0.5 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
                 <Shield className="size-2.5" />
@@ -320,18 +367,22 @@ function JobCard({
             )}
             {/* Last run status dot */}
             {lastRun && (
-              <span className={cn(
-                'size-1.5 rounded-full shrink-0',
-                lastRun.status === 'success' && 'bg-green-500',
-                lastRun.status === 'failed' && 'bg-red-500',
-                lastRun.status === 'running' && 'bg-amber-400 animate-pulse',
-              )} />
+              <span
+                className={cn(
+                  'size-1.5 shrink-0 rounded-full',
+                  lastRun.status === 'success' && 'bg-green-500',
+                  lastRun.status === 'failed' && 'bg-red-500',
+                  lastRun.status === 'running' && 'animate-pulse bg-amber-400'
+                )}
+              />
             )}
           </div>
           <p className="text-muted-foreground mt-0.5 truncate text-xs">
             {formatSchedule(job.schedule)}
             {job.lastRunAt && (
-              <span className="ml-2 opacity-60">· 上次 {formatTime(job.lastRunAt)}</span>
+              <span className="ml-2 opacity-60">
+                · 上次 {formatTime(job.lastRunAt)}
+              </span>
             )}
           </p>
         </div>
@@ -349,10 +400,12 @@ function JobCard({
               toggling && 'cursor-not-allowed opacity-50'
             )}
           >
-            <span className={cn(
-              'inline-block size-3.5 rounded-full bg-white shadow transition-transform',
-              job.enabled ? 'translate-x-[18px]' : 'translate-x-[2px]'
-            )} />
+            <span
+              className={cn(
+                'inline-block size-3.5 rounded-full bg-white shadow transition-transform',
+                job.enabled ? 'translate-x-[18px]' : 'translate-x-[2px]'
+              )}
+            />
           </button>
 
           {/* Run now */}
@@ -362,9 +415,11 @@ function JobCard({
             title="立即执行"
             className="text-muted-foreground hover:text-foreground rounded-md p-1.5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
           >
-            {running
-              ? <Loader2 className="size-3.5 animate-spin" />
-              : <Play className="size-3.5" />}
+            {running ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Play className="size-3.5" />
+            )}
           </button>
 
           {/* Delete */}
@@ -375,9 +430,11 @@ function JobCard({
               title="删除"
               className="text-muted-foreground hover:text-destructive rounded-md p-1.5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
             >
-              {deleting
-                ? <Loader2 className="size-3.5 animate-spin" />
-                : <Trash2 className="size-3.5" />}
+              {deleting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="size-3.5" />
+              )}
             </button>
           )}
         </div>
@@ -385,15 +442,21 @@ function JobCard({
 
       {/* Expanded details */}
       {expanded && (
-        <div className="border-border border-t px-4 pb-4 pt-3 space-y-3">
+        <div className="border-border space-y-3 border-t px-4 pt-3 pb-4">
           {/* Prompt */}
           {(job.prompt || job.system) && (
             <div>
-              <p className="text-muted-foreground mb-1 text-[11px] font-medium uppercase tracking-wide">提示词</p>
-              <p className={cn(
-                'bg-muted/40 rounded-lg p-2.5 text-xs leading-relaxed',
-                job.prompt ? 'text-foreground' : 'text-muted-foreground italic'
-              )}>
+              <p className="text-muted-foreground mb-1 text-[11px] font-medium tracking-wide uppercase">
+                提示词
+              </p>
+              <p
+                className={cn(
+                  'bg-muted/40 rounded-lg p-2.5 text-xs leading-relaxed',
+                  job.prompt
+                    ? 'text-foreground'
+                    : 'text-muted-foreground italic'
+                )}
+              >
                 {job.prompt || '系统内置任务，由应用自动处理'}
               </p>
             </div>
@@ -404,40 +467,67 @@ function JobCard({
             <div className="flex items-center gap-2 text-xs">
               <Clock className="text-muted-foreground size-3.5" />
               <span className="text-muted-foreground">下次执行:</span>
-              <span className="text-foreground">{formatTime(job.nextRunAt)}</span>
+              <span className="text-foreground">
+                {formatTime(job.nextRunAt)}
+              </span>
             </div>
           )}
 
           {/* Run history */}
           {job.runs && job.runs.length > 0 && (
             <div>
-              <p className="text-muted-foreground mb-1.5 text-[11px] font-medium uppercase tracking-wide">
+              <p className="text-muted-foreground mb-1.5 text-[11px] font-medium tracking-wide uppercase">
                 最近执行记录 ({job.runs.length})
               </p>
               <div className="space-y-1.5">
-                {[...job.runs].reverse().slice(0, 5).map((run, i) => (
-                  <div key={i} className="bg-muted/30 flex items-start gap-2 rounded-lg p-2.5">
-                    {run.status === 'success' && <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-green-500" />}
-                    {run.status === 'failed' && <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-red-500" />}
-                    {run.status === 'running' && <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-amber-500" />}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className={cn(
-                          'text-xs font-medium',
-                          run.status === 'success' && 'text-green-600 dark:text-green-400',
-                          run.status === 'failed' && 'text-red-600 dark:text-red-400',
-                          run.status === 'running' && 'text-amber-600 dark:text-amber-400',
-                        )}>
-                          {run.status === 'success' ? '成功' : run.status === 'failed' ? '失败' : '执行中'}
-                        </span>
-                        <span className="text-muted-foreground text-[11px]">{formatTime(run.startedAt)}</span>
-                      </div>
-                      {run.error && (
-                        <p className="text-muted-foreground mt-0.5 truncate text-[11px]">{run.error}</p>
+                {[...job.runs]
+                  .reverse()
+                  .slice(0, 5)
+                  .map((run, i) => (
+                    <div
+                      key={i}
+                      className="bg-muted/30 flex items-start gap-2 rounded-lg p-2.5"
+                    >
+                      {run.status === 'success' && (
+                        <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-green-500" />
                       )}
+                      {run.status === 'failed' && (
+                        <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-red-500" />
+                      )}
+                      {run.status === 'running' && (
+                        <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-amber-500" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={cn(
+                              'text-xs font-medium',
+                              run.status === 'success' &&
+                                'text-green-600 dark:text-green-400',
+                              run.status === 'failed' &&
+                                'text-red-600 dark:text-red-400',
+                              run.status === 'running' &&
+                                'text-amber-600 dark:text-amber-400'
+                            )}
+                          >
+                            {run.status === 'success'
+                              ? '成功'
+                              : run.status === 'failed'
+                                ? '失败'
+                                : '执行中'}
+                          </span>
+                          <span className="text-muted-foreground text-[11px]">
+                            {formatTime(run.startedAt)}
+                          </span>
+                        </div>
+                        {run.error && (
+                          <p className="text-muted-foreground mt-0.5 truncate text-[11px]">
+                            {run.error}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           )}
@@ -474,7 +564,8 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
   const buildSchedule = (): CronSchedule => {
     if (scheduleType === 'cron') return { type: 'cron', expression, timezone };
     if (scheduleType === 'every') {
-      const mult = intervalUnit === 'h' ? 3600000 : intervalUnit === 'm' ? 60000 : 1000;
+      const mult =
+        intervalUnit === 'h' ? 3600000 : intervalUnit === 'm' ? 60000 : 1000;
       return { type: 'every', interval: Number(intervalVal) * mult };
     }
     // datetime-local gives a local-time string without timezone info (e.g. "2025-04-18T09:00").
@@ -506,7 +597,10 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
           delivery,
           enabled: true,
           targetConversationId: targetConversationId.trim() || undefined,
-          jitter: scheduleType !== 'at' && jitterEnabled ? Math.max(0, Number(jitterSec)) * 1000 : 0,
+          jitter:
+            scheduleType !== 'at' && jitterEnabled
+              ? Math.max(0, Number(jitterSec)) * 1000
+              : 0,
         }),
       });
       const data = await res.json();
@@ -527,16 +621,26 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
       <div className="bg-background border-border relative w-full max-w-md rounded-2xl border shadow-2xl">
         {/* Title */}
         <div className="border-border flex items-center justify-between border-b px-5 py-4">
-          <h3 className="text-foreground text-sm font-semibold">{t.settings.cronCreateTitle}</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <h3 className="text-foreground text-sm font-semibold">
+            {t.settings.cronCreateTitle}
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
             <X className="size-4" />
           </button>
         </div>
 
-        <div className="space-y-4 overflow-y-auto px-5 py-5" style={{ maxHeight: '70vh' }}>
+        <div
+          className="space-y-4 overflow-y-auto px-5 py-5"
+          style={{ maxHeight: '70vh' }}
+        >
           {/* Name */}
           <div className="space-y-1.5">
-            <label className="text-foreground text-xs font-medium">{t.settings.cronName} *</label>
+            <label className="text-foreground text-xs font-medium">
+              {t.settings.cronName} *
+            </label>
             <input
               type="text"
               value={name}
@@ -548,7 +652,9 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
 
           {/* Prompt */}
           <div className="space-y-1.5">
-            <label className="text-foreground text-xs font-medium">{t.settings.cronPrompt} *</label>
+            <label className="text-foreground text-xs font-medium">
+              {t.settings.cronPrompt} *
+            </label>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -560,7 +666,9 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
 
           {/* Schedule type */}
           <div className="space-y-1.5">
-            <label className="text-foreground text-xs font-medium">{t.settings.cronScheduleType}</label>
+            <label className="text-foreground text-xs font-medium">
+              {t.settings.cronScheduleType}
+            </label>
             <div className="flex gap-2">
               {(['cron', 'every', 'at'] as ScheduleType[]).map((type) => (
                 <button
@@ -573,7 +681,11 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
                       : 'border-border text-muted-foreground hover:border-primary/50'
                   )}
                 >
-                  {type === 'cron' ? 'Cron 表达式' : type === 'every' ? '定时间隔' : '单次执行'}
+                  {type === 'cron'
+                    ? 'Cron 表达式'
+                    : type === 'every'
+                      ? '定时间隔'
+                      : '单次执行'}
                 </button>
               ))}
             </div>
@@ -583,7 +695,9 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
           {scheduleType === 'cron' && (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <label className="text-foreground text-xs font-medium">Cron 表达式</label>
+                <label className="text-foreground text-xs font-medium">
+                  Cron 表达式
+                </label>
                 <input
                   type="text"
                   value={expression}
@@ -592,11 +706,15 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
                   className="border-border bg-background text-foreground placeholder:text-muted-foreground w-full rounded-lg border px-3 py-2 font-mono text-sm outline-none focus:ring-1 focus:ring-blue-500"
                 />
                 <p className="text-muted-foreground text-[11px]">
-                  分 时 日 月 周 &nbsp;·&nbsp; 例: <code className="bg-muted rounded px-1">0 9 * * 1-5</code> 工作日 9 点
+                  分 时 日 月 周 &nbsp;·&nbsp; 例:{' '}
+                  <code className="bg-muted rounded px-1">0 9 * * 1-5</code>{' '}
+                  工作日 9 点
                 </p>
               </div>
               <div className="space-y-1.5">
-                <label className="text-foreground text-xs font-medium">时区</label>
+                <label className="text-foreground text-xs font-medium">
+                  时区
+                </label>
                 <input
                   type="text"
                   value={timezone}
@@ -610,7 +728,9 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
 
           {scheduleType === 'every' && (
             <div className="space-y-1.5">
-              <label className="text-foreground text-xs font-medium">间隔时长</label>
+              <label className="text-foreground text-xs font-medium">
+                间隔时长
+              </label>
               <div className="flex gap-2">
                 <input
                   type="number"
@@ -621,7 +741,9 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
                 />
                 <select
                   value={intervalUnit}
-                  onChange={(e) => setIntervalUnit(e.target.value as 's' | 'm' | 'h')}
+                  onChange={(e) =>
+                    setIntervalUnit(e.target.value as 's' | 'm' | 'h')
+                  }
                   className="border-border bg-background text-foreground rounded-lg border px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
                 >
                   <option value="s">秒</option>
@@ -634,7 +756,9 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
 
           {scheduleType === 'at' && (
             <div className="space-y-1.5">
-              <label className="text-foreground text-xs font-medium">执行时间</label>
+              <label className="text-foreground text-xs font-medium">
+                执行时间
+              </label>
               <input
                 type="datetime-local"
                 value={atVal}
@@ -646,7 +770,9 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
 
           {/* Delivery */}
           <div className="space-y-1.5">
-            <label className="text-foreground text-xs font-medium">{t.settings.cronDelivery}</label>
+            <label className="text-foreground text-xs font-medium">
+              {t.settings.cronDelivery}
+            </label>
             <div className="flex gap-2">
               {(['none', 'channel'] as DeliveryMode[]).map((mode) => (
                 <button
@@ -673,7 +799,9 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
           {/* Target Conversation ID for channel delivery */}
           {delivery === 'channel' && (
             <div className="space-y-1.5">
-              <label className="text-foreground text-xs font-medium">目标对话 ID（Feishu chat_id）</label>
+              <label className="text-foreground text-xs font-medium">
+                目标对话 ID（Feishu chat_id）
+              </label>
               <input
                 type="text"
                 value={targetConversationId}
@@ -682,7 +810,8 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
                 className="border-border bg-background text-foreground placeholder:text-muted-foreground w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
               />
               <p className="text-muted-foreground text-[11px]">
-                从 Feishu 获取群组或个人对话的 chat_id，用于接收定时任务的执行结果
+                从 Feishu 获取群组或个人对话的
+                chat_id，用于接收定时任务的执行结果
               </p>
             </div>
           )}
@@ -690,7 +819,9 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
           {/* Jitter — only for recurring schedules */}
           {scheduleType !== 'at' && (
             <div className="space-y-1.5">
-              <label className="text-foreground text-xs font-medium">随机延迟（Jitter）</label>
+              <label className="text-foreground text-xs font-medium">
+                随机延迟（Jitter）
+              </label>
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -722,7 +853,8 @@ function CreateJobDialog({ onClose, onCreated }: CreateJobDialogProps) {
                 )}
               </div>
               <p className="text-muted-foreground text-[11px]">
-                执行前随机等待 0 ~ {jitterEnabled ? jitterSec : '0'} 秒，避免多任务同时触发
+                执行前随机等待 0 ~ {jitterEnabled ? jitterSec : '0'}{' '}
+                秒，避免多任务同时触发
               </p>
             </div>
           )}

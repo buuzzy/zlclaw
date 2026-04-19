@@ -1,0 +1,151 @@
+.fh-card {
+  background: var(--ht-card-bg);
+  border: 1px solid var(--ht-card-border);
+  border-radius: 12px;
+  padding: 16px;
+  max-width: 480px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Header */
+.fh-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.fh-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fh-company {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.fh-code {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.fh-year {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  background: var(--muted);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+/* 2x2 grid */
+.fh-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Dimension card */
+.fh-dim-card {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fh-dim-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fh-dim-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.fh-dim-score {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Score bar */
+.fh-score-bar-track {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.fh-score-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+
+.fh-dim-tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/* Metrics */
+.fh-dim-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.fh-metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fh-metric-label {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.fh-metric-value {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 11px;
+  color: var(--foreground);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.fh-metric-value.up {
+  color: var(--ht-up);
+}
+.fh-metric-value.down {
+  color: var(--ht-down);
+}
+
+.fh-trend-icon {
+  font-size: 9px;
+}
+
+/* Summary */
+.fh-summary {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-style: italic;
+  line-height: 1.6;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}

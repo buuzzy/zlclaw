@@ -10,6 +10,7 @@ export default {
   continue: 'Continue',
   // Model configuration prompt
   modelNotConfigured: 'Model Not Configured',
-  modelNotConfiguredDescription: 'Please configure an AI model provider to get started. You need to set up an API key and select a model.',
+  modelNotConfiguredDescription:
+    'Please configure an AI model provider to get started. You need to set up an API key and select a model.',
   configureModel: 'Configure Model',
 };

@@ -7,7 +7,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import QRCode from 'qrcode';
 import { API_BASE_URL } from '@/config';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
@@ -20,8 +19,16 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
+import QRCode from 'qrcode';
 
-type WeChatStatus = 'idle' | 'starting' | 'installing' | 'waiting_scan' | 'connected' | 'bound_other' | 'error';
+type WeChatStatus =
+  | 'idle'
+  | 'starting'
+  | 'installing'
+  | 'waiting_scan'
+  | 'connected'
+  | 'bound_other'
+  | 'error';
 
 interface WeChatStatusResponse {
   status: WeChatStatus;
@@ -132,7 +139,10 @@ export function ConnectorSettings() {
       return;
     }
     const update = () => {
-      const remaining = Math.max(0, Math.floor((qrExpireAt - Date.now()) / 1000));
+      const remaining = Math.max(
+        0,
+        Math.floor((qrExpireAt - Date.now()) / 1000)
+      );
       setCountdown(remaining);
       if (remaining <= 0 && countdownRef.current) {
         clearInterval(countdownRef.current);
@@ -204,7 +214,9 @@ export function ConnectorSettings() {
   const handleBindToHtclaw = async () => {
     setBindLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/channels/wechat/bind`, { method: 'POST' });
+      const res = await fetch(`${API_BASE_URL}/channels/wechat/bind`, {
+        method: 'POST',
+      });
       if (res.ok) {
         setBoundToHtclaw(true);
         setBoundAgent('htclaw');
@@ -357,10 +369,14 @@ export function ConnectorSettings() {
               <AlertCircle className="mt-0.5 size-4 shrink-0 text-orange-500" />
               <div className="space-y-1">
                 <p className="text-foreground text-sm font-medium">
-                  WeClaw 当前绑定到 <span className="text-orange-600 dark:text-orange-400">{boundAgent || '其他 Agent'}</span>
+                  WeClaw 当前绑定到{' '}
+                  <span className="text-orange-600 dark:text-orange-400">
+                    {boundAgent || '其他 Agent'}
+                  </span>
                 </p>
                 <p className="text-muted-foreground text-xs">
-                  微信消息正在发送到其他 Agent。点击「切换到 HT Claw」将修改 WeClaw 配置并重启服务，使微信消息转发到 HT Claw。
+                  微信消息正在发送到其他 Agent。点击「切换到 HT Claw」将修改
+                  WeClaw 配置并重启服务，使微信消息转发到 HT Claw。
                 </p>
               </div>
             </div>
@@ -445,7 +461,10 @@ export function ConnectorSettings() {
                     检测到已登录的微信账号，正在恢复连接
                   </p>
                   <button
-                    onClick={() => { setShowQrPanel(false); stopPolling(); }}
+                    onClick={() => {
+                      setShowQrPanel(false);
+                      stopPolling();
+                    }}
                     className="text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1 text-xs"
                   >
                     <X className="size-3" />
@@ -455,7 +474,8 @@ export function ConnectorSettings() {
               )}
 
               {/* QR Code (new login or re-auth required) */}
-              {(wechatStatus === 'waiting_scan' || (wechatStatus === 'starting' && qrUrl)) && (
+              {(wechatStatus === 'waiting_scan' ||
+                (wechatStatus === 'starting' && qrUrl)) && (
                 <>
                   <p className="text-foreground mb-4 text-sm">
                     {t.settings.wechatScanning}
@@ -470,7 +490,9 @@ export function ConnectorSettings() {
                     ) : (
                       <div className="flex flex-col items-center gap-2">
                         <Loader2 className="text-muted-foreground size-6 animate-spin" />
-                        <span className="text-muted-foreground text-xs">生成二维码中...</span>
+                        <span className="text-muted-foreground text-xs">
+                          生成二维码中...
+                        </span>
                       </div>
                     )}
                     {countdown <= 0 && qrExpireAt && (
@@ -544,7 +566,11 @@ function FeishuCard() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; botName?: string; error?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    botName?: string;
+    error?: string;
+  } | null>(null);
 
   // Form fields
   const [formAppId, setFormAppId] = useState('');
@@ -616,7 +642,11 @@ function FeishuCard() {
       const res = await fetch(`${API_BASE_URL}/channels/feishu/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appId: formAppId, appSecret: formAppSecret, autoConnect: true }),
+        body: JSON.stringify({
+          appId: formAppId,
+          appSecret: formAppSecret,
+          autoConnect: true,
+        }),
       });
       const data = await res.json();
 
@@ -662,7 +692,9 @@ function FeishuCard() {
   const handleDisconnect = async () => {
     setLoading(true);
     try {
-      await fetch(`${API_BASE_URL}/channels/feishu/disconnect`, { method: 'POST' });
+      await fetch(`${API_BASE_URL}/channels/feishu/disconnect`, {
+        method: 'POST',
+      });
       stopPolling();
       await fetchStatus();
     } catch {
@@ -726,7 +758,11 @@ function FeishuCard() {
           disabled={loading}
           className="text-muted-foreground hover:text-foreground rounded-md border px-3 py-1.5 text-xs transition-colors"
         >
-          {loading ? <Loader2 className="size-3 animate-spin" /> : t.settings.feishuDisconnect}
+          {loading ? (
+            <Loader2 className="size-3 animate-spin" />
+          ) : (
+            t.settings.feishuDisconnect
+          )}
         </button>
       );
     }
@@ -743,7 +779,11 @@ function FeishuCard() {
               loading && 'cursor-not-allowed opacity-50'
             )}
           >
-            {loading ? <Loader2 className="size-3 animate-spin" /> : t.settings.feishuConnect}
+            {loading ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              t.settings.feishuConnect
+            )}
           </button>
           <button
             onClick={handleOpenForm}
@@ -757,7 +797,10 @@ function FeishuCard() {
 
     if (status === 'connecting') {
       return (
-        <button disabled className="cursor-not-allowed rounded-md px-3 py-1.5 text-xs opacity-50">
+        <button
+          disabled
+          className="cursor-not-allowed rounded-md px-3 py-1.5 text-xs opacity-50"
+        >
           <Loader2 className="size-3 animate-spin" />
         </button>
       );
@@ -782,7 +825,11 @@ function FeishuCard() {
       <div className="flex items-center justify-between p-5">
         <div className="flex items-center gap-3">
           <div className="flex size-10 items-center justify-center rounded-lg bg-blue-500/10">
-            <svg className="size-5 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="currentColor">
+            <svg
+              className="size-5 text-blue-600 dark:text-blue-400"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
               <path d="M6.3 3.3c.4-.3 1-.3 1.4 0l8 6.5c.2.2.3.4.3.7v7c0 .4-.2.7-.5.9l-3 2c-.4.3-1 .3-1.4 0l-8-6.5c-.2-.2-.3-.4-.3-.7v-7c0-.4.2-.7.5-.9l3-2zm1.2 2.4L5 7.5v5.5l6.5 5.3 1.5-1V12L6.5 6.7z" />
             </svg>
           </div>
@@ -821,7 +868,9 @@ function FeishuCard() {
         <div className="border-border border-t px-5 py-3">
           <div className="flex items-start gap-2 rounded-lg bg-red-500/5 p-3">
             <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-500" />
-            <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {errorMessage}
+            </p>
           </div>
         </div>
       )}
@@ -845,11 +894,16 @@ function FeishuCard() {
 
             {/* App ID */}
             <div className="space-y-1.5">
-              <label className="text-foreground text-xs font-medium">App ID</label>
+              <label className="text-foreground text-xs font-medium">
+                App ID
+              </label>
               <input
                 type="text"
                 value={formAppId}
-                onChange={(e) => { setFormAppId(e.target.value); setTestResult(null); }}
+                onChange={(e) => {
+                  setFormAppId(e.target.value);
+                  setTestResult(null);
+                }}
                 placeholder="cli_xxxxxxxxxx"
                 className="border-border bg-background text-foreground placeholder:text-muted-foreground w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
               />
@@ -857,37 +911,60 @@ function FeishuCard() {
 
             {/* App Secret */}
             <div className="space-y-1.5">
-              <label className="text-foreground text-xs font-medium">App Secret</label>
+              <label className="text-foreground text-xs font-medium">
+                App Secret
+              </label>
               <input
                 type="password"
                 value={formAppSecret}
-                onChange={(e) => { setFormAppSecret(e.target.value); setTestResult(null); }}
-                placeholder={hasConfig ? t.settings.feishuSecretPlaceholder : 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+                onChange={(e) => {
+                  setFormAppSecret(e.target.value);
+                  setTestResult(null);
+                }}
+                placeholder={
+                  hasConfig
+                    ? t.settings.feishuSecretPlaceholder
+                    : 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+                }
                 className="border-border bg-background text-foreground placeholder:text-muted-foreground w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
 
             {/* Test Result */}
             {testResult && (
-              <div className={cn(
-                'flex items-start gap-2 rounded-lg p-3',
-                testResult.ok ? 'bg-green-500/5' : 'bg-red-500/5'
-              )}>
+              <div
+                className={cn(
+                  'flex items-start gap-2 rounded-lg p-3',
+                  testResult.ok ? 'bg-green-500/5' : 'bg-red-500/5'
+                )}
+              >
                 {testResult.ok ? (
                   <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-500" />
                 ) : (
                   <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-500" />
                 )}
                 <div>
-                  <p className={cn('text-sm font-medium', testResult.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>
+                  <p
+                    className={cn(
+                      'text-sm font-medium',
+                      testResult.ok
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
+                    )}
+                  >
                     {testResult.ok
-                      ? (testResult.botName
-                        ? t.settings.feishuTestSuccessWithName.replace('{name}', testResult.botName)
-                        : t.settings.feishuTestSuccess)
+                      ? testResult.botName
+                        ? t.settings.feishuTestSuccessWithName.replace(
+                            '{name}',
+                            testResult.botName
+                          )
+                        : t.settings.feishuTestSuccess
                       : t.settings.feishuTestFailed}
                   </p>
                   {testResult.error && (
-                    <p className="text-muted-foreground mt-0.5 text-xs">{testResult.error}</p>
+                    <p className="text-muted-foreground mt-0.5 text-xs">
+                      {testResult.error}
+                    </p>
                   )}
                 </div>
               </div>
@@ -901,7 +978,8 @@ function FeishuCard() {
                 className={cn(
                   'rounded-md border px-3 py-1.5 text-xs font-medium transition-colors',
                   'hover:bg-muted',
-                  (testLoading || !formAppId || !formAppSecret) && 'cursor-not-allowed opacity-50'
+                  (testLoading || !formAppId || !formAppSecret) &&
+                    'cursor-not-allowed opacity-50'
                 )}
               >
                 {testLoading ? (
@@ -920,7 +998,8 @@ function FeishuCard() {
                 className={cn(
                   'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                   'bg-primary text-primary-foreground hover:bg-primary/90',
-                  (loading || !formAppId || !formAppSecret) && 'cursor-not-allowed opacity-50'
+                  (loading || !formAppId || !formAppSecret) &&
+                    'cursor-not-allowed opacity-50'
                 )}
               >
                 {loading ? (
@@ -934,7 +1013,11 @@ function FeishuCard() {
               </button>
 
               <button
-                onClick={() => { setShowForm(false); setTestResult(null); setErrorMessage(null); }}
+                onClick={() => {
+                  setShowForm(false);
+                  setTestResult(null);
+                  setErrorMessage(null);
+                }}
                 className="text-muted-foreground hover:text-foreground ml-auto text-xs"
               >
                 {t.settings.feishuCancel}

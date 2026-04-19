@@ -149,7 +149,10 @@ export function LeftSidebar({
 
   // Rename dialog state
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
-  const [taskToRename, setTaskToRename] = useState<{ id: string; prompt: string } | null>(null);
+  const [taskToRename, setTaskToRename] = useState<{
+    id: string;
+    prompt: string;
+  } | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
   // Loading state for task switching

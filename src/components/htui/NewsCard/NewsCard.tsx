@@ -1,6 +1,7 @@
-import type { NewsListData } from "@/shared/types/artifact";
-import { formatPercent } from "@/shared/lib/format";
-import "./NewsCard.css";
+import { formatPercent } from '@/shared/lib/format';
+import type { NewsListData } from '@/shared/types/artifact';
+
+import './NewsCard.css';
 
 interface Props {
   data: NewsListData;
@@ -16,9 +17,7 @@ function NewsCard({ data }: Props) {
             <span className="news-item-time">{item.publishTime}</span>
           </div>
 
-          {item.summary && (
-            <p className="news-item-summary">{item.summary}</p>
-          )}
+          {item.summary && <p className="news-item-summary">{item.summary}</p>}
 
           <div className="news-item-footer">
             {item.tags.length > 0 && (
@@ -36,7 +35,7 @@ function NewsCard({ data }: Props) {
                 {item.marketTrends.map((t) => (
                   <span
                     key={t.ticker}
-                    className={`news-trend ${t.changeRate >= 0 ? "up" : "down"}`}
+                    className={`news-trend ${t.changeRate >= 0 ? 'up' : 'down'}`}
                   >
                     {t.ticker} {formatPercent(t.changeRate * 100)}
                   </span>

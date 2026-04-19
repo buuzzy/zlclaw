@@ -266,11 +266,11 @@ code {
 
 /* HT Claw Financial Color System */
 :root {
-  --ht-up: #10B981;
-  --ht-down: #EF4444;
-  --ht-warn: #F59E0B;
-  --ht-accent: #06B6D4;
-  --ht-accent-light: #22D3EE;
+  --ht-up: #10b981;
+  --ht-down: #ef4444;
+  --ht-warn: #f59e0b;
+  --ht-accent: #06b6d4;
+  --ht-accent-light: #22d3ee;
   --ht-card-bg: #f8f9fa;
   --ht-card-border: #e4e4e7;
 }

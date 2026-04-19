@@ -87,10 +87,7 @@ function SkillCard({
         <span className="text-foreground min-w-0 truncate text-sm font-medium">
           {skill.name}
         </span>
-        <Switch
-          checked={skill.enabled}
-          onChange={onToggle}
-        />
+        <Switch checked={skill.enabled} onChange={onToggle} />
       </div>
 
       <p className="text-muted-foreground mb-4 line-clamp-2 flex-1 text-xs">
@@ -192,9 +189,7 @@ export function SkillsSettings({
     setDisabledSkills(next);
 
     setSkills((prev) =>
-      prev.map((s) =>
-        s.name === skillName ? { ...s, enabled } : s
-      )
+      prev.map((s) => (s.name === skillName ? { ...s, enabled } : s))
     );
 
     setNeedsRestart(true);
@@ -573,7 +568,9 @@ export function SkillsSettings({
                     <SkillCard
                       key={skill.id}
                       skill={skill}
-                      onToggle={(enabled) => handleToggleSkill(skill.name, enabled)}
+                      onToggle={(enabled) =>
+                        handleToggleSkill(skill.name, enabled)
+                      }
                       onDelete={() => handleDeleteSkill(skill.id)}
                     />
                   ))}

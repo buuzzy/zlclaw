@@ -2,6 +2,12 @@
 
 > 记录已完成、进行中和待实现的功能。  
 > 每个功能标注优先级（P0~P3）和状态。
+>
+> 📁 **完整文档请见 [`docs/`](./docs/) 目录：**
+> - [`docs/TODO.md`](./docs/TODO.md) — 完整版（含竞品分析改进项）
+> - [`docs/PRD.md`](./docs/PRD.md) — 产品需求文档
+> - [`docs/SPEC.md`](./docs/SPEC.md) — 技术规格文档
+> - [`docs/competitive-analysis.md`](./docs/competitive-analysis.md) — 竞品对比分析
 
 ---
 
@@ -313,6 +319,148 @@ Agent 调用：定时任务管理 skill → curl POST /cron/jobs
 - `delivery: 'channel'` + `deleteAfterRun: true` 框架已完整
 - 用户可通过自然语言告诉 Agent 创建监控任务：「当茅台跌破1500提醒我」
 - Agent 使用 `定时任务管理` skill 创建 `type=every, interval=300000` 的轮询任务
+
+---
+
+---
+
+### P1 — OKX 全链路交易集成
+
+**状态：** 💡 构思中（2026-04-19）
+
+#### 背景
+
+HTclaw 当前已覆盖 A 股的行情获取（westock-market）、投研分析（westock-research）、选股筛选（westock-screener）和股单管理（westock-market 接口六）。但 A 股存在一个根本限制：**券商 API 不对个人开放**，AI 完成分析后用户仍需手动到券商 App 执行交易，链路断裂。
+
+OKX 开放了完整的 REST + WebSocket API（免申请，API Key 即可使用），覆盖现货、合约、期权全品类，支持行情查询、账户管理、下单交易。这使 HTclaw 有机会在加密资产方向实现**从行情 → 分析 → 下单的完整闭环**，弥补 A 股执行端的空白。
+
+#### 整体链路
+
+```
+行情数据        投研分析        信号生成        风控确认        下单执行        持仓监控
+────────       ────────       ────────       ────────       ────────       ────────
+OKX 实时       AI 解读        AI 建议         用户点击        OKX API        实时追踪
+行情/K线        宏观+链上       入场点位         确认卡片        trade/order    持仓盈亏
+资金费率        情绪指标        仓位比例         金额展示        批量撤单        止盈止损
+深度/成交       技术形态        止损设置         不可绕过        异步回调        异常告警
+```
+
+#### 分阶段实现计划
+
+**第一阶段：`okx-market` Skill — 行情与数据（只读，无账户）**
+
+新增 `src-api/resources/skills/okx-market/SKILL.md`，封装以下 OKX Public API（无需 API Key）：
+
+| 接口 | 说明 |
+|------|------|
+| `GET /api/v5/market/ticker` | 单币种实时报价（最新价、24h 涨跌、成交量） |
+| `GET /api/v5/market/tickers` | 全市场行情概览（可按 instType 过滤：SPOT/SWAP） |
+| `GET /api/v5/market/candles` | K 线数据（支持 1m/5m/1H/4H/1D 等 13 种粒度） |
+| `GET /api/v5/market/books` | 盘口深度（买卖挂单分布） |
+| `GET /api/v5/market/trades` | 最近成交记录 |
+| `GET /api/v5/rubik/stat/taker-volume` | 主动买/卖成交量比（判断多空力量） |
+| `GET /api/v5/rubik/stat/contracts/long-short-account-ratio` | 多空持仓人数比 |
+| `GET /api/v5/public/funding-rate` | 当前资金费率（合约特有指标） |
+| `GET /api/v5/public/open-interest` | 持仓量（反映市场参与度） |
+
+与 westock 系列的差异：
+- A 股行情来自腾讯财经代理，只有日线/分钟线
+- OKX 提供秒级 WebSocket 推送，Agent 可实时感知价格变动
+- 资金费率、多空比、持仓量是加密市场独有的衍生品指标，A 股无对应数据
+
+**第二阶段：`okx-account` Skill — 账户与持仓（只读，需 API Key）**
+
+新增 `okx-account` Skill，封装账户查询类接口（仅需 `read` 权限的 API Key，无交易风险）：
+
+| 接口 | 说明 |
+|------|------|
+| `GET /api/v5/account/balance` | 账户余额（各币种可用/冻结） |
+| `GET /api/v5/account/positions` | 当前持仓（合约仓位、杠杆、盈亏） |
+| `GET /api/v5/trade/orders-pending` | 当前挂单列表 |
+| `GET /api/v5/trade/fills` | 历史成交记录 |
+| `GET /api/v5/account/bills` | 账单流水（充提、手续费、资金费） |
+
+API Key 配置：存入 `~/.htclaw/config.json` 的 `okx` 字段（`apiKey` / `secretKey` / `passphrase`），在 Settings > Connector 面板配置，不随代码提交。
+
+**第三阶段：`okx-trade` Skill — 下单执行（需 trade 权限 API Key）**
+
+这是最核心也最需要谨慎设计的部分。
+
+核心原则：**AI 只负责计算和提案，执行权始终在用户手中。**
+
+交互流程：
+```
+用户：把我 20% 的 USDT 在当前价附近买入 BTC
+
+AI 分析：
+  当前 BTC 价格：$84,200
+  账户 USDT 余额：10,000
+  建议下单：限价 $84,000，数量 0.0238 BTC，花费 2,000 USDT
+
+  ┌─────────────────────────────────────────┐
+  │  📋 待确认订单                           │
+  │  BTC-USDT 现货 · 买入                   │
+  │  价格：$84,000   数量：0.0238 BTC       │
+  │  金额：≈ 2,000 USDT（占余额 20%）       │
+  │                                         │
+  │  [✅ 确认下单]        [❌ 取消]          │
+  └─────────────────────────────────────────┘
+
+用户点击"确认下单" → 调用 POST /api/v5/trade/order
+```
+
+封装接口：
+
+| 接口 | 说明 |
+|------|------|
+| `POST /api/v5/trade/order` | 单笔下单（市价/限价/止损） |
+| `POST /api/v5/trade/batch-orders` | 批量下单 |
+| `POST /api/v5/trade/cancel-order` | 撤单 |
+| `POST /api/v5/trade/cancel-batch-orders` | 批量撤单 |
+| `POST /api/v5/trade/amend-order` | 改单（修改价格/数量） |
+
+风控配置（存入 `config.json`，用户可在设置面板调整）：
+```json
+{
+  "okx": {
+    "trade": {
+      "enabled": true,
+      "allowedInstTypes": ["SPOT"],      // 默认只允许现货，防止合约爆仓
+      "maxSingleOrderUSDT": 1000,        // 单笔最大下单金额
+      "maxDailyTradeUSDT": 5000,         // 每日累计交易上限
+      "requireConfirmation": true        // 必须用户手动确认（不可关闭）
+    }
+  }
+}
+```
+
+#### 与现有系统的集成点
+
+1. **Cron 定时任务**：可创建「每天 9:00 拉取 BTC/ETH 行情 + 资金费率，生成每日加密早报推送飞书」
+2. **westock 协同**：AI 可同时分析 A 股和加密市场，做跨市场相关性分析（如美股科技股 → BTC 联动）
+3. **记忆系统**：用户的加密投资偏好、风险偏好、历史操作习惯写入 MEMORY.md，下次分析自动参考
+4. **飞书/微信渠道**：在飞书群里 @ 机器人「BTC 当前怎么样」，返回实时行情卡片
+
+#### 技术实现要点
+
+- OKX API 签名：每个请求需要 HMAC-SHA256 签名（timestamp + method + requestPath + body），封装为 `src-api/src/shared/utils/okx-auth.ts`
+- WebSocket 实时推送：行情监控类 Cron Job 可订阅 OKX WS `wss://ws.okx.com:8443/ws/v5/public`，替代轮询
+- Artifact 确认卡片：前端新增 `artifact:trade-confirm` 类型，渲染订单确认 UI，用户点击后回调 API
+- 测试环境：OKX 提供模拟盘 API（`https://www.okx.com/api/v5/` → `https://www.okx.com/api/v5/` + header `x-simulated-trading: 1`），开发阶段全程用模拟盘验证
+
+#### 实现顺序建议
+
+```
+okx-market (public, 无风险) → 验证数据质量和用户场景
+    ↓
+okx-account (read-only) → 让 AI 能结合真实持仓做分析
+    ↓
+trade confirm UI (artifact:trade-confirm) → 前端确认组件
+    ↓
+okx-trade (模拟盘验证) → 全流程端到端测试
+    ↓
+okx-trade (真实环境，小额测试) → 上线
+```
 
 ---
 

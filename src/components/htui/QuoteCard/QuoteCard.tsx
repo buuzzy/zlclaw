@@ -1,11 +1,12 @@
-import type { QuoteCardData } from "@/shared/types/artifact";
 import {
-  formatPrice,
-  formatPercent,
-  formatVolume,
   formatAmount,
-} from "@/shared/lib/format";
-import "./QuoteCard.css";
+  formatPercent,
+  formatPrice,
+  formatVolume,
+} from '@/shared/lib/format';
+import type { QuoteCardData } from '@/shared/types/artifact';
+
+import './QuoteCard.css';
 
 interface QuoteCardProps {
   data: QuoteCardData;
@@ -13,8 +14,8 @@ interface QuoteCardProps {
 
 function QuoteCard({ data }: QuoteCardProps) {
   const isUp = data.chgPct >= 0;
-  const trend = isUp ? "up" : "down";
-  const arrow = isUp ? "▲" : "▼";
+  const trend = isUp ? 'up' : 'down';
+  const arrow = isUp ? '▲' : '▼';
 
   return (
     <div className="quote-card">
@@ -32,7 +33,10 @@ function QuoteCard({ data }: QuoteCardProps) {
           <span className="quote-currency">{data.currency}</span>
         </div>
         <div className={`quote-change ${trend}`}>
-          <span>{isUp ? "+" : ""}{formatPrice(data.chgVal)}</span>
+          <span>
+            {isUp ? '+' : ''}
+            {formatPrice(data.chgVal)}
+          </span>
           <span>({formatPercent(data.chgPct)})</span>
           <span className="quote-arrow">{arrow}</span>
         </div>
@@ -51,13 +55,17 @@ function QuoteCard({ data }: QuoteCardProps) {
         </div>
         <div className="quote-cell">
           <span className="cell-label">最高</span>
-          <span className={`cell-value ${data.high >= data.prevClose ? "up" : "down"}`}>
+          <span
+            className={`cell-value ${data.high >= data.prevClose ? 'up' : 'down'}`}
+          >
             {formatPrice(data.high)}
           </span>
         </div>
         <div className="quote-cell">
           <span className="cell-label">最低</span>
-          <span className={`cell-value ${data.low >= data.prevClose ? "up" : "down"}`}>
+          <span
+            className={`cell-value ${data.low >= data.prevClose ? 'up' : 'down'}`}
+          >
             {formatPrice(data.low)}
           </span>
         </div>

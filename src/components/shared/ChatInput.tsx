@@ -32,6 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
 import { ContextUsageRing } from './ContextUsageRing';
 
 export type ChatMode = 'auto' | 'chat' | 'task';
@@ -57,7 +58,11 @@ export interface ChatInputProps {
   /** Whether the agent is running */
   isRunning?: boolean;
   /** Callback when submitting with text, attachments, and mode */
-  onSubmit: (text: string, attachments?: MessageAttachment[], mode?: ChatMode) => Promise<void>;
+  onSubmit: (
+    text: string,
+    attachments?: MessageAttachment[],
+    mode?: ChatMode
+  ) => Promise<void>;
   /** Callback when stop button is clicked */
   onStop?: () => void;
   /** Variant: 'home' for larger home page style, 'reply' for compact reply style */
@@ -271,19 +276,32 @@ export function ChatInput({
 
       const newAttachments: Attachment[] = [];
       for (const filePath of paths) {
-        const name = filePath.split('/').pop() || filePath.split('\\').pop() || filePath;
+        const name =
+          filePath.split('/').pop() || filePath.split('\\').pop() || filePath;
         const ext = name.split('.').pop()?.toLowerCase() || '';
-        const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'];
+        const imageExts = [
+          'jpg',
+          'jpeg',
+          'png',
+          'gif',
+          'webp',
+          'bmp',
+          'svg',
+          'ico',
+        ];
         const isImage = imageExts.includes(ext);
 
         // Create a minimal File object with the path stored in name
         // The actual content will be read later via Tauri FS when converting to MessageAttachment
         const mimeType = isImage
           ? `image/${ext === 'jpg' ? 'jpeg' : ext}`
-          : ext === 'pdf' ? 'application/pdf'
-          : ext === 'json' ? 'application/json'
-          : ext === 'csv' ? 'text/csv'
-          : 'application/octet-stream';
+          : ext === 'pdf'
+            ? 'application/pdf'
+            : ext === 'json'
+              ? 'application/json'
+              : ext === 'csv'
+                ? 'text/csv'
+                : 'application/octet-stream';
 
         const attachment: Attachment = {
           id: generateId(),
@@ -335,7 +353,8 @@ export function ChatInput({
 
     const setupDragDrop = async () => {
       // Only in Tauri environment
-      if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
+      if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window))
+        return;
 
       try {
         const { getCurrentWebview } = await import('@tauri-apps/api/webview');
@@ -353,18 +372,26 @@ export function ChatInput({
           } else if (event.payload.type === 'over') {
             const { x, y } = event.payload.position;
             const isOver =
-              x >= rect.left && x <= rect.right &&
-              y >= rect.top && y <= rect.bottom;
+              x >= rect.left &&
+              x <= rect.right &&
+              y >= rect.top &&
+              y <= rect.bottom;
             setIsDragging(isOver);
           } else if (event.payload.type === 'drop') {
             setIsDragging(false);
             const now = Date.now();
             const { x, y } = event.payload.position;
             const isOver =
-              x >= rect.left && x <= rect.right &&
-              y >= rect.top && y <= rect.bottom;
+              x >= rect.left &&
+              x <= rect.right &&
+              y >= rect.top &&
+              y <= rect.bottom;
             // Guard: only one ChatInput instance handles each drop
-            if (isOver && event.payload.paths.length > 0 && now - lastDropTimestamp > 100) {
+            if (
+              isOver &&
+              event.payload.paths.length > 0 &&
+              now - lastDropTimestamp > 100
+            ) {
               lastDropTimestamp = now;
               addFilesFromPaths(event.payload.paths);
             }
@@ -378,7 +405,9 @@ export function ChatInput({
     };
 
     setupDragDrop();
-    return () => { unlisten?.(); };
+    return () => {
+      unlisten?.();
+    };
   }, [addFilesFromPaths]);
 
   // Open file picker
@@ -397,7 +426,9 @@ export function ChatInput({
   };
 
   // Convert attachments to MessageAttachment format
-  const convertToMessageAttachments = async (): Promise<MessageAttachment[] | undefined> => {
+  const convertToMessageAttachments = async (): Promise<
+    MessageAttachment[] | undefined
+  > => {
     if (attachments.length === 0) return undefined;
 
     const result: MessageAttachment[] = [];
@@ -406,7 +437,9 @@ export function ChatInput({
       // For images, only include if preview exists and has data
       if (a.type === 'image') {
         if (!a.preview || a.preview.length === 0) {
-          console.warn(`[ChatInput] Skipping image ${a.file.name}: no preview data`);
+          console.warn(
+            `[ChatInput] Skipping image ${a.file.name}: no preview data`
+          );
           continue;
         }
       }
@@ -422,9 +455,14 @@ export function ChatInput({
       if (a.type === 'file' && !data) {
         try {
           data = await readFileAsBase64(a.file);
-          console.log(`[ChatInput] Read file ${a.file.name}: ${data.length} chars`);
+          console.log(
+            `[ChatInput] Read file ${a.file.name}: ${data.length} chars`
+          );
         } catch (error) {
-          console.error(`[ChatInput] Failed to read file ${a.file.name}:`, error);
+          console.error(
+            `[ChatInput] Failed to read file ${a.file.name}:`,
+            error
+          );
         }
       }
 

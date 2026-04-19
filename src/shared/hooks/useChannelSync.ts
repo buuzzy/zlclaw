@@ -61,14 +61,10 @@ function addDeletedId(id: string): void {
   ids.add(id);
   try {
     localStorage.setItem(DELETED_KEY, JSON.stringify([...ids]));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
-function clearDeletedIds(): void {
-  try {
-    localStorage.removeItem(DELETED_KEY);
-  } catch { /* ignore */ }
-}
-
 
 /** Call this when a channel-originated task is deleted by the user */
 export function markChannelTaskDeleted(taskId: string): void {
@@ -99,6 +95,26 @@ export function useChannelSync(onNewTask?: () => void) {
 
       const deletedIds = getDeletedIds();
       let changed = false;
+
+      // Clean up deletedIds: if a conversation no longer exists on the backend,
+      // it's safe to remove from the blocked list (it won't be recreated).
+      if (deletedIds.size > 0) {
+        const backendIds = new Set(data.conversations.map((c) => c.id));
+        const toRemove = [...deletedIds].filter((id) => !backendIds.has(id));
+        if (toRemove.length > 0) {
+          const updated = getDeletedIds();
+          toRemove.forEach((id) => updated.delete(id));
+          try {
+            if (updated.size === 0) {
+              localStorage.removeItem(DELETED_KEY);
+            } else {
+              localStorage.setItem(DELETED_KEY, JSON.stringify([...updated]));
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      }
 
       for (const conv of data.conversations) {
         try {
@@ -170,7 +186,12 @@ export function useChannelSync(onNewTask?: () => void) {
             }
 
             if (newMessages.length > 0) {
-              console.log('[ChannelSync] Appended', newMessages.length, 'msgs to', taskId);
+              console.log(
+                '[ChannelSync] Appended',
+                newMessages.length,
+                'msgs to',
+                taskId
+              );
               changed = true;
             }
           }
@@ -178,10 +199,6 @@ export function useChannelSync(onNewTask?: () => void) {
           console.error('[ChannelSync] Failed to sync', conv.id, err);
         }
       }
-
-      // Clear deleted IDs after successful sync to prevent indefinite blocking
-      // The backend has confirmed these conversations are gone
-      clearDeletedIds();
 
       if (changed) {
         onNewTask?.();

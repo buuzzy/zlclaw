@@ -10,6 +10,7 @@ export default {
   continue: '继续',
   // Model configuration prompt
   modelNotConfigured: '模型未配置',
-  modelNotConfiguredDescription: '请先配置 AI 模型服务商。您需要设置 API Key 并选择一个模型。',
+  modelNotConfiguredDescription:
+    '请先配置 AI 模型服务商。您需要设置 API Key 并选择一个模型。',
   configureModel: '配置模型',
 };

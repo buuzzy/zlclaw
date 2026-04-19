@@ -99,21 +99,22 @@ export function ContextUsageRing({
       {showTooltip && interactive && (
         <div
           className={cn(
-            'absolute bottom-full mb-2 left-1/2 -translate-x-1/2',
-            'z-50 px-3 py-2 text-xs font-medium text-white rounded-lg',
-            'bg-slate-900 dark:bg-slate-800 whitespace-nowrap pointer-events-none',
+            'absolute bottom-full left-1/2 mb-2 -translate-x-1/2',
+            'z-50 rounded-lg px-3 py-2 text-xs font-medium text-white',
+            'pointer-events-none bg-slate-900 whitespace-nowrap dark:bg-slate-800',
             'animate-in fade-in duration-150'
           )}
         >
           <div className="font-semibold">
-            {currentTokens.toLocaleString()} / {(contextLimit / 1000).toFixed(0)}K tokens
+            {currentTokens.toLocaleString()} /{' '}
+            {(contextLimit / 1000).toFixed(0)}K tokens
           </div>
           <div className="text-slate-400">
             {Math.round(percentage)}% context used
           </div>
           {/* Arrow */}
           <div
-            className="absolute left-1/2 -translate-x-1/2 top-full w-2 h-2 bg-slate-900 dark:bg-slate-800 rotate-45"
+            className="absolute top-full left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-slate-900 dark:bg-slate-800"
             style={{ marginTop: '-4px' }}
           />
         </div>

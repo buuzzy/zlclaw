@@ -1,30 +1,31 @@
-import type { FinanceBreakfastData } from "@/shared/types/artifact";
-import "./FinanceBreakfast.css";
+import type { FinanceBreakfastData } from '@/shared/types/artifact';
+
+import './FinanceBreakfast.css';
 
 const TAG_META: Record<number, { icon: string; label: string }> = {
-  1: { icon: "🌅", label: "财经早餐" },
-  2: { icon: "🌙", label: "港股收盘" },
-  3: { icon: "☀️", label: "港股午盘" },
+  1: { icon: '🌅', label: '财经早餐' },
+  2: { icon: '🌙', label: '港股收盘' },
+  3: { icon: '☀️', label: '港股午盘' },
 };
 
 const SENTIMENT_CLASS: Record<string, string> = {
-  positive: "positive",
-  neutral: "neutral",
-  negative: "negative",
+  positive: 'positive',
+  neutral: 'neutral',
+  negative: 'negative',
 };
 
 function sentimentLabel(raw: string): string {
-  if (/乐观|positive|bullish/i.test(raw)) return "乐观";
-  if (/悲观|negative|bearish/i.test(raw)) return "悲观";
-  if (/中性偏乐观/i.test(raw)) return "中性偏乐观";
-  if (/中性偏悲观/i.test(raw)) return "中性偏悲观";
-  return raw || "中性";
+  if (/乐观|positive|bullish/i.test(raw)) return '乐观';
+  if (/悲观|negative|bearish/i.test(raw)) return '悲观';
+  if (/中性偏乐观/i.test(raw)) return '中性偏乐观';
+  if (/中性偏悲观/i.test(raw)) return '中性偏悲观';
+  return raw || '中性';
 }
 
 function sentimentClass(raw: string): string {
-  if (/乐观|positive|bullish/i.test(raw)) return "positive";
-  if (/悲观|negative|bearish/i.test(raw)) return "negative";
-  return SENTIMENT_CLASS[raw] ?? "neutral";
+  if (/乐观|positive|bullish/i.test(raw)) return 'positive';
+  if (/悲观|negative|bearish/i.test(raw)) return 'negative';
+  return SENTIMENT_CLASS[raw] ?? 'neutral';
 }
 
 interface Props {

@@ -717,11 +717,13 @@ export async function initializeSettings(): Promise<Settings> {
     for (let i = 0; i < retries; i++) {
       try {
         await syncSettingsWithBackend();
-        console.log('[Settings] Auto-synced model config with backend on startup');
+        console.log(
+          '[Settings] Auto-synced model config with backend on startup'
+        );
         return;
       } catch {
         if (i < retries - 1) {
-          await new Promise(r => setTimeout(r, delay));
+          await new Promise((r) => setTimeout(r, delay));
         }
       }
     }
@@ -849,12 +851,11 @@ export function isModelConfigured(): boolean {
   const settings = getSettings();
 
   if (!settings.defaultProvider || settings.defaultProvider === 'default') {
-    const validProvider = settings.providers.find(
-      (p) => p.enabled && p.apiKey
-    );
+    const validProvider = settings.providers.find((p) => p.enabled && p.apiKey);
     if (validProvider) {
       settings.defaultProvider = validProvider.id;
-      settings.defaultModel = validProvider.defaultModel || validProvider.models?.[0] || '';
+      settings.defaultModel =
+        validProvider.defaultModel || validProvider.models?.[0] || '';
       saveSettings(settings);
       return true;
     }
@@ -872,7 +873,8 @@ export function isModelConfigured(): boolean {
   const validProvider = settings.providers.find((p) => p.enabled && p.apiKey);
   if (validProvider) {
     settings.defaultProvider = validProvider.id;
-    settings.defaultModel = validProvider.defaultModel || validProvider.models?.[0] || '';
+    settings.defaultModel =
+      validProvider.defaultModel || validProvider.models?.[0] || '';
     saveSettings(settings);
     return true;
   }
@@ -895,7 +897,8 @@ export async function syncSettingsWithBackend(): Promise<void> {
       aiProvider = fallback;
       // Also fix defaultProvider so future syncs are correct
       settings.defaultProvider = fallback.id;
-      settings.defaultModel = fallback.defaultModel || fallback.models?.[0] || settings.defaultModel;
+      settings.defaultModel =
+        fallback.defaultModel || fallback.models?.[0] || settings.defaultModel;
       saveSettings(settings);
     }
   }

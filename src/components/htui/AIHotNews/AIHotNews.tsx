@@ -1,5 +1,6 @@
-import type { AIHotNewsData } from "@/shared/types/artifact";
-import "./AIHotNews.css";
+import type { AIHotNewsData } from '@/shared/types/artifact';
+
+import './AIHotNews.css';
 
 interface Props {
   data: AIHotNewsData;

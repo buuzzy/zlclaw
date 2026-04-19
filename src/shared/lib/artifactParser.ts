@@ -1,18 +1,22 @@
-import type { Artifact, ArtifactType } from "../types/artifact";
+import type { Artifact, ArtifactType } from '../types/artifact';
 
 const VALID_TYPES: Set<string> = new Set([
-  "quote-card",
-  "kline-chart",
-  "news-list",
-  "finance-breakfast",
-  "ai-hot-news",
-  "bar-chart",
-  "line-chart",
-  "data-table",
+  'quote-card',
+  'kline-chart',
+  'news-list',
+  'finance-breakfast',
+  'ai-hot-news',
+  'bar-chart',
+  'line-chart',
+  'data-table',
+  'stock-snapshot',
+  'sector-heatmap',
+  'research-consensus',
+  'financial-health',
+  'news-feed',
 ]);
 
-const ARTIFACT_BLOCK_RE =
-  /```artifact:([\w-]+)\s*\n([\s\S]*?)```/g;
+const ARTIFACT_BLOCK_RE = /```artifact:([\w-]+)\s*\n([\s\S]*?)```/g;
 
 let idCounter = 0;
 
@@ -39,7 +43,7 @@ export function extractArtifacts(text: string): ExtractResult {
 
   const cleanText = text.replace(ARTIFACT_BLOCK_RE, (_match, type, body) => {
     const trimmedType = (type as string).trim();
-    if (!VALID_TYPES.has(trimmedType)) return "";
+    if (!VALID_TYPES.has(trimmedType)) return '';
 
     try {
       const data = JSON.parse(body as string);
@@ -51,7 +55,7 @@ export function extractArtifacts(text: string): ExtractResult {
     } catch {
       // JSON parse failed — drop the block silently
     }
-    return "";
+    return '';
   });
 
   return { cleanText: cleanText.trim(), artifacts };
@@ -62,9 +66,9 @@ export function extractArtifacts(text: string): ExtractResult {
  * Used during streaming to defer extraction until the block completes.
  */
 export function hasIncompleteBlock(text: string): boolean {
-  const lastOpen = text.lastIndexOf("```artifact:");
+  const lastOpen = text.lastIndexOf('```artifact:');
   if (lastOpen === -1) return false;
   const afterOpen = text.slice(lastOpen);
-  const closingFence = afterOpen.indexOf("```", "```artifact:".length);
+  const closingFence = afterOpen.indexOf('```', '```artifact:'.length);
   return closingFence === -1;
 }

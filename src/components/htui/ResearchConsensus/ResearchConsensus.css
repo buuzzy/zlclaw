@@ -1,0 +1,263 @@
+.rc-card {
+  background: var(--ht-card-bg);
+  border: 1px solid var(--ht-card-border);
+  border-radius: 12px;
+  padding: 16px;
+  max-width: 480px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Header */
+.rc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.rc-title-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rc-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.rc-code {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.rc-price {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--foreground);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.rc-price-label {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+
+/* Section */
+.rc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.rc-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Rating bar */
+.rc-rating-bar {
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+  gap: 1px;
+}
+
+.rc-bar-seg {
+  height: 100%;
+  border-radius: 3px;
+  transition: flex 0.3s ease;
+}
+
+.rc-bar-seg.buy {
+  background: var(--ht-up);
+}
+.rc-bar-seg.hold {
+  background: var(--muted-foreground);
+  opacity: 0.5;
+}
+.rc-bar-seg.sell {
+  background: var(--ht-down);
+}
+
+.rc-rating-counts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rc-count {
+  font-size: 12px;
+  font-weight: 500;
+}
+.rc-count.buy {
+  color: var(--ht-up);
+}
+.rc-count.hold {
+  color: var(--muted-foreground);
+}
+.rc-count.sell {
+  color: var(--ht-down);
+}
+
+.rc-count-total {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-left: auto;
+}
+
+/* Target price range */
+.rc-target-track-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rc-target-low,
+.rc-target-high {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.rc-target-track {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  position: relative;
+}
+
+/* Current price marker — thin vertical bar */
+.rc-target-marker {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 12px;
+  background: var(--foreground);
+  border-radius: 1px;
+  transform: translateX(-50%);
+}
+
+/* Avg target price marker — diamond */
+.rc-avg-marker {
+  position: absolute;
+  top: -3px;
+  width: 10px;
+  height: 10px;
+  background: var(--primary);
+  border-radius: 2px;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.rc-avg-label {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rc-avg-label strong {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  color: var(--foreground);
+}
+
+.upside {
+  font-size: 11px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+.upside.positive {
+  color: var(--ht-up);
+}
+.upside.negative {
+  color: var(--ht-down);
+}
+
+/* Research list */
+.rc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.rc-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+
+.rc-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.rc-item-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rc-institution {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+  white-space: nowrap;
+}
+
+.rc-report-title {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.rc-item-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.rc-rating-badge {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rc-target-price {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.rc-date {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
