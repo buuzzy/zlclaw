@@ -278,3 +278,8 @@ code {
   --ht-card-bg: #1e1e1e;
   --ht-card-border: #27272a;
 }
+
+/* Hide action bar during screenshot export */
+.exporting-screenshot .agent-action-bar {
+  display: none !important;
+}

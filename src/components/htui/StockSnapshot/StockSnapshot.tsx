@@ -40,7 +40,8 @@ function StockSnapshot({ data }: Props) {
 
   const sparkW = 96;
   const sparkH = 40;
-  const sparkPath = buildSparklinePath(data.sparkline, sparkW, sparkH);
+  const sparkline = data.sparkline ?? [];
+  const sparkPath = buildSparklinePath(sparkline, sparkW, sparkH);
 
   return (
     <div className="ss-card">
@@ -71,7 +72,7 @@ function StockSnapshot({ data }: Props) {
             <span>({formatPercent(data.chgPct)})</span>
           </div>
         </div>
-        {data.sparkline.length >= 2 && (
+        {sparkline.length >= 2 && (
           <svg
             className="ss-sparkline"
             viewBox={`0 0 ${sparkW} ${sparkH}`}

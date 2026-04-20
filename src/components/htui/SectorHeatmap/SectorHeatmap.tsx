@@ -27,7 +27,7 @@ function chgColor(pct: number): string {
 }
 
 function SectorHeatmap({ data }: Props) {
-  const treeData = data.items.map((item) => ({
+  const treeData = (data.items ?? []).map((item) => ({
     name: item.name,
     value: item.vol && item.vol > 0 ? item.vol : 1,
     chgPct: item.chgPct,

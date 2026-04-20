@@ -7,6 +7,22 @@ interface Props {
   data: ResearchConsensusData;
 }
 
+// Normalize English enum values → Chinese display strings
+function normalizeRating(rating: string): string {
+  const map: Record<string, string> = {
+    buy: '买入',
+    'strong buy': '强烈买入',
+    outperform: '增持',
+    overweight: '增持',
+    hold: '中性',
+    neutral: '中性',
+    underperform: '减持',
+    underweight: '减持',
+    sell: '卖出',
+  };
+  return map[rating.toLowerCase()] ?? rating;
+}
+
 const RATING_COLORS: Record<string, string> = {
   买入: 'var(--color-success)',
   强烈买入: 'var(--color-success)',
@@ -18,28 +34,30 @@ const RATING_COLORS: Record<string, string> = {
 };
 
 function getRatingGroup(rating: string): 'buy' | 'hold' | 'sell' {
-  if (['买入', '强烈买入', '增持'].includes(rating)) return 'buy';
-  if (['减持', '卖出'].includes(rating)) return 'sell';
+  const normalized = normalizeRating(rating);
+  if (['买入', '强烈买入', '增持'].includes(normalized)) return 'buy';
+  if (['减持', '卖出'].includes(normalized)) return 'sell';
   return 'hold';
 }
 
 function ResearchConsensus({ data }: Props) {
-  const items = data.items.slice(0, 5);
+  const allItems = data.items ?? [];
+  const items = allItems.slice(0, 5);
 
-  // Compute counts from items if not provided
+  // Compute counts from ALL items (not just the displayed 5) if not provided
   const buyCount =
     data.buyCount ??
-    items.filter((i) => getRatingGroup(i.rating) === 'buy').length;
+    allItems.filter((i) => getRatingGroup(i.rating) === 'buy').length;
   const holdCount =
     data.holdCount ??
-    items.filter((i) => getRatingGroup(i.rating) === 'hold').length;
+    allItems.filter((i) => getRatingGroup(i.rating) === 'hold').length;
   const sellCount =
     data.sellCount ??
-    items.filter((i) => getRatingGroup(i.rating) === 'sell').length;
+    allItems.filter((i) => getRatingGroup(i.rating) === 'sell').length;
   const total = buyCount + holdCount + sellCount || 1;
 
-  // Compute target price range from items if not provided
-  const itemsWithTarget = items.filter((i) => i.targetPrice != null);
+  // Compute target price range from ALL items if not provided
+  const itemsWithTarget = allItems.filter((i) => i.targetPrice != null);
   const targets = itemsWithTarget.map((i) => i.targetPrice as number);
   const highTarget =
     data.highTarget ?? (targets.length > 0 ? Math.max(...targets) : null);
@@ -182,10 +200,10 @@ function ResearchConsensus({ data }: Props) {
                     className="rc-rating-badge"
                     style={{
                       color:
-                        RATING_COLORS[item.rating] ?? 'var(--text-secondary)',
+                        RATING_COLORS[normalizeRating(item.rating)] ?? 'var(--text-secondary)',
                     }}
                   >
-                    {item.rating}
+                    {normalizeRating(item.rating)}
                   </span>
                   {item.targetPrice != null && (
                     <span className="rc-target-price">

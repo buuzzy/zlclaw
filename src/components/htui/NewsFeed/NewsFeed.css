@@ -27,6 +27,62 @@
   color: var(--muted-foreground);
 }
 
+/* Sentiment Summary */
+.nf-sentiment-summary {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: var(--muted);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nf-ss-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nf-ss-overall {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.nf-ss-counts {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.nf-ss-bar {
+  display: flex;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  gap: 1px;
+}
+
+.nf-ss-seg {
+  height: 100%;
+  border-radius: 2px;
+  min-width: 2px;
+}
+
+.nf-ss-seg.bullish { background: #10b981; }
+.nf-ss-seg.neutral  { background: #71717a; }
+.nf-ss-seg.bearish  { background: #ef4444; }
+
+.nf-ss-text {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-style: italic;
+  line-height: 1.5;
+}
+
 /* Timeline list */
 .nf-list {
   display: flex;
@@ -165,3 +221,4 @@
   color: var(--ht-down);
   background: color-mix(in srgb, var(--ht-down) 15%, transparent);
 }
+

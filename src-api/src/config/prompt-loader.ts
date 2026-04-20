@@ -56,6 +56,20 @@ function yesterdayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function buildDateContext(): string {
+  const now = new Date();
+  const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  const dow = now.getDay(); // 0=Sun, 6=Sat
+  const dateStr = todayStr();
+  const weekStr = weekDays[dow];
+  // A/H shares trade Mon–Fri; weekend = market closed
+  const isWeekend = dow === 0 || dow === 6;
+  const marketNote = isWeekend
+    ? '今天是休市日（周末），A股/港股不交易，最新行情数据为上一个交易日收盘数据。'
+    : '今天是交易日，行情数据为当日实时或最新收盘数据。';
+  return `# 当前日期\n今天是 ${dateStr}（${weekStr}）。${marketNote}`;
+}
+
 /**
  * Check whether vector search is operational (config + non-empty index).
  */
@@ -162,6 +176,8 @@ export async function getHTClawSystemPrompt(userQuery?: string): Promise<string>
     : await loadMemoryFullText();
 
   const parts: string[] = [];
+  // Always inject current date first so the model has accurate temporal context
+  parts.push(buildDateContext());
   if (soul) parts.push(soul);
   if (agents) parts.push(agents);
   if (memoryCtx) parts.push(memoryCtx);
