@@ -1,5 +1,5 @@
 import { formatPercent } from '@/shared/lib/format';
-import type { NewsFeedData, NewsFeedItem } from '@/shared/types/artifact';
+import type { NewsFeedData, NewsFeedItem, NewsFeedSentimentSummary } from '@/shared/types/artifact';
 
 import './NewsFeed.css';
 
@@ -14,10 +14,54 @@ const SENTIMENT_CONFIG = {
 };
 
 function formatTime(raw: string): string {
-  // Extract HH:MM if time is like "2026-04-19 09:30:00"
-  const match = raw.match(/(\d{2}:\d{2})/);
-  if (match) return match[1];
-  return raw.slice(-5);
+  // Full ISO / "YYYY-MM-DD HH:MM" → keep as-is
+  const fullMatch = raw.match(/(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/);
+  if (fullMatch) return `${fullMatch[1]} ${fullMatch[2]}`;
+  // Time-only "HH:MM" → prepend today's date so the user always sees a date
+  const timeOnly = raw.match(/^(\d{2}:\d{2})/);
+  if (timeOnly) {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    return `${today} ${timeOnly[1]}`;
+  }
+  return raw;
+}
+
+function SentimentBar({ summary }: { summary: NewsFeedSentimentSummary }) {
+  const total = summary.bullish + summary.bearish + summary.neutral || 1;
+  const bullPct = (summary.bullish / total) * 100;
+  const bearPct = (summary.bearish / total) * 100;
+  const neutPct = (summary.neutral / total) * 100;
+
+  const overallCfg = SENTIMENT_CONFIG[summary.overall];
+
+  return (
+    <div className="nf-sentiment-summary">
+      <div className="nf-ss-top">
+        <span className="nf-ss-overall" style={{ color: overallCfg.color }}>
+          {overallCfg.label}偏多
+        </span>
+        <div className="nf-ss-counts">
+          <span style={{ color: SENTIMENT_CONFIG.bullish.dot }}>{summary.bullish} 利好</span>
+          <span style={{ color: SENTIMENT_CONFIG.neutral.dot }}>{summary.neutral} 中性</span>
+          <span style={{ color: SENTIMENT_CONFIG.bearish.dot }}>{summary.bearish} 利空</span>
+        </div>
+      </div>
+      <div className="nf-ss-bar">
+        {bullPct > 0 && (
+          <div className="nf-ss-seg bullish" style={{ width: `${bullPct}%` }} />
+        )}
+        {neutPct > 0 && (
+          <div className="nf-ss-seg neutral" style={{ width: `${neutPct}%` }} />
+        )}
+        {bearPct > 0 && (
+          <div className="nf-ss-seg bearish" style={{ width: `${bearPct}%` }} />
+        )}
+      </div>
+      {summary.summary && (
+        <p className="nf-ss-text">{summary.summary}</p>
+      )}
+    </div>
+  );
 }
 
 function NewsFeedItemRow({
@@ -77,18 +121,28 @@ function NewsFeedItemRow({
 function NewsFeed({ data }: Props) {
   if (!data.items || data.items.length === 0) return null;
 
+  // Sort items by publishTime descending (newest first)
+  const sorted = [...data.items].sort((a, b) =>
+    b.publishTime.localeCompare(a.publishTime)
+  );
+
   return (
     <div className="nf-card">
       <div className="nf-header">
         <span className="nf-header-title">市场资讯</span>
         <span className="nf-header-count">{data.total} 条</span>
       </div>
+
+      {data.sentimentSummary && (
+        <SentimentBar summary={data.sentimentSummary} />
+      )}
+
       <div className="nf-list">
-        {data.items.map((item, i) => (
+        {sorted.map((item, i) => (
           <NewsFeedItemRow
             key={item.id}
             item={item}
-            isLast={i === data.items.length - 1}
+            isLast={i === sorted.length - 1}
           />
         ))}
       </div>

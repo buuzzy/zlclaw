@@ -28,10 +28,13 @@ import { extractArtifacts } from '@/shared/lib/artifactParser';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import {
+  AlertTriangle,
   ArrowDown,
   CheckCircle2,
   ChevronDown,
+  Copy,
   FileText,
+  Image,
   PanelLeft,
   Pencil,
 } from 'lucide-react';
@@ -1021,6 +1024,7 @@ function TaskDetailContent() {
                       phase={phase}
                       onApprovePlan={approvePlan}
                       onRejectPlan={rejectPlan}
+                      taskId={taskId}
                     />
 
                     {isRunning && <RunningIndicator messages={messages} />}
@@ -1234,6 +1238,7 @@ function MessageList({
   phase,
   onApprovePlan,
   onRejectPlan,
+  taskId,
 }: {
   messages: AgentMessage[];
   isRunning: boolean;
@@ -1241,6 +1246,7 @@ function MessageList({
   phase?: string;
   onApprovePlan?: () => void;
   onRejectPlan?: () => void;
+  taskId?: string;
 }) {
   if (messages.length === 0) {
     return null;
@@ -1500,6 +1506,8 @@ function MessageList({
             phase={phase}
             onApprovePlan={onApprovePlan}
             onRejectPlan={onRejectPlan}
+            allMessages={messages}
+            taskId={taskId}
           />
         );
       })}
@@ -1603,17 +1611,448 @@ function TaskGroupComponent({
   );
 }
 
+// ─── Agent Action Bar ─────────────────────────────────────────────────────────
+
+const BUG_CATEGORIES = [
+  '工具调用错误',
+  '组件渲染异常',
+  '回答内容有误',
+  '性能问题',
+  '其他',
+] as const;
+
+type BugCategory = (typeof BUG_CATEGORIES)[number];
+
+/** Serialize all messages in a task into human-readable text for review/copying */
+function serializeMessagesForCopy(msgs: AgentMessage[]): string {
+  const MAX_TOOL_RESULT_CHARS = 500;
+
+  return msgs
+    .map((msg) => {
+      switch (msg.type) {
+        case 'user':
+          return `[用户]\n${msg.content || ''}`;
+        case 'text':
+          return `[助手]\n${msg.content || ''}`;
+        case 'tool_use': {
+          const inputStr =
+            typeof msg.input === 'string'
+              ? msg.input
+              : JSON.stringify(msg.input, null, 2);
+          return `[工具调用] ${msg.name || ''}\n${inputStr}`;
+        }
+        case 'tool_result': {
+          const raw = msg.content || '';
+          const truncated =
+            raw.length > MAX_TOOL_RESULT_CHARS
+              ? `${raw.slice(0, MAX_TOOL_RESULT_CHARS)}… [truncated ${raw.length - MAX_TOOL_RESULT_CHARS} chars]`
+              : raw;
+          return `[工具结果]\n${truncated}`;
+        }
+        case 'result':
+          return `[完成] subtype=${msg.subtype || ''} cost=${msg.cost ?? ''} duration=${msg.duration ?? ''}ms`;
+        case 'error':
+          return `[错误] ${msg.message || ''}`;
+        case 'plan':
+          return `[计划]\n${JSON.stringify(msg.plan, null, 2)}`;
+        default:
+          return `[${msg.type}]\n${msg.content || ''}`;
+      }
+    })
+    .join('\n\n---\n\n');
+}
+
+function AgentActionBar({
+  cleanText,
+  allMessages,
+  taskId,
+  containerRef,
+}: {
+  cleanText: string;
+  allMessages: AgentMessage[];
+  taskId?: string;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
+}) {
+  const [copiedAnswer, setCopiedAnswer] = useState(false);
+  const [copiedProcess, setCopiedProcess] = useState(false);
+  const [exportingImage, setExportingImage] = useState(false);
+  const [bugOpen, setBugOpen] = useState(false);
+  const [bugCategory, setBugCategory] = useState<BugCategory>('其他');
+  const [bugDesc, setBugDesc] = useState('');
+  const [bugSubmitting, setBugSubmitting] = useState(false);
+  const [bugSubmitted, setBugSubmitted] = useState(false);
+  const bugPopoverRef = useRef<HTMLDivElement>(null);
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    if (!bugOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        bugPopoverRef.current &&
+        !bugPopoverRef.current.contains(e.target as Node)
+      ) {
+        setBugOpen(false);
+        setBugSubmitted(false);
+        setBugDesc('');
+        setBugCategory('其他');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [bugOpen]);
+
+  const handleCopyAnswer = async () => {
+    try {
+      await navigator.clipboard.writeText(cleanText.trim());
+      setCopiedAnswer(true);
+      setTimeout(() => setCopiedAnswer(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleCopyProcess = async () => {
+    try {
+      const text = serializeMessagesForCopy(allMessages);
+      await navigator.clipboard.writeText(text);
+      setCopiedProcess(true);
+      setTimeout(() => setCopiedProcess(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleExportImage = async () => {
+    const node = containerRef?.current;
+    if (!node || exportingImage) return;
+    setExportingImage(true);
+
+    // Hide action bar from screenshot via CSS class instead of inline style
+    node.classList.add('exporting-screenshot');
+    try {
+      const { toPng } = await import('html-to-image');
+
+      const dataUrl = await toPng(node, {
+        pixelRatio: 2,
+        skipFonts: false,
+        filter: (el) => {
+          // Exclude the action bar element from the screenshot
+          if (el instanceof HTMLElement && el.classList.contains('agent-action-bar')) return false;
+          return true;
+        },
+      });
+
+      // Convert data URL → Uint8Array
+      const base64 = dataUrl.split(',')[1];
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const fileName = `htclaw-${ts}.png`;
+
+      try {
+        const { downloadDir } = await import('@tauri-apps/api/path');
+        const { writeFile } = await import('@tauri-apps/plugin-fs');
+        const dir = await downloadDir();
+        await writeFile(`${dir}/${fileName}`, bytes);
+      } catch {
+        // Fallback: browser download
+        const a = document.createElement('a');
+        a.download = fileName;
+        a.href = dataUrl;
+        a.click();
+      }
+    } catch (err) {
+      console.error('[ExportImage] failed:', err);
+    } finally {
+      node.classList.remove('exporting-screenshot');
+      setExportingImage(false);
+    }
+  };
+
+  const handleSubmitBug = async () => {
+    setBugSubmitting(true);
+    try {
+      const report = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        timestamp: new Date().toISOString(),
+        taskId: taskId ?? null,
+        // TODO: add userId when user system is implemented
+        category: bugCategory,
+        description: bugDesc.trim() || null,
+        messageCount: allMessages.length,
+      };
+      const line = JSON.stringify(report) + '\n';
+
+      // Write to ~/.htclaw/feedback/bug-reports.jsonl via Tauri fs
+      const { appDataDir } = await import('@tauri-apps/api/path');
+      const { writeTextFile, mkdir } = await import(
+        '@tauri-apps/plugin-fs'
+      );
+
+      const dataDir = await appDataDir();
+      const feedbackDir = `${dataDir}/feedback`;
+
+      // Ensure directory exists
+      try {
+        await mkdir(feedbackDir, { recursive: true });
+      } catch {
+        /* already exists */
+      }
+
+      // Append to JSONL file
+      const filePath = `${feedbackDir}/bug-reports.jsonl`;
+      try {
+        const { readTextFile } = await import('@tauri-apps/plugin-fs');
+        const existing = await readTextFile(filePath);
+        await writeTextFile(filePath, existing + line);
+      } catch {
+        // File doesn't exist yet — create it
+        await writeTextFile(filePath, line);
+      }
+
+      setBugSubmitted(true);
+      setBugDesc('');
+      setTimeout(() => {
+        setBugOpen(false);
+        setBugSubmitted(false);
+        setBugCategory('其他');
+      }, 1500);
+    } catch (err) {
+      console.error('Failed to write bug report:', err);
+    } finally {
+      setBugSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="agent-action-bar mt-2 flex items-center gap-1 opacity-0 transition-opacity group-hover/msgitem:opacity-100">
+      {/* Copy answer */}
+      <button
+        onClick={handleCopyAnswer}
+        className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors"
+        title="复制回答"
+      >
+        <Copy className="size-3" />
+        <span>{copiedAnswer ? '已复制' : '复制回答'}</span>
+      </button>
+
+      {/* Copy full process */}
+      <button
+        onClick={handleCopyProcess}
+        className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors"
+        title="复制完整过程（含工具调用记录）"
+      >
+        <Copy className="size-3" />
+        <span>{copiedProcess ? '已复制' : '复制完整过程'}</span>
+      </button>
+
+      {/* Export as image */}
+      <button
+        onClick={handleExportImage}
+        disabled={exportingImage}
+        className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors disabled:opacity-40"
+        title="导出为图片（保存到下载目录）"
+      >
+        <Image className="size-3" />
+        <span>{exportingImage ? '导出中…' : '导出图片'}</span>
+      </button>
+
+      {/* Bug report */}
+      <div className="relative" ref={bugPopoverRef}>
+        <button
+          onClick={() => {
+            setBugOpen((v) => !v);
+            setBugSubmitted(false);
+          }}
+          className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors"
+          title="反馈问题"
+        >
+          <AlertTriangle className="size-3" />
+          <span>反馈问题</span>
+        </button>
+
+        {bugOpen && (
+          <div className="bg-popover border-border absolute bottom-full left-0 z-50 mb-2 w-72 rounded-lg border p-3 shadow-lg">
+            {bugSubmitted ? (
+              <div className="flex items-center gap-2 py-2 text-sm text-green-600 dark:text-green-400">
+                <CheckCircle2 className="size-4" />
+                <span>感谢反馈！</span>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <p className="text-foreground text-xs font-semibold">反馈问题类型</p>
+                <div className="flex flex-col gap-1.5">
+                  {BUG_CATEGORIES.map((cat) => (
+                    <label
+                      key={cat}
+                      className="flex cursor-pointer items-center gap-2"
+                    >
+                      <input
+                        type="radio"
+                        name="bug-category"
+                        value={cat}
+                        checked={bugCategory === cat}
+                        onChange={() => setBugCategory(cat)}
+                        className="accent-primary"
+                      />
+                      <span className="text-foreground text-xs">{cat}</span>
+                    </label>
+                  ))}
+                </div>
+                <textarea
+                  value={bugDesc}
+                  onChange={(e) => setBugDesc(e.target.value)}
+                  placeholder="补充说明（可选）"
+                  rows={2}
+                  className="border-border bg-muted text-foreground placeholder:text-muted-foreground w-full resize-none rounded border px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-offset-0"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setBugOpen(false)}
+                    className="text-muted-foreground hover:text-foreground rounded px-2 py-1 text-xs"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleSubmitBug}
+                    disabled={bugSubmitting}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 rounded px-3 py-1 text-xs disabled:opacity-50"
+                  >
+                    {bugSubmitting ? '提交中…' : '提交'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Text message sub-component — extracted so useRef is always called at top level
+function TextMessageItem({
+  message,
+  allMessages,
+  taskId,
+}: {
+  message: AgentMessage;
+  allMessages?: AgentMessage[];
+  taskId?: string;
+}) {
+  const msgContainerRef = useRef<HTMLDivElement>(null);
+  const { cleanText, artifacts: extractedArtifacts } = extractArtifacts(
+    message.content || ''
+  );
+
+  return (
+    <div ref={msgContainerRef} className="group/msgitem flex min-w-0 flex-col gap-3">
+      <Logo />
+      <ArtifactRenderer artifacts={extractedArtifacts} />
+      {cleanText.trim() && (
+        <div className="prose prose-sm text-foreground max-w-none min-w-0 flex-1 overflow-hidden">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              pre: ({ children }: any) => (
+                <pre className="bg-muted max-w-full overflow-x-auto rounded-lg p-4">
+                  {children}
+                </pre>
+              ),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              code: ({ className, children, ...props }: any) => {
+                const isInline = !className;
+                if (isInline) {
+                  return (
+                    <code
+                      className="bg-muted rounded px-1.5 py-0.5 text-sm"
+                      {...props}
+                    >
+                      {children}
+                    </code>
+                  );
+                }
+                return (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                );
+              },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              a: ({ children, href }: any) => (
+                <a
+                  href={href}
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    if (href) {
+                      try {
+                        const { openUrl } =
+                          await import('@tauri-apps/plugin-opener');
+                        await openUrl(href);
+                      } catch {
+                        window.open(href, '_blank');
+                      }
+                    }
+                  }}
+                  className="text-primary cursor-pointer hover:underline"
+                >
+                  {children}
+                </a>
+              ),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              table: ({ children }: any) => (
+                <div className="overflow-x-auto">
+                  <table className="border-border border-collapse border">
+                    {children}
+                  </table>
+                </div>
+              ),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              th: ({ children }: any) => (
+                <th className="border-border bg-muted border px-3 py-2 text-left">
+                  {children}
+                </th>
+              ),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              td: ({ children }: any) => (
+                <td className="border-border border px-3 py-2">{children}</td>
+              ),
+            }}
+          >
+            {cleanText}
+          </ReactMarkdown>
+        </div>
+      )}
+      {(cleanText.trim() || extractedArtifacts.length > 0) && (
+        <AgentActionBar
+          cleanText={cleanText}
+          allMessages={allMessages ?? [message]}
+          taskId={taskId}
+          containerRef={msgContainerRef}
+        />
+      )}
+    </div>
+  );
+}
+
 // Individual Message Component for non-task messages
 function MessageItem({
   message,
   phase,
   onApprovePlan,
   onRejectPlan,
+  allMessages,
+  taskId,
 }: {
   message: AgentMessage;
   phase?: string;
   onApprovePlan?: () => void;
   onRejectPlan?: () => void;
+  allMessages?: AgentMessage[];
+  taskId?: string;
 }) {
   if (message.type === 'user') {
     return (
@@ -1636,90 +2075,12 @@ function MessageItem({
   }
 
   if (message.type === 'text') {
-    const { cleanText, artifacts: extractedArtifacts } = extractArtifacts(
-      message.content || ''
-    );
-
     return (
-      <div className="flex min-w-0 flex-col gap-3">
-        <Logo />
-        <ArtifactRenderer artifacts={extractedArtifacts} />
-        {cleanText.trim() && (
-          <div className="prose prose-sm text-foreground max-w-none min-w-0 flex-1 overflow-hidden">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                pre: ({ children }: any) => (
-                  <pre className="bg-muted max-w-full overflow-x-auto rounded-lg p-4">
-                    {children}
-                  </pre>
-                ),
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                code: ({ className, children, ...props }: any) => {
-                  const isInline = !className;
-                  if (isInline) {
-                    return (
-                      <code
-                        className="bg-muted rounded px-1.5 py-0.5 text-sm"
-                        {...props}
-                      >
-                        {children}
-                      </code>
-                    );
-                  }
-                  return (
-                    <code className={className} {...props}>
-                      {children}
-                    </code>
-                  );
-                },
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                a: ({ children, href }: any) => (
-                  <a
-                    href={href}
-                    onClick={async (e) => {
-                      e.preventDefault();
-                      if (href) {
-                        try {
-                          const { openUrl } =
-                            await import('@tauri-apps/plugin-opener');
-                          await openUrl(href);
-                        } catch {
-                          window.open(href, '_blank');
-                        }
-                      }
-                    }}
-                    className="text-primary cursor-pointer hover:underline"
-                  >
-                    {children}
-                  </a>
-                ),
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                table: ({ children }: any) => (
-                  <div className="overflow-x-auto">
-                    <table className="border-border border-collapse border">
-                      {children}
-                    </table>
-                  </div>
-                ),
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                th: ({ children }: any) => (
-                  <th className="border-border bg-muted border px-3 py-2 text-left">
-                    {children}
-                  </th>
-                ),
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                td: ({ children }: any) => (
-                  <td className="border-border border px-3 py-2">{children}</td>
-                ),
-              }}
-            >
-              {cleanText}
-            </ReactMarkdown>
-          </div>
-        )}
-      </div>
+      <TextMessageItem
+        message={message}
+        allMessages={allMessages}
+        taskId={taskId}
+      />
     );
   }
 

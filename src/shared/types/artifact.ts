@@ -201,9 +201,18 @@ export interface NewsFeedItem {
   relatedTickers?: { ticker: string; chgPct: number }[];
 }
 
+export interface NewsFeedSentimentSummary {
+  bullish: number;
+  bearish: number;
+  neutral: number;
+  overall: 'bullish' | 'bearish' | 'neutral';
+  summary?: string; // 一句话总结，如"关税政策持续压制情绪，整体偏空"
+}
+
 export interface NewsFeedData {
   items: NewsFeedItem[];
   total: number;
+  sentimentSummary?: NewsFeedSentimentSummary;
 }
 
 export interface Artifact {

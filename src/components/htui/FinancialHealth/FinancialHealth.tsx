@@ -10,9 +10,9 @@ interface Props {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 70) return 'var(--color-success)';
+  if (score >= 70) return '#22c55e';
   if (score >= 40) return '#f59e0b';
-  return 'var(--color-danger)';
+  return '#ef4444';
 }
 
 function scoreLabel(score: number): string {
@@ -48,7 +48,7 @@ function DimensionCard({ dim }: { dim: FinancialDimension }) {
         {scoreLabel(dim.score)}
       </div>
       <div className="fh-dim-metrics">
-        {dim.metrics.map((m, i) => (
+        {(dim.metrics ?? []).map((m, i) => (
           <div key={i} className="fh-metric-row">
             <span className="fh-metric-label">{m.label}</span>
             <span
@@ -80,7 +80,7 @@ function FinancialHealth({ data }: Props) {
       </div>
 
       <div className="fh-grid">
-        {data.dimensions.map((dim, i) => (
+        {(data.dimensions ?? []).map((dim, i) => (
           <DimensionCard key={i} dim={dim} />
         ))}
       </div>
