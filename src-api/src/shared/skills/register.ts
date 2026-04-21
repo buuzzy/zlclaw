@@ -1,7 +1,7 @@
 /**
  * Filesystem Skills → SDK Registry Bridge
  *
- * Loads SKILL.md-based skills from ~/.htclaw/skills/ and registers them
+ * Loads SKILL.md-based skills from ~/.sage/skills/ and registers them
  * with @codeany/open-agent-sdk's skill registry so the Agent's Skill
  * tool can discover and invoke them at runtime.
  */
@@ -25,7 +25,7 @@ function buildGetPrompt(skill: LoadedSkill) {
 
 /**
  * Load all filesystem skills and register enabled ones with the SDK.
- * Skills listed in ~/.htclaw/skills-config.json as disabled are skipped.
+ * Skills listed in ~/.sage/skills-config.json as disabled are skipped.
  * Safe to call multiple times; duplicate names are silently skipped by the registry.
  */
 export async function registerFilesystemSkills(): Promise<number> {

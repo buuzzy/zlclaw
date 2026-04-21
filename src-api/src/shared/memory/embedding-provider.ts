@@ -27,7 +27,7 @@ export interface EmbeddingProvider {
 }
 
 // ---------------------------------------------------------------------------
-// Config persistence  (~/.htclaw/memory-index/config.json)
+// Config persistence  (~/.sage/memory-index/config.json)
 // ---------------------------------------------------------------------------
 
 function configDir(): string {

@@ -204,7 +204,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
         }[]) {
           if (configInfo.name === 'claude') {
             dirs.user = configInfo.path;
-          } else if (configInfo.name === 'htclaw') {
+          } else if (configInfo.name === 'sage') {
             dirs.app = configInfo.path;
           }
 
@@ -234,7 +234,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
               url: hasUrl ? cfg.url : undefined,
               headers: hasUrl ? cfg.headers : undefined,
               autoExecute: true,
-              source: configInfo.name as 'htclaw' | 'claude',
+              source: configInfo.name as 'sage' | 'claude',
             });
           }
         }
@@ -339,7 +339,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
       for (const [name, config] of Object.entries(mcpServers)) {
         const cfg = config as Record<string, unknown>;
         const existingIndex = newServers.findIndex(
-          (s) => s.name === name && s.source === 'htclaw'
+          (s) => s.name === name && s.source === 'sage'
         );
 
         // Determine type: use explicit type if provided, otherwise default based on config
@@ -349,7 +349,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
         }
 
         const serverData: MCPServerUI = {
-          id: `htclaw-${name}`,
+          id: `sage-${name}`,
           name,
           type: serverType,
           enabled: true,
@@ -358,7 +358,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
           url: cfg.url as string | undefined,
           headers: cfg.headers as Record<string, string> | undefined,
           autoExecute: true,
-          source: 'htclaw',
+          source: 'sage',
         };
 
         if (existingIndex >= 0) {
@@ -450,7 +450,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
         };
       }
     } else {
-      const fullId = `htclaw-${configDialog.serverName}`;
+      const fullId = `sage-${configDialog.serverName}`;
       if (
         newServers.some(
           (s) => s.id === fullId || s.name === configDialog.serverName
@@ -476,7 +476,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
         url: isUrlType ? configDialog.url : undefined,
         headers: isUrlType && hasHeaders ? headersObj : undefined,
         autoExecute: true,
-        source: 'htclaw',
+        source: 'sage',
       });
     }
 

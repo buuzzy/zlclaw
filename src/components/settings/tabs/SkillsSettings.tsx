@@ -234,7 +234,7 @@ export function SkillsSettings({
   const loadSkillsFromPath = async (skillsPath: string) => {
     setLoading(true);
     try {
-      // Get all skills directories (htclaw and claude)
+      // Get all skills directories (sage and claude)
       const dirsResponse = await fetch(`${API_BASE_URL}/files/skills-dir`);
       const dirsData = await dirsResponse.json();
 
@@ -250,14 +250,14 @@ export function SkillsSettings({
         }[]) {
           if (dir.name === 'claude') {
             dirs.user = dir.path;
-          } else if (dir.name === 'htclaw') {
+          } else if (dir.name === 'sage') {
             dirs.app = dir.path;
           }
         }
       }
       setSkillsDirs(dirs);
 
-      // Load skills from all directories (claude + htclaw)
+      // Load skills from all directories (claude + sage)
       if (dirsData.directories) {
         for (const dir of dirsData.directories as {
           name: string;
@@ -309,7 +309,7 @@ export function SkillsSettings({
                   allSkills.push({
                     id: `${dir.name}-${folder.name}`,
                     name: skillName,
-                    source: dir.name as 'claude' | 'htclaw',
+                    source: dir.name as 'claude' | 'sage',
                     path: folder.path,
                     files: folder.children || [],
                     enabled: !disabledSkills.has(skillName),
@@ -376,7 +376,7 @@ export function SkillsSettings({
                   allSkills.push({
                     id: `custom-${folder.name}`,
                     name: skillName,
-                    source: 'htclaw',
+                    source: 'sage',
                     path: folder.path,
                     files: folder.children || [],
                     enabled: !disabledSkills.has(skillName),

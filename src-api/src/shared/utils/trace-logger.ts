@@ -1,7 +1,7 @@
 /**
  * Channel Trace Logger
  *
- * Writes diagnostic logs to ~/.htclaw/logs/channel-trace.log
+ * Writes diagnostic logs to ~/.sage/logs/channel-trace.log
  * for debugging message loss in channel adapters.
  *
  * Each log line: [ISO timestamp] [T{node}] {label} | {detail}
@@ -17,7 +17,7 @@ import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const LOG_DIR = join(homedir(), '.htclaw', 'logs');
+const LOG_DIR = join(homedir(), '.sage', 'logs');
 const LOG_FILE = join(LOG_DIR, 'channel-trace.log');
 
 // Ensure log directory exists on module load

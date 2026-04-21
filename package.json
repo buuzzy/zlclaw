@@ -1,23 +1,23 @@
 {
-  "name": "htclaw",
+  "name": "sage",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "ver": "./scripts/version.sh",
     "dev": "vite",
-    "dev:api": "pnpm --filter htclaw-api dev",
+    "dev:api": "pnpm --filter sage-api dev",
     "predev:app": "node scripts/check-rust.js && node scripts/check-api-binary.js",
     "dev:app": "pnpm tauri dev",
     "dev:web": "pnpm dev",
     "dev:all": "concurrently \"pnpm dev:api\" \"pnpm dev:app\"",
     "build": "vite build",
-    "build:api": "pnpm --filter htclaw-api build",
-    "build:api:binary": "pnpm --filter htclaw-api build:binary",
-    "build:api:binary:mac-arm": "pnpm --filter htclaw-api build:binary:mac-arm",
-    "build:api:binary:mac-intel": "pnpm --filter htclaw-api build:binary:mac-intel",
-    "build:api:binary:linux": "pnpm --filter htclaw-api build:binary:linux",
-    "build:api:binary:windows": "pnpm --filter htclaw-api build:binary:windows",
+    "build:api": "pnpm --filter sage-api build",
+    "build:api:binary": "pnpm --filter sage-api build:binary",
+    "build:api:binary:mac-arm": "pnpm --filter sage-api build:binary:mac-arm",
+    "build:api:binary:mac-intel": "pnpm --filter sage-api build:binary:mac-intel",
+    "build:api:binary:linux": "pnpm --filter sage-api build:binary:linux",
+    "build:api:binary:windows": "pnpm --filter sage-api build:binary:windows",
     "preview": "vite preview",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
@@ -110,6 +110,9 @@
     "vite": "^7.0.4"
   },
   "pnpm": {
-    "overrides": {}
+    "overrides": {},
+    "patchedDependencies": {
+      "@codeany/open-agent-sdk@0.2.1": "patches/@codeany__open-agent-sdk@0.2.1.patch"
+    }
   }
 }

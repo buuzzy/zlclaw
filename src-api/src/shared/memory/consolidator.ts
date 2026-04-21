@@ -4,7 +4,7 @@
  * Nightly job that distills raw daily memory files into long-term MEMORY.md.
  *
  * Flow:
- *   1. Scan ~/.htclaw/memory/ for daily files older than CONSOLIDATE_AFTER_DAYS
+ *   1. Scan ~/.sage/memory/ for daily files older than CONSOLIDATE_AFTER_DAYS
  *      that have not yet been marked as consolidated.
  *   2. For each file, call the LLM to extract: user preferences, tracked assets,
  *      important conclusions, and notable query patterns.
@@ -48,7 +48,7 @@ const META_CONSOLIDATE_THRESHOLD = 60;
 // User profile helpers
 // ---------------------------------------------------------------------------
 
-/** Read ~/.htclaw/user.md and return as a context block, or empty string if not found */
+/** Read ~/.sage/user.md and return as a context block, or empty string if not found */
 function getUserProfileContext(): string {
   try {
     const userMdPath = join(getAppDir(), 'user.md');

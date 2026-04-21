@@ -1561,7 +1561,7 @@ export class FeishuAdapter implements ChannelAdapter {
   // ─── Deduplication (persistent) ─────────────────────────────────────
 
   private getDedupCachePath(): string {
-    return join(homedir(), '.htclaw', 'dedup-cache.json');
+    return join(homedir(), '.sage', 'dedup-cache.json');
   }
 
   private loadDedupCache(): void {

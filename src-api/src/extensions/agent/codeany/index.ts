@@ -45,7 +45,7 @@ import {
   DEFAULT_API_PORT,
   DEFAULT_WORK_DIR,
 } from '@/config/constants';
-import { getHTClawSystemPrompt } from '@/config/prompt-loader';
+import { getSageSystemPrompt } from '@/config/prompt-loader';
 import { appendDailyMemory } from '@/shared/memory/daily-writer';
 import { loadMcpServers, type McpServerConfig } from '@/shared/mcp/loader';
 import { createLogger, LOG_FILE_PATH } from '@/shared/utils/logger';
@@ -218,7 +218,8 @@ export class CodeAnyAgent extends BaseAgent {
   private buildSdkOptions(
     sessionCwd: string,
     options?: AgentOptions,
-    extraOpts?: Partial<SdkAgentOptions>
+    extraOpts?: Partial<SdkAgentOptions>,
+    systemPrompt?: string
   ): SdkAgentOptions {
     const sdkOpts: SdkAgentOptions = {
       cwd: sessionCwd,
@@ -240,6 +241,14 @@ export class CodeAnyAgent extends BaseAgent {
     }
     if (this.config.baseUrl) {
       sdkOpts.baseURL = stripHashSuffix(this.config.baseUrl);
+    }
+
+    // Inject SOUL.md + AGENTS.md + memory as a proper system prompt field.
+    // For OpenAI-compatible APIs (e.g. MiniMax) the SDK passes this as the
+    // system message, ensuring the model treats it as instructions rather than
+    // user input.  appendSystemPrompt appends after the SDK's built-in prompt.
+    if (systemPrompt) {
+      sdkOpts.appendSystemPrompt = systemPrompt;
     }
 
     // Set allowed tools
@@ -306,6 +315,10 @@ export class CodeAnyAgent extends BaseAgent {
 
   private sanitizeText(text: string): string {
     let sanitized = text;
+
+    // Strip reasoning tags emitted by MiniMax and other thinking models
+    // (e.g. <think>...</think>) — they should never be shown to the user.
+    sanitized = sanitized.replace(/<think>[\s\S]*?<\/think>\s*/g, '');
 
     const apiKeyErrorPatterns = [
       /Invalid API key/i, /invalid_api_key/i, /API key.*invalid/i,
@@ -413,9 +426,12 @@ export class CodeAnyAgent extends BaseAgent {
     const contextSessionId = options?.taskId || session.id;
     const conversationContext = await this.buildConversationContext(contextSessionId, options?.conversation);
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
-    const htclawSystemPrompt = await getHTClawSystemPrompt(prompt);
+    const sageSystemPrompt = await getSageSystemPrompt(prompt);
 
-    const textPrompt = htclawSystemPrompt + getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext + languageInstruction + prompt;
+    // System prompt (SOUL.md + AGENTS.md + memory) is injected via SDK's
+    // appendSystemPrompt so OpenAI-compatible APIs treat it as a system message.
+    // Only workspace/conversation/language context remains in the text prompt.
+    const textPrompt = getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext + languageInstruction + prompt;
 
     // Build the final prompt: always a string (images referenced by file path)
     let finalPrompt: string;
@@ -431,7 +447,7 @@ export class CodeAnyAgent extends BaseAgent {
 
     const sdkOpts = this.buildSdkOptions(sessionCwd, options, {
       abortController: options?.abortController || session.abortController,
-    });
+    }, sageSystemPrompt);
 
     // Add MCP servers if any
     if (Object.keys(userMcpServers).length > 0) {
@@ -510,15 +526,15 @@ export class CodeAnyAgent extends BaseAgent {
 
     const workspaceInstruction = `\n## CRITICAL: Output Directory\n**ALL files must be saved to: ${sessionCwd}**\n`;
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
-    const htclawSystemPrompt = await getHTClawSystemPrompt(prompt);
-    const planningPrompt = htclawSystemPrompt + workspaceInstruction + PLANNING_INSTRUCTION + languageInstruction + prompt;
+    const sageSystemPrompt = await getSageSystemPrompt(prompt);
+    const planningPrompt = workspaceInstruction + PLANNING_INSTRUCTION + languageInstruction + prompt;
 
     let fullResponse = '';
 
     const sdkOpts = this.buildSdkOptions(sessionCwd, options, {
       allowedTools: [],
       abortController: options?.abortController || session.abortController,
-    });
+    }, sageSystemPrompt);
 
     try {
       for await (const message of query({ prompt: planningPrompt, options: sdkOpts })) {
@@ -586,9 +602,8 @@ export class CodeAnyAgent extends BaseAgent {
       ? { enabled: true, image: options.sandbox.image, apiEndpoint: options.sandbox.apiEndpoint || SANDBOX_API_URL }
       : undefined;
 
-    const htclawSystemPrompt = await getHTClawSystemPrompt(options.originalPrompt);
+    const sageSystemPrompt = await getSageSystemPrompt(options.originalPrompt);
     const executionPrompt =
-      htclawSystemPrompt +
       formatPlanForExecution(plan, sessionCwd, sandboxOpts, options.language, options.originalPrompt) +
       '\n\nOriginal request: ' + options.originalPrompt;
 
@@ -601,7 +616,7 @@ export class CodeAnyAgent extends BaseAgent {
 
     const sdkOpts = this.buildSdkOptions(sessionCwd, options, {
       abortController: options.abortController || session.abortController,
-    });
+    }, sageSystemPrompt);
 
     if (Object.keys(userMcpServers).length > 0) {
       sdkOpts.mcpServers = userMcpServers;

@@ -200,7 +200,7 @@ export interface Settings {
   mcpConfigPath: string;
   mcpEnabled: boolean; // Enable MCP mounting during agent conversations
   mcpUserDirEnabled: boolean; // Enable loading MCP servers from user directory (claude config)
-  mcpAppDirEnabled: boolean; // Enable loading MCP servers from app directory (htclaw config)
+  mcpAppDirEnabled: boolean; // Enable loading MCP servers from app directory (sage config)
 
   // Skills settings
   skillsPath: string;
@@ -253,10 +253,11 @@ export const defaultProviders: AIProvider[] = [
     id: 'minimax',
     name: 'MiniMax',
     apiKey: '',
-    baseUrl: 'https://api.minimax.io/anthropic',
+    baseUrl: 'https://api.minimaxi.com/v1',
     enabled: true,
-    models: ['MiniMax-M2.1'],
-    apiType: 'anthropic-messages',
+    models: ['MiniMax-M2', 'MiniMax-M2.5', 'MiniMax-M2.5-highspeed', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed'],
+    defaultModel: 'MiniMax-M2',
+    apiType: 'openai-completions',
     icon: 'M',
     apiKeyUrl:
       'https://platform.minimax.io/subscribe/coding-plan?code=9hgHKlPO3G&source=link',
@@ -295,7 +296,7 @@ export const defaultProviders: AIProvider[] = [
     models: ['claude-sonnet-4-5-20250929'],
     apiType: 'anthropic-messages',
     icon: '3',
-    apiKeyUrl: 'https://302.ai/?utm_source=htclaw_desktop',
+    apiKeyUrl: 'https://302.ai/?utm_source=sage_desktop',
     canDelete: true,
   },
   {
@@ -392,7 +393,7 @@ export const customProviderModels: Record<string, string[]> = {
 
 // Default settings
 // Note: Path values are placeholders that get resolved at initialization
-// to platform-specific paths (e.g., ~/.htclaw on macOS/Linux)
+// to platform-specific paths (e.g., ~/.sage on macOS/Linux)
 export const defaultSettings: Settings = {
   profile: {
     nickname: 'Guest User',
@@ -423,7 +424,7 @@ export const defaultSettings: Settings = {
   language: '', // Empty string triggers system language detection on first run
 };
 
-const DB_NAME = 'sqlite:htclaw.db';
+const DB_NAME = 'sqlite:sage.db';
 
 // Check if running in Tauri environment synchronously
 function isTauriSync(): boolean {
@@ -506,6 +507,14 @@ export async function getSettingsAsync(): Promise<Settings> {
             settings.providers.push(defaultProvider);
           }
         }
+        // Migration: Update MiniMax provider to new OpenAI-compatible endpoint
+        const minimaxProvider = settings.providers.find((p) => p.id === 'minimax');
+        if (minimaxProvider && minimaxProvider.baseUrl !== 'https://api.minimaxi.com/v1') {
+          minimaxProvider.baseUrl = 'https://api.minimaxi.com/v1';
+          minimaxProvider.apiType = 'openai-completions';
+          minimaxProvider.models = ['MiniMax-M2', 'MiniMax-M2.5', 'MiniMax-M2.5-highspeed', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed'];
+          minimaxProvider.defaultModel = 'MiniMax-M2';
+        }
         // Debug: Log loaded settings
         console.log('[Settings] Loaded from database:', {
           defaultProvider: settings.defaultProvider,
@@ -527,7 +536,7 @@ export async function getSettingsAsync(): Promise<Settings> {
 
   // Fallback to localStorage for browser mode
   try {
-    const stored = localStorage.getItem('htclaw_settings');
+    const stored = localStorage.getItem('sage_settings');
     if (stored) {
       const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
       // Migration: Add missing default providers
@@ -540,6 +549,14 @@ export async function getSettingsAsync(): Promise<Settings> {
           loadedSettings.providers.push(defaultProvider);
         }
       }
+      // Migration: Update MiniMax provider to new OpenAI-compatible endpoint
+      const minimaxProvider = loadedSettings.providers.find((p: AIProvider) => p.id === 'minimax');
+      if (minimaxProvider && minimaxProvider.baseUrl !== 'https://api.minimaxi.com/v1') {
+        minimaxProvider.baseUrl = 'https://api.minimaxi.com/v1';
+        minimaxProvider.apiType = 'openai-completions';
+        minimaxProvider.models = ['MiniMax-M2', 'MiniMax-M2.5', 'MiniMax-M2.5-highspeed', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed'];
+        minimaxProvider.defaultModel = 'MiniMax-M2';
+      }
       // Debug: Log loaded settings
       console.log('[Settings] Loaded from localStorage:', {
         defaultProvider: loadedSettings.defaultProvider,
@@ -550,7 +567,7 @@ export async function getSettingsAsync(): Promise<Settings> {
       settingsCache = loadedSettings;
       return loadedSettings;
     } else {
-      console.log('[Settings] localStorage has no htclaw_settings');
+      console.log('[Settings] localStorage has no sage_settings');
     }
   } catch (error) {
     console.error('[Settings] Failed to load from localStorage:', error);
@@ -573,7 +590,7 @@ export function getSettings(): Settings {
 
   // Try localStorage first for immediate sync access
   try {
-    const stored = localStorage.getItem('htclaw_settings');
+    const stored = localStorage.getItem('sage_settings');
     if (stored) {
       const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
       // Migration: Add missing default providers
@@ -633,7 +650,7 @@ export async function saveSettingsAsync(settings: Settings): Promise<void> {
 
   // Also save to localStorage as fallback
   try {
-    localStorage.setItem('htclaw_settings', JSON.stringify(settings));
+    localStorage.setItem('sage_settings', JSON.stringify(settings));
   } catch (error) {
     console.error('[Settings] Failed to save to localStorage:', error);
   }
@@ -651,7 +668,7 @@ export function saveSettings(settings: Settings): void {
 
   // Save to localStorage immediately for sync access
   try {
-    localStorage.setItem('htclaw_settings', JSON.stringify(settings));
+    localStorage.setItem('sage_settings', JSON.stringify(settings));
     console.log('[Settings] Saved to localStorage successfully');
   } catch (error) {
     console.error('[Settings] Failed to save to localStorage:', error);
@@ -987,7 +1004,7 @@ export async function saveSettingItem(
 
   // Also save to localStorage
   try {
-    localStorage.setItem(`htclaw_${key}`, value);
+    localStorage.setItem(`sage_${key}`, value);
   } catch (error) {
     console.error(`[Settings] Failed to save ${key} to localStorage:`, error);
   }
@@ -1015,7 +1032,7 @@ export async function getSettingItem(key: string): Promise<string | null> {
 
   // Fallback to localStorage
   try {
-    return localStorage.getItem(`htclaw_${key}`);
+    return localStorage.getItem(`sage_${key}`);
   } catch {
     return null;
   }
@@ -1050,7 +1067,7 @@ export async function clearAllSettings(): Promise<void> {
   try {
     const keys = Object.keys(localStorage);
     for (const key of keys) {
-      if (key.startsWith('htclaw') || key.startsWith('workany')) {
+      if (key.startsWith('sage') || key.startsWith('workany')) {
         localStorage.removeItem(key);
       }
     }

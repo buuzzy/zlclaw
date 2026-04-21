@@ -1,7 +1,7 @@
 /**
  * Per-skill enable/disable configuration.
  *
- * Stores a list of disabled skill names in ~/.htclaw/skills-config.json.
+ * Stores a list of disabled skill names in ~/.sage/skills-config.json.
  * All skills are enabled by default; only explicitly disabled ones are listed.
  */
 

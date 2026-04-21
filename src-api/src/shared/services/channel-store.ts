@@ -3,7 +3,7 @@
  *
  * Persistent store for conversations originating from external channels.
  * Data is kept in-memory for fast access and periodically flushed to disk
- * (~/.htclaw/channel-conversations.json) so conversations survive sidecar restarts.
+ * (~/.sage/channel-conversations.json) so conversations survive sidecar restarts.
  *
  * Supports session continuity: messages from the same channel within
  * a time window are grouped into one conversation.

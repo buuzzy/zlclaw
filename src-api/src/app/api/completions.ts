@@ -2,7 +2,7 @@
  * OpenAI-Compatible Chat Completions API
  *
  * Provides a /chat/completions endpoint that WeClaw and other
- * OpenAI-compatible clients can call to interact with HT Claw's Agent.
+ * OpenAI-compatible clients can call to interact with Sage's Agent.
  *
  * Supports slash commands: /new, /reset, /compact
  * Integrates with the memory system for persistent user context.
@@ -140,7 +140,7 @@ completionsRoutes.post('/chat/completions', async (c) => {
     );
   }
 
-  const model = body.model || 'htclaw';
+  const model = body.model || 'sage';
 
   // ─── Slash command handling ─────────────────────────────────────────
   const command = detectCommand(lastUserMsg.content);
@@ -283,10 +283,10 @@ completionsRoutes.get('/models', (c) => {
     object: 'list',
     data: [
       {
-        id: 'htclaw',
+        id: 'sage',
         object: 'model',
         created: Math.floor(Date.now() / 1000),
-        owned_by: 'htclaw',
+        owned_by: 'sage',
       },
     ],
   });

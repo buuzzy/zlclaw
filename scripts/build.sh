@@ -612,13 +612,20 @@ if (!config.bundle.externalBin.includes('../src-api/dist/codex')) {
 }
 
 // Add cli-bundle as resource (contains shared Node.js + both CLI packages)
+// resources can be either an array (legacy) or an object (Tauri v2)
 const cliResource = '../src-api/dist/cli-bundle/**/*';
-if (!config.bundle.resources.includes(cliResource)) {
-    // Remove old separate bundle resources
-    config.bundle.resources = config.bundle.resources.filter(r =>
-        !r.includes('claude-bundle') && !r.includes('codex-bundle')
-    );
-    config.bundle.resources.push(cliResource);
+if (Array.isArray(config.bundle.resources)) {
+    if (!config.bundle.resources.includes(cliResource)) {
+        config.bundle.resources = config.bundle.resources.filter(r =>
+            !r.includes('claude-bundle') && !r.includes('codex-bundle')
+        );
+        config.bundle.resources.push(cliResource);
+    }
+} else {
+    // Object format: { "src": "dest" }
+    if (!config.bundle.resources[cliResource]) {
+        config.bundle.resources[cliResource] = 'cli-bundle';
+    }
 }
 console.log('Added unified CLI bundle config');
 

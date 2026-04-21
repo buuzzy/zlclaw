@@ -7,10 +7,10 @@ import { getAllMcpConfigPaths } from '../../config/constants';
 
 const mcp = new Hono();
 
-// MCP config file path: ~/.htclaw/mcp.json
+// MCP config file path: ~/.sage/mcp.json
 const getMcpConfigPath = (): string => {
   const homeDir = os.homedir();
-  return path.join(homeDir, '.htclaw', 'mcp.json');
+  return path.join(homeDir, '.sage', 'mcp.json');
 };
 
 // Claude settings file path: ~/.claude/settings.json
@@ -138,7 +138,7 @@ mcp.get('/path', (c) => {
   });
 });
 
-// GET /mcp/all-configs - Read MCP configs from all sources (htclaw and claude)
+// GET /mcp/all-configs - Read MCP configs from all sources (sage and claude)
 mcp.get('/all-configs', async (c) => {
   const configPaths = getAllMcpConfigPaths();
   const results: {
@@ -165,7 +165,7 @@ mcp.get('/all-configs', async (c) => {
           servers: config.mcpServers || {},
         });
       } else {
-        // HT Claw mcp.json structure
+        // Sage mcp.json structure
         results.push({
           name: configInfo.name,
           path: configInfo.path,

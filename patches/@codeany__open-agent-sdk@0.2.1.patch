@@ -1,0 +1,99 @@
+diff --git a/dist/providers/openai.js b/dist/providers/openai.js
+index a137c3813dd97d09941742c68ac61d58a0593127..8fe2bc520dbc8da1237d4e7f536cb8f243914771 100644
+--- a/dist/providers/openai.js
++++ b/dist/providers/openai.js
+@@ -149,6 +149,51 @@ export class OpenAIProvider {
+     // --------------------------------------------------------------------------
+     // Response Conversion: OpenAI → Internal
+     // --------------------------------------------------------------------------
++    /**
++     * Parse MiniMax proprietary XML tool-call blocks embedded in the text content.
++     *
++     * MiniMax M2 series does not emit standard OpenAI `tool_calls` JSON; instead
++     * it inlines tool invocations directly in `message.content` using a custom
++     * XML dialect:
++     *
++     *   <minimax:tool_call>
++     *     <invoke name="Skill">
++     *       <parameter name="skill">westock-quote</parameter>
++     *       <parameter name="args">snapshot sz300750</parameter>
++     *     </invoke>
++     *   </minimax:tool_call>
++     *
++     * This method extracts all such blocks, converts each to a `tool_use` content
++     * block (compatible with the rest of the SDK pipeline), and returns the
++     * remaining text (with the XML stripped out) plus the tool-use blocks.
++     */
++    parseMinimaxXmlToolCalls(text) {
++        const toolUseBlocks = [];
++        // Match one or more <minimax:tool_call> ... </minimax:tool_call> sections
++        const toolCallRegex = /<minimax:tool_call>([\s\S]*?)<\/minimax:tool_call>/g;
++        let remainingText = text;
++        let match;
++        while ((match = toolCallRegex.exec(text)) !== null) {
++            const xmlBody = match[1];
++            // Remove the matched XML from the remaining text
++            remainingText = remainingText.replace(match[0], '');
++            // Extract <invoke name="ToolName"> ... </invoke>
++            const invokeMatch = xmlBody.match(/<invoke\s+name="([^"]+)">([\s\S]*?)<\/invoke>/);
++            if (!invokeMatch) continue;
++            const toolName = invokeMatch[1];
++            const paramsXml = invokeMatch[2];
++            // Extract all <parameter name="key">value</parameter> pairs
++            const paramRegex = /<parameter\s+name="([^"]+)">([\s\S]*?)<\/parameter>/g;
++            const input = {};
++            let paramMatch;
++            while ((paramMatch = paramRegex.exec(paramsXml)) !== null) {
++                input[paramMatch[1]] = paramMatch[2].trim();
++            }
++            const id = `minimax_tool_${Date.now()}_${toolUseBlocks.length}`;
++            toolUseBlocks.push({ type: 'tool_use', id, name: toolName, input });
++        }
++        return { remainingText: remainingText.trim(), toolUseBlocks };
++    }
+     convertResponse(data) {
+         const choice = data.choices[0];
+         if (!choice) {
+@@ -159,11 +204,21 @@ export class OpenAIProvider {
+             };
+         }
+         const content = [];
+-        // Add text content
++        // Add text content — but first check for MiniMax inline XML tool calls
+         if (choice.message.content) {
+-            content.push({ type: 'text', text: choice.message.content });
++            const rawText = choice.message.content;
++            if (rawText.includes('<minimax:tool_call>')) {
++                // Parse out XML tool calls embedded in the text
++                const { remainingText, toolUseBlocks } = this.parseMinimaxXmlToolCalls(rawText);
++                if (remainingText) {
++                    content.push({ type: 'text', text: remainingText });
++                }
++                content.push(...toolUseBlocks);
++            } else {
++                content.push({ type: 'text', text: rawText });
++            }
+         }
+-        // Add tool calls
++        // Add standard OpenAI-format tool calls (JSON)
+         if (choice.message.tool_calls) {
+             for (const tc of choice.message.tool_calls) {
+                 let input;
+@@ -185,8 +240,15 @@ export class OpenAIProvider {
+         if (content.length === 0) {
+             content.push({ type: 'text', text: '' });
+         }
+-        // Map finish_reason to our normalized stop reasons
+-        const stopReason = this.mapFinishReason(choice.finish_reason);
++        // Map finish_reason to our normalized stop reasons.
++        // MiniMax returns 'tool_calls' finish_reason only for standard JSON tool
++        // calls; for XML-embedded tool calls it returns 'stop'.  If we detected
++        // tool_use blocks in the content we override the stop reason so the engine
++        // keeps the agentic loop running.
++        let stopReason = this.mapFinishReason(choice.finish_reason);
++        if (stopReason !== 'tool_use' && content.some(b => b.type === 'tool_use')) {
++            stopReason = 'tool_use';
++        }
+         return {
+             content,
+             stopReason,

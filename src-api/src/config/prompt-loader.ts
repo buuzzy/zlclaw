@@ -1,7 +1,7 @@
 /**
- * HT Claw Prompt Loader
+ * Sage Prompt Loader
  *
- * Loads SOUL.md, AGENTS.md, and memory files from ~/.htclaw/
+ * Loads SOUL.md, AGENTS.md, and memory files from ~/.sage/
  * and provides them as system prompt fragments for the Agent runtime.
  *
  * When a vector index is available, long-term and daily memory are
@@ -160,12 +160,12 @@ async function loadMemoryFullText(): Promise<string> {
 }
 
 /**
- * Returns the combined HT Claw system prompt (SOUL + AGENTS + Memory).
+ * Returns the combined Sage system prompt (SOUL + AGENTS + Memory).
  *
  * @param userQuery - when provided and vector search is ready, memory is
  *   retrieved semantically instead of full-text injected.
  */
-export async function getHTClawSystemPrompt(userQuery?: string): Promise<string> {
+export async function getSageSystemPrompt(userQuery?: string): Promise<string> {
   const [soul, agents] = await Promise.all([
     getSoulPrompt(),
     getAgentsPrompt(),

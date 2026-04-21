@@ -2,10 +2,10 @@
  * WeChat (WeClaw) Management API
  *
  * Manages the WeClaw binary lifecycle:
- *  - POST /start   → Auto-install if missing, bind to HT Claw, launch WeClaw
+ *  - POST /start   → Auto-install if missing, bind to Sage, launch WeClaw
  *  - GET  /status  → Real-time status (process + config binding detection)
  *  - POST /stop    → Kill WeClaw process
- *  - POST /bind    → Switch WeClaw's default_agent to htclaw
+ *  - POST /bind    → Switch WeClaw's default_agent to sage
  */
 
 import { execSync, spawn, type ChildProcess } from 'node:child_process';
@@ -29,7 +29,7 @@ const WECLAW_DIR = join(HOME, '.weclaw');
 const WECLAW_BIN = join(WECLAW_DIR, 'bin', 'weclaw');
 const WECLAW_CONFIG = join(WECLAW_DIR, 'config.json');
 const GITHUB_API = 'https://api.github.com/repos/fastclaw-ai/weclaw/releases/latest';
-const HTCLAW_AGENT_NAME = 'htclaw';
+const HTCLAW_AGENT_NAME = 'sage';
 
 type WeChatStatus = 'idle' | 'starting' | 'installing' | 'waiting_scan' | 'connected' | 'bound_other' | 'error';
 
@@ -62,7 +62,7 @@ interface ProbeResult {
   processAlive: boolean;
   healthOk: boolean;
   boundAgent: string | null;
-  boundToHtclaw: boolean;
+  boundToSage: boolean;
 }
 
 function readWeClawConfig(): WeClawConfig | null {
@@ -94,10 +94,10 @@ function probeRealStatus(): ProbeResult {
   const config = readWeClawConfig();
   const boundAgent = config?.default_agent ?? null;
   const port = Number(process.env.PORT) || 2026;
-  const htclawEndpoint = `http://127.0.0.1:${port}/v1/chat/completions`;
+  const sageEndpoint = `http://127.0.0.1:${port}/v1/chat/completions`;
   const agentConfig = boundAgent && config?.agents?.[boundAgent];
-  const boundToHtclaw = boundAgent === HTCLAW_AGENT_NAME
-    || (!!agentConfig && typeof agentConfig === 'object' && (agentConfig as any).endpoint === htclawEndpoint);
+  const boundToSage = boundAgent === HTCLAW_AGENT_NAME
+    || (!!agentConfig && typeof agentConfig === 'object' && (agentConfig as any).endpoint === sageEndpoint);
 
   const processAlive = isProcessAlive(state.pid);
 
@@ -111,7 +111,7 @@ function probeRealStatus(): ProbeResult {
     healthOk = out.trim() === 'ok';
   } catch {}
 
-  return { processAlive, healthOk, boundAgent, boundToHtclaw };
+  return { processAlive, healthOk, boundAgent, boundToSage };
 }
 
 function bindToHtclaw(): void {
@@ -123,12 +123,12 @@ function bindToHtclaw(): void {
     type: 'http',
     endpoint: `http://127.0.0.1:${port}/v1/chat/completions`,
     model: HTCLAW_AGENT_NAME,
-    system_prompt: '你是 HT Claw 金融 AI 助手，擅长股票行情分析、K线图解读和金融数据查询。',
+    system_prompt: '你是 Sage 金融 AI 助手，擅长股票行情分析、K线图解读和金融数据查询。',
     ...(config.agents[HTCLAW_AGENT_NAME] || {}),
   };
   config.agents[HTCLAW_AGENT_NAME].endpoint = `http://127.0.0.1:${port}/v1/chat/completions`;
   writeFileSync(WECLAW_CONFIG, JSON.stringify(config, null, 2), 'utf-8');
-  console.log('[WeClaw] Config bound to htclaw');
+  console.log('[WeClaw] Config bound to sage');
 }
 
 function findWeClaw(): string | null {
@@ -311,12 +311,12 @@ function launchWeClaw(binary: string): void {
  * 3. Health check: GET :18011/health verifies WeClaw is serving (foreground or daemon).
  * 4. Config binding: config.default_agent tells us who WeClaw forwards to.
  *
- * "connected" requires BOTH health=ok AND boundToHtclaw=true.
+ * "connected" requires BOTH health=ok AND boundToSage=true.
  */
 function computeEffectiveStatus(): {
   status: WeChatStatus;
   boundAgent: string | null;
-  boundToHtclaw: boolean;
+  boundToSage: boolean;
   running: boolean;
 } {
   const probe = probeRealStatus();
@@ -325,7 +325,7 @@ function computeEffectiveStatus(): {
   // Transient states from our managed flow (QR scan, install)
   const transient: WeChatStatus[] = ['starting', 'waiting_scan', 'installing'];
   if (transient.includes(state.status) && probe.processAlive) {
-    return { status: state.status, boundAgent: probe.boundAgent, boundToHtclaw: probe.boundToHtclaw, running };
+    return { status: state.status, boundAgent: probe.boundAgent, boundToSage: probe.boundToSage, running };
   }
 
   // If managed process died but state still thinks it's alive, fix it
@@ -340,15 +340,15 @@ function computeEffectiveStatus(): {
   // WeClaw is alive (our process or external daemon)
   if (running) {
     return {
-      status: probe.boundToHtclaw ? 'connected' : 'bound_other',
+      status: probe.boundToSage ? 'connected' : 'bound_other',
       boundAgent: probe.boundAgent,
-      boundToHtclaw: probe.boundToHtclaw,
+      boundToSage: probe.boundToSage,
       running,
     };
   }
 
   // Nothing running
-  return { status: 'idle', boundAgent: probe.boundAgent, boundToHtclaw: probe.boundToHtclaw, running: false };
+  return { status: 'idle', boundAgent: probe.boundAgent, boundToSage: probe.boundToSage, running: false };
 }
 
 export const wechatRoutes = new Hono();
@@ -356,7 +356,7 @@ export const wechatRoutes = new Hono();
 wechatRoutes.post('/start', async (c) => {
   const effective = computeEffectiveStatus();
 
-  // Already connected to HT Claw
+  // Already connected to Sage
   if (effective.status === 'connected') {
     return c.json({ ok: true, status: 'connected', qrUrl: state.qrUrl, qrExpireAt: state.qrExpireAt });
   }
@@ -432,7 +432,7 @@ wechatRoutes.get('/status', (c) => {
     hasConfig: existsSync(WECLAW_CONFIG),
     pid: state.pid,
     boundAgent: effective.boundAgent,
-    boundToHtclaw: effective.boundToHtclaw,
+    boundToSage: effective.boundToSage,
     running: effective.running,
   });
 });
@@ -457,7 +457,7 @@ wechatRoutes.post('/bind', async (c) => {
     } catch {}
     try {
       execSync(`"${binary}" restart 2>&1`, { timeout: 5000, encoding: 'utf-8' });
-      console.log('[WeClaw] Restarted with htclaw binding');
+      console.log('[WeClaw] Restarted with sage binding');
     } catch {}
   }
 
@@ -518,10 +518,10 @@ export async function connectWechatOnStartup(): Promise<void> {
     return;
   }
 
-  // Check if WeClaw config exists and is bound to htclaw
+  // Check if WeClaw config exists and is bound to sage
   const config = readWeClawConfig();
   if (!config || config.default_agent !== HTCLAW_AGENT_NAME) {
-    console.log('[WeClaw] Startup: not bound to htclaw, skipping');
+    console.log('[WeClaw] Startup: not bound to sage, skipping');
     return;
   }
 

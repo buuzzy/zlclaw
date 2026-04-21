@@ -27,9 +27,9 @@ export function AboutSettings() {
       {/* Product Info */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <img src={ImageLogo} alt="HT Claw" className="size-16 rounded-xl" />
+          <img src={ImageLogo} alt="Sage" className="size-16 rounded-xl" />
           <div>
-            <h2 className="text-foreground text-xl font-bold">HT Claw</h2>
+            <h2 className="text-foreground text-xl font-bold">Sage</h2>
             <p className="text-muted-foreground text-sm">
               {t.settings.aiPlatform}
             </p>
@@ -80,7 +80,7 @@ export function AboutSettings() {
             {t.settings.copyright}
           </span>
           <span className="text-foreground flex items-center gap-1 text-sm font-medium">
-            © 2026 HT Claw
+            © 2026 Sage
           </span>
         </div>
         <div className="border-border flex items-center justify-between rounded-lg border p-3">
@@ -88,7 +88,7 @@ export function AboutSettings() {
             {t.settings.license}
           </span>
           <span className="text-foreground flex items-center gap-1 text-sm font-medium">
-            HT Claw Community License
+            Sage Community License
           </span>
         </div>
       </div>

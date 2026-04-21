@@ -1,13 +1,13 @@
 /**
  * Cron System — Type Definitions
  *
- * HTclaw supports user-manageable scheduled tasks. Jobs are persisted to
- * ~/.htclaw/cron/jobs.json and can be created via:
+ * Sage supports user-manageable scheduled tasks. Jobs are persisted to
+ * ~/.sage/cron/jobs.json and can be created via:
  *   - The REST API (frontend settings panel)
  *   - Natural language (Agent calling the cron tool in future iteration)
  *
  * Design: simplified adaptation of OpenClaw's cron architecture, tailored
- * for HTclaw's financial assistant use-case.
+ * for Sage's financial assistant use-case.
  */
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ export interface CronJob {
   enabled: boolean;
 
   /**
-   * System jobs (e.g. F25 memory consolidation) are created by HTclaw itself.
+   * System jobs (e.g. F25 memory consolidation) are created by Sage itself.
    * They cannot be deleted by the user but can be disabled.
    */
   system?: boolean;

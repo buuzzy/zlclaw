@@ -254,7 +254,13 @@ function getBuiltinSkillsSourceDir(): string {
   // In tsc build: dist/shared/skills/ -> resources/skills/
   const prodPath = join(thisDir, '..', '..', 'resources', 'skills');
   if (existsSync(prodPath)) return prodPath;
-  // In pkg binary: use process.cwd() as base
+  // In pkg binary inside macOS .app bundle:
+  //   process.execPath = Contents/MacOS/sage-api-aarch64-apple-darwin
+  //   Tauri resources  = Contents/Resources/resources/skills/
+  const binaryDir = dirname(process.execPath);
+  const appBundlePath = join(binaryDir, '..', 'Resources', 'resources', 'skills');
+  if (existsSync(appBundlePath)) return appBundlePath;
+  // Fallback: CWD-relative
   const pkgPath = join(process.cwd(), 'resources', 'skills');
   if (existsSync(pkgPath)) return pkgPath;
   return devPath;
@@ -278,7 +284,7 @@ async function copyDir(src: string, dest: string): Promise<void> {
 }
 
 /**
- * Install built-in skills from project resources to ~/.htclaw/skills/
+ * Install built-in skills from project resources to ~/.sage/skills/
  * Only copies if the destination doesn't exist or is outdated.
  */
 export async function installBuiltinSkills(): Promise<void> {
@@ -332,7 +338,7 @@ export async function installBuiltinSkills(): Promise<void> {
 }
 
 /**
- * Load skills from all directories (both ~/.claude/skills/ and ~/.htclaw/skills/)
+ * Load skills from all directories (both ~/.claude/skills/ and ~/.sage/skills/)
  */
 export async function loadAllSkills(
   skillsConfig?: SkillsConfig

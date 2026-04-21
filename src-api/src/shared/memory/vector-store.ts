@@ -1,7 +1,7 @@
 /**
  * Vector Store — JSON-based vector storage with cosine similarity search.
  *
- * Stores all chunk embeddings in a single `~/.htclaw/memory-index/index.json`.
+ * Stores all chunk embeddings in a single `~/.sage/memory-index/index.json`.
  * Zero external dependencies; suitable for a desktop app's memory scale.
  *
  * Performance optimisation: mtime-based in-process cache avoids re-reading

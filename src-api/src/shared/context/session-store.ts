@@ -2,7 +2,7 @@
  * Session Store — disk-persisted conversation context.
  *
  * Stores full conversation messages and compaction summaries per sessionId
- * in ~/.htclaw/sessions/{sessionId}.json.
+ * in ~/.sage/sessions/{sessionId}.json.
  *
  * The full message history is NEVER truncated on disk — compaction only
  * affects what gets assembled into the model's context window.

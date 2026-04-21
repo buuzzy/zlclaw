@@ -26,9 +26,9 @@ export const API_BASE_URL = `http://localhost:${API_PORT}`;
 /**
  * App name
  */
-export const APP_NAME = 'HT Claw';
+export const APP_NAME = 'Sage';
 
 /**
  * App identifier (must match tauri.conf.json)
  */
-export const APP_IDENTIFIER = 'ai.htclaw.app';
+export const APP_IDENTIFIER = 'ai.sage.app';

@@ -1,9 +1,9 @@
 export default {
-  title: 'Welcome to HT Claw',
+  title: 'Welcome to Sage',
   subtitle: "Let's make sure you have all the required tools installed",
   checking: 'Checking dependencies...',
   checkingEnvironment: 'Checking environment...',
-  redirecting: 'Entering HT Claw...',
+  redirecting: 'Entering Sage...',
   recheck: 'Recheck',
   skip: 'Skip',
   retry: 'Retry',

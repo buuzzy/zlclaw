@@ -13,7 +13,7 @@ import * as path from 'path';
 
 export interface PreviewConfig {
   taskId: string;
-  workDir: string; // Host path: ~/.htclaw/sessions/{taskId}
+  workDir: string; // Host path: ~/.sage/sessions/{taskId}
   port?: number; // Preferred port (auto-assign if unavailable)
 }
 
