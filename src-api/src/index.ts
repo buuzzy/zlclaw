@@ -75,7 +75,7 @@ app.route('/v1', completionsRoutes);
 // Root endpoint
 app.get('/', (c) => {
   return c.json({
-    name: 'HT Claw API',
+    name: 'Sage API',
     version: '0.1.1',
     endpoints: {
       health: '/health',
@@ -162,7 +162,12 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Initialize and start server
 async function start() {
-  console.log(`🚀 HT Claw API starting...`);
+  console.log(`🚀 Sage API starting...`);
+
+  // Ensure ~/.sage/ directory structure and default files are in place
+  // Must run before loadConfig() which may read ~/.sage/config.json
+  const { ensureAppDirInitialized } = await import('@/shared/init/first-run');
+  await ensureAppDirInitialized();
 
   // Load configuration
   await loadConfig();
@@ -172,7 +177,7 @@ async function start() {
     process.env.IWENCAI_API_KEY = DEFAULT_IWENCAI_API_KEY;
   }
 
-  // Install built-in skills to ~/.htclaw/skills/
+  // Install built-in skills to ~/.sage/skills/
   const { installBuiltinSkills } = await import('@/shared/skills/loader');
   await installBuiltinSkills();
 
@@ -249,7 +254,7 @@ async function start() {
 
   // Initialize cron scheduler (loads persisted jobs, schedules enabled ones)
   // The scheduler registers the built-in F25 memory consolidation job (23:00 daily)
-  // and any user-created jobs from ~/.htclaw/cron/jobs.json
+  // and any user-created jobs from ~/.sage/cron/jobs.json
   const { initScheduler } = await import('@/shared/cron/scheduler');
   initScheduler();
   console.log('⏰ Cron scheduler initialized');

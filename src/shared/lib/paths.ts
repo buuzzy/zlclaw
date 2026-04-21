@@ -1,7 +1,7 @@
 /**
- * Path utilities for HT Claw
+ * Path utilities for Sage
  *
- * Uses ~/.htclaw/ as the standard data directory across all platforms.
+ * Uses ~/.sage/ as the standard data directory across all platforms.
  * This follows the Unix dotfile convention used by developer tools like:
  * - ~/.claude/ (Claude Code)
  * - ~/.npm/ (npm)
@@ -71,7 +71,7 @@ export async function getClaudeSkillsDir(): Promise<string> {
 }
 
 /**
- * Get the HT Claw MCP config path (platform-aware)
+ * Get the Sage MCP config path (platform-aware)
  */
 export async function getWorkanyMcpPath(): Promise<string> {
   const appDir = await getAppDataDir();
@@ -81,7 +81,7 @@ export async function getWorkanyMcpPath(): Promise<string> {
 
 /**
  * Get the application data directory
- * Returns ~/.htclaw on all platforms (using correct path separator)
+ * Returns ~/.sage on all platforms (using correct path separator)
  */
 export async function getAppDataDir(): Promise<string> {
   if (cachedAppDataDir) {
@@ -96,7 +96,7 @@ export async function getAppDataDir(): Promise<string> {
       // Remove trailing slash/backslash if present
       const homeClean =
         home.endsWith('/') || home.endsWith('\\') ? home.slice(0, -1) : home;
-      cachedAppDataDir = `${homeClean}${separator}.htclaw`;
+      cachedAppDataDir = `${homeClean}${separator}.sage`;
       return cachedAppDataDir;
     } catch (error) {
       console.warn('[Paths] Failed to get home dir:', error);
@@ -104,7 +104,7 @@ export async function getAppDataDir(): Promise<string> {
   }
 
   // Fallback for browser mode
-  cachedAppDataDir = '~/.htclaw';
+  cachedAppDataDir = '~/.sage';
   return cachedAppDataDir;
 }
 
@@ -183,7 +183,7 @@ export async function expandPath(path: string): Promise<string> {
 export async function getLogPath(): Promise<string> {
   const appDir = await getAppDataDir();
   const sep = await getPathSeparator();
-  return `${appDir}${sep}logs${sep}htclaw.log`;
+  return `${appDir}${sep}logs${sep}sage.log`;
 }
 
 /**

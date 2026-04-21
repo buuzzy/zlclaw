@@ -103,7 +103,7 @@ memoryRoutes.post('/config/test', async (c) => {
       model: body.model || 'text-embedding-3-small',
     });
 
-    const testText = 'HT Claw memory search test';
+    const testText = 'Sage memory search test';
     const [vec] = await provider.embed([testText]);
 
     return c.json({

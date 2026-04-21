@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@codeany/open-agent-sdk@0.2.1':
+    hash: bbb5d724589ae83e53c616a13701251906ca95533c8ee484b9d804b86c01c459
+    path: patches/@codeany__open-agent-sdk@0.2.1.patch
+
 importers:
 
   .:
@@ -203,7 +208,7 @@ importers:
         version: 0.78.0(zod@4.3.5)
       '@codeany/open-agent-sdk':
         specifier: ^0.2.1
-        version: 0.2.1
+        version: 0.2.1(patch_hash=bbb5d724589ae83e53c616a13701251906ca95533c8ee484b9d804b86c01c459)
       '@hono/node-server':
         specifier: ^1.14.1
         version: 1.19.9(hono@4.11.4)
@@ -4640,7 +4645,7 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
 
-  '@codeany/open-agent-sdk@0.2.1':
+  '@codeany/open-agent-sdk@0.2.1(patch_hash=bbb5d724589ae83e53c616a13701251906ca95533c8ee484b9d804b86c01c459)':
     dependencies:
       '@anthropic-ai/sdk': 0.52.0
       '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)

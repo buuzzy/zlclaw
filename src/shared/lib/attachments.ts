@@ -4,7 +4,7 @@
  * Stores attachment files in the session folder instead of database
  * to avoid bloating the database with large binary data.
  *
- * Structure: ~/.htclaw/sessions/{sessionId}/attachments/{filename}
+ * Structure: ~/.sage/sessions/{sessionId}/attachments/{filename}
  */
 
 import type { MessageAttachment } from '@/shared/hooks/useAgent';

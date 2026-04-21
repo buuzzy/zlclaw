@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "HT Claw",
+  "productName": "Sage",
   "version": "1.0.0",
-  "identifier": "ai.htclaw.desktop",
+  "identifier": "ai.sage.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -32,11 +32,16 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "../src-api/dist/htclaw-api"
+      "../src-api/dist/codex",
+      "../src-api/dist/claude",
+      "../src-api/dist/sage-api"
     ],
     "macOS": {
       "entitlements": "entitlements.plist"
     },
-    "resources": []
+    "resources": {
+      "../src-api/resources": "resources",
+      "../src-api/dist/cli-bundle/**/*": "cli-bundle"
+    }
   }
 }

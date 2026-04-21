@@ -1,7 +1,7 @@
 /**
  * MCP Config Loader
  *
- * Loads MCP server configuration from ~/.htclaw/mcp.json
+ * Loads MCP server configuration from ~/.sage/mcp.json
  */
 
 import fs from 'fs/promises';
@@ -30,8 +30,8 @@ export interface McpSSEServerConfig {
 
 export type McpServerConfig = McpStdioServerConfig | McpHttpServerConfig | McpSSEServerConfig;
 
-// HT Claw MCP Config file format
-interface _HtClawMcpConfig {
+// Sage MCP Config file format
+interface _SageMcpConfig {
   mcpServers: Record<
     string,
     {
@@ -123,7 +123,7 @@ export interface McpConfig {
 }
 
 /**
- * Load MCP servers configuration from ~/.htclaw/mcp.json
+ * Load MCP servers configuration from ~/.sage/mcp.json
  *
  * @param mcpConfig Optional config to control loading
  * @returns Record of server name to config
@@ -138,7 +138,7 @@ export async function loadMcpServers(
   }
 
   const configPath = getMcpConfigPath();
-  const servers = await loadMcpServersFromFile(configPath, 'htclaw');
+  const servers = await loadMcpServersFromFile(configPath, 'sage');
 
   const serverCount = Object.keys(servers).length;
   if (serverCount > 0) {

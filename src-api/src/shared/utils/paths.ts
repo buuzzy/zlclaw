@@ -1,7 +1,7 @@
 /**
- * Path utilities for HT Claw API
+ * Path utilities for Sage API
  *
- * Uses ~/.htclaw/ as the standard data directory across all platforms.
+ * Uses ~/.sage/ as the standard data directory across all platforms.
  * This follows the Unix dotfile convention used by developer tools like:
  * - ~/.claude/ (Claude Code)
  * - ~/.npm/ (npm)
@@ -21,7 +21,7 @@ import {
 
 /**
  * Get the application data directory
- * Returns ~/.htclaw on all platforms
+ * Returns ~/.sage on all platforms
  */
 
 export function getAppDataDir(): string {

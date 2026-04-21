@@ -2,7 +2,7 @@
  * Daily Memory Writer
  *
  * Appends a single user↔assistant exchange to today's daily memory file
- * (~/.htclaw/memory/YYYY-MM-DD.md) and triggers an incremental vector
+ * (~/.sage/memory/YYYY-MM-DD.md) and triggers an incremental vector
  * re-index of that file.
  *
  * Rules:

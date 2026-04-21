@@ -5,7 +5,7 @@
  * Original messages are NEVER deleted — compaction only affects what
  * the model sees in the context window.
  *
- * Storage: ~/.htclaw/compaction/{sanitized-taskId}.json
+ * Storage: ~/.sage/compaction/{sanitized-taskId}.json
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
@@ -26,7 +26,7 @@ export interface StoredCompaction {
 }
 
 function compactionDir(): string {
-  return join(homedir(), '.htclaw', 'compaction');
+  return join(homedir(), '.sage', 'compaction');
 }
 
 function compactionPath(taskId: string): string {

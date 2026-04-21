@@ -1,7 +1,7 @@
 /**
  * Application Constants
  *
- * Centralized configuration constants for the HT Claw API.
+ * Centralized configuration constants for the Sage API.
  * All hardcoded values should be defined here for easy management.
  */
 
@@ -13,10 +13,10 @@ import { join } from 'path';
 // ============================================================================
 
 /** Application name */
-export const APP_NAME = 'htclaw';
+export const APP_NAME = 'sage';
 
 /** Application data directory name (used in home directory) */
-export const APP_DIR_NAME = '.htclaw';
+export const APP_DIR_NAME = '.sage';
 
 /** Claude Code directory name (system config) */
 export const CLAUDE_DIR_NAME = '.claude';
@@ -62,8 +62,8 @@ export const MCP_CONFIG_FILE_NAME = 'mcp.json';
 
 /** Config file search paths (relative) */
 export const CONFIG_SEARCH_PATHS = [
-  './htclaw.config.json',
-  './config/htclaw.json',
+  './sage.config.json',
+  './config/sage.json',
 ];
 
 // ============================================================================
@@ -131,7 +131,7 @@ export function getHomeDir(): string {
   return homedir();
 }
 
-/** Get HT Claw app data directory */
+/** Get Sage app data directory */
 export function getAppDir(): string {
   return join(homedir(), APP_DIR_NAME);
 }
@@ -141,7 +141,7 @@ export function getClaudeDir(): string {
   return join(homedir(), CLAUDE_DIR_NAME);
 }
 
-/** Get HT Claw skills directory */
+/** Get Sage skills directory */
 export function getWorkanySkillsDir(): string {
   return join(getAppDir(), SKILLS_DIR_NAME);
 }
@@ -154,12 +154,12 @@ export function getClaudeSkillsDir(): string {
 /** Get all skills directories to search */
 export function getAllSkillsDirs(): { name: string; path: string }[] {
   return [
-    { name: 'htclaw', path: getWorkanySkillsDir() },
+    { name: 'sage', path: getWorkanySkillsDir() },
     { name: 'claude', path: getClaudeSkillsDir() },
   ];
 }
 
-/** Get HT Claw MCP config path */
+/** Get Sage MCP config path */
 export function getWorkanyMcpConfigPath(): string {
   return join(getAppDir(), MCP_CONFIG_FILE_NAME);
 }
@@ -172,7 +172,7 @@ export function getClaudeSettingsPath(): string {
 /** Get all MCP config paths to search */
 export function getAllMcpConfigPaths(): { name: string; path: string }[] {
   return [
-    { name: 'htclaw', path: getWorkanyMcpConfigPath() },
+    { name: 'sage', path: getWorkanyMcpConfigPath() },
     { name: 'claude', path: getClaudeSettingsPath() },
   ];
 }

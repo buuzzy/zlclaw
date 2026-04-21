@@ -39,7 +39,7 @@ interface WeChatStatusResponse {
   hasConfig: boolean;
   pid: number | null;
   boundAgent: string | null;
-  boundToHtclaw: boolean;
+  boundToSage: boolean;
   running: boolean;
 }
 
@@ -66,7 +66,7 @@ export function ConnectorSettings() {
   const [showQrPanel, setShowQrPanel] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [boundAgent, setBoundAgent] = useState<string | null>(null);
-  const [, setBoundToHtclaw] = useState(false);
+  const [, setBoundToSage] = useState(false);
   const [, setIsRunning] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -82,7 +82,7 @@ export function ConnectorSettings() {
       setErrorMessage(data.errorMessage);
       setIsInstalled(data.installed);
       setBoundAgent(data.boundAgent);
-      setBoundToHtclaw(data.boundToHtclaw);
+      setBoundToSage(data.boundToSage);
       setIsRunning(data.running);
 
       if (data.status === 'connected') {
@@ -211,15 +211,15 @@ export function ConnectorSettings() {
     setShowQrPanel(false);
   };
 
-  const handleBindToHtclaw = async () => {
+  const handleBindToSage = async () => {
     setBindLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/channels/wechat/bind`, {
         method: 'POST',
       });
       if (res.ok) {
-        setBoundToHtclaw(true);
-        setBoundAgent('htclaw');
+        setBoundToSage(true);
+        setBoundAgent('sage');
         await fetchStatus();
       }
     } catch {
@@ -328,7 +328,7 @@ export function ConnectorSettings() {
               </button>
             ) : wechatStatus === 'bound_other' ? (
               <button
-                onClick={handleBindToHtclaw}
+                onClick={handleBindToSage}
                 disabled={bindLoading}
                 className={cn(
                   'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
@@ -339,7 +339,7 @@ export function ConnectorSettings() {
                 {bindLoading ? (
                   <Loader2 className="size-3 animate-spin" />
                 ) : (
-                  '切换到 HT Claw'
+                  '切换到 Sage'
                 )}
               </button>
             ) : (
@@ -375,8 +375,8 @@ export function ConnectorSettings() {
                   </span>
                 </p>
                 <p className="text-muted-foreground text-xs">
-                  微信消息正在发送到其他 Agent。点击「切换到 HT Claw」将修改
-                  WeClaw 配置并重启服务，使微信消息转发到 HT Claw。
+                  微信消息正在发送到其他 Agent。点击「切换到 Sage」将修改
+                  WeClaw 配置并重启服务，使微信消息转发到 Sage。
                 </p>
               </div>
             </div>

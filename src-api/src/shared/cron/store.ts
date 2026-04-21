@@ -1,7 +1,7 @@
 /**
  * Cron Job Store
  *
- * Persists jobs to ~/.htclaw/cron/jobs.json.
+ * Persists jobs to ~/.sage/cron/jobs.json.
  * Uses atomic write (write-to-temp + rename) to prevent corruption.
  * In-memory cache is always the source of truth; disk is flushed on every mutation.
  */

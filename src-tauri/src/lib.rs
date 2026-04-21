@@ -191,7 +191,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:htclaw.db", migrations)
+                .add_migrations("sqlite:sage.db", migrations)
                 .build(),
         );
 
@@ -213,7 +213,7 @@ pub fn run() {
                 // Kill any existing process on the API port
                 kill_existing_api_process(API_PORT);
 
-                let sidecar_command = app.shell().sidecar("htclaw-api")
+                let sidecar_command = app.shell().sidecar("sage-api")
                     .unwrap()
                     .env("PORT", API_PORT.to_string())
                     .env("NODE_ENV", "production");
