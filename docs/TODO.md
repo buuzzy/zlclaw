@@ -1,4 +1,4 @@
-# HTclaw — TODO & Feature Roadmap
+# Sage — TODO & Feature Roadmap
 
 > 记录已完成、进行中和待实现的功能。  
 > 每个功能标注优先级（P0~P3）和状态。
@@ -24,7 +24,7 @@
 - `src/shared/types/artifact.ts` — 追加 5 个新类型
 - `src/components/htui/[Name]/[Name].tsx` + `[Name].css` — 各组件实现
 - `src/components/htui/ArtifactRenderer.tsx` — 注册 5 个新组件
-- `~/.htclaw/AGENTS.md` — 更新意图路由表 + 组件 Schema 文档
+- `~/.sage/AGENTS.md` — 更新意图路由表 + 组件 Schema 文档
 
 ---
 
@@ -52,10 +52,10 @@
 - 完整的 prompt 编写指南（自包含、可使用内置金融技能）
 
 **实现文件：**
-- `~/.htclaw/skills/定时任务管理/SKILL.md` — 技能指令文件，Agent 自动发现并注册
-- `~/.htclaw/AGENTS.md` — 意图识别表添加两行路由规则
+- `~/.sage/skills/定时任务管理/SKILL.md` — 技能指令文件，Agent 自动发现并注册
+- `~/.sage/AGENTS.md` — 意图识别表添加两行路由规则
 
-**自动注册流程：** 服务启动时 `registerFilesystemSkills()` 扫描 `~/.htclaw/skills/` → 发现 `定时任务管理` → 注册到 SDK skill registry → Agent 的 `Skill` 工具可调用。
+**自动注册流程：** 服务启动时 `registerFilesystemSkills()` 扫描 `~/.sage/skills/` → 发现 `定时任务管理` → 注册到 SDK skill registry → Agent 的 `Skill` 工具可调用。
 
 ---
 
@@ -150,7 +150,7 @@ if (result.failed.length > 0) {
 ### 记忆写入与注入验证
 **状态：** ✅ 已验证
 
-- **写入**：每轮非 trivial 对话追加至 `~/.htclaw/memory/YYYY-MM-DD.md`（截断：用户 ≤200 字符，助手 ≤300 字符）
+- **写入**：每轮非 trivial 对话追加至 `~/.sage/memory/YYYY-MM-DD.md`（截断：用户 ≤200 字符，助手 ≤300 字符）
 - **注入**：新对话开始时调用混合搜索（vector 0.7 + keyword 0.3），将 top-5 结果注入 system prompt
 - **实测**：查询「westock数据接口 skill 技能封装」，返回今日日文件得分 0.42–0.60，注入正常
 
@@ -179,7 +179,7 @@ if (result.failed.length > 0) {
 ### F25 — 每日记忆归纳
 **状态：** ✅ 完成（含架构升级）
 
-每晚 23:00 将 `~/.htclaw/memory/YYYY-MM-DD.md` 中的日常对话提炼为结构化长期记忆，追加到 `~/.htclaw/MEMORY.md`。
+每晚 23:00 将 `~/.sage/memory/YYYY-MM-DD.md` 中的日常对话提炼为结构化长期记忆，追加到 `~/.sage/MEMORY.md`。
 
 **实现文件：**
 - `src-api/src/shared/memory/consolidator.ts` — 核心逻辑（扫描、LLM摘要、写入标记文件、触发向量重索引）
@@ -202,7 +202,7 @@ if (result.failed.length > 0) {
 REST API  POST /cron/jobs
     ↓
 CronScheduler (shared/cron/scheduler.ts)
-    ├── 持久化 → ~/.htclaw/cron/jobs.json
+    ├── 持久化 → ~/.sage/cron/jobs.json
     ├── node-cron（type=cron）
     ├── setInterval（type=every）
     └── setTimeout（type=at，一次性任务）
@@ -269,6 +269,83 @@ const baseUrl = rawBaseUrl.replace(/#.*$/, '').replace(/\/$/, '');
 ---
 
 ## 待实现 📋
+
+### P0 — 品牌更名：HTclaw → Sage
+
+**状态：** 待实现（2026-04-20）
+
+#### 品牌决策背景
+
+当前内部代号 **HTclaw**（"HT" 源于项目早期命名，"claw" 隐喻抓取数据）是开发代号，不适合面向用户的正式产品。
+
+经评估，正式产品名定为 **Sage**：
+- 英文本义"智者/先哲"，传达洞见、沉稳、可信赖
+- 与产品核心差异化高度契合：**有记忆的个人 AI 金融助手**，像一位了解你的私人顾问
+- 简洁（单音节），国际化友好，域名/AppStore 搜索辨识度高
+- Tagline 方向：*"Your personal financial Sage"* / *「懂你的 AI 投资顾问」*
+
+#### 需要更名的范围
+
+**代码层**
+
+| 位置 | 当前值 | 目标值 |
+|------|--------|--------|
+| `src-tauri/tauri.conf.json` → `productName` | `HTclaw` | `Sage` |
+| `src-tauri/tauri.conf.json` → `identifier` | `com.htclaw.app` | `com.sage.app`（或 `ai.sage.app`） |
+| `package.json` → `name` | `htclaw-app` | `sage` |
+| `src-api/package.json` → `name` | `htclaw-api` | `sage-api` |
+| App 标题栏、窗口标题 | HTclaw | Sage |
+| 设置面板、About 页 | HTclaw | Sage |
+
+**数据目录**
+
+| 位置 | 当前值 | 目标值 | 注意 |
+|------|--------|--------|------|
+| `getAppDir()` 返回路径 | `~/.sage/` | `~/.sage/` | 需要迁移脚本，兼容旧数据 |
+| `getClaudeSkillsDir()` | `~/.claude/skills/` | 保持不变（通用） | — |
+| Cron 持久化目录 | `~/.sage/cron/` | `~/.sage/cron/` | 随 appDir 自动迁移 |
+| 向量索引目录 | `~/.sage/memory-index/` | `~/.sage/memory-index/` | 随 appDir 自动迁移 |
+
+**GitHub 仓库**
+
+| 项目 | 当前 | 目标 |
+|------|------|------|
+| 仓库名 | `buuzzy/HTclaw` | `buuzzy/sage`（或保留 HTclaw 作为开发仓库） |
+
+**文档 & 注释**
+
+- `docs/` 下所有 `.md` 文件中的 "HTclaw" 字样替换为 "Sage"
+- 代码注释中的 `[HTClaw]`、`[HT Claw]` 前缀统一替换
+- `SOUL.md`、`AGENTS.md` 模板中的品牌提及更新
+
+#### 数据目录迁移方案
+
+首次启动检测到 `~/.sage/` 存在而 `~/.sage/` 不存在时，自动执行迁移：
+
+```
+1. cp -r ~/.sage/ ~/.sage/        # 拷贝全量数据
+2. 写入 ~/.sage/.migrated_from_htclaw  # 标记文件，防止重复迁移
+3. 提示用户：旧数据已迁移，~/.sage/ 可手动删除
+```
+
+迁移逻辑加在 `src-api/src/config/constants.ts` 的 `getAppDir()` 或 Tauri 启动钩子中。
+
+#### 实现建议
+
+先做"软更名"（UI 展示层），再做"硬更名"（目录迁移）：
+
+```
+阶段一：UI 层更名（低风险，随时可回滚）
+  → tauri.conf.json productName / 窗口标题 / 设置面板 / About 页
+
+阶段二：标识符更名
+  → bundle identifier / package.json name
+
+阶段三：数据目录迁移（最后做，风险最高）
+  → getAppDir() 路径变更 + 迁移脚本 + 兼容测试
+```
+
+---
 
 ### P1 — OKX 全链路交易集成
 
@@ -370,13 +447,213 @@ okx-trade (真实环境，小额测试) → 上线
 
 ---
 
+### P1.5 — 用户引导（Onboarding）与 user.md 自动生成
+
+**状态：** 待实现
+
+#### 背景
+
+HTclaw 内置三层记忆系统（`user.md` 用户画像 + `MEMORY.md` 长期记忆 + 日文件），对话自动记录和夜间归纳均**无需 embedding 开箱即用**。但有一个缺口：`user.md` 目前没有任何自动生成逻辑，需要用户自行创建并填写，导致「让 HTClaw 更懂用户」这件事在初次使用时无法自动启动。
+
+**Embedding 与记忆的关系澄清（设计决策背景）：**
+- **无 embedding**：`loadMemoryFullText()` 全量注入 `user.md` + `MEMORY.md` + 近两日日记，「懂用户」基础功能完全可用
+- **有 embedding**：额外支持语义检索，仅在 MEMORY.md 累积超过 60 条每日归纳（约 2 个月使用量）后才有明显收益
+- 结论：embedding 是锦上添花，不是 user.md 的前置依赖
+
+#### 目标
+
+首次启动时，通过对话引导用户回答几个问题，Agent 自动生成并写入 `~/.sage/user.md`，使记忆系统立即「有料可用」。
+
+#### 方案设计
+
+**触发时机：** 检测到 `~/.sage/user.md` 不存在时（或文件为空），在 UI 层展示 onboarding 引导卡片。
+
+**引导内容（5 个问题，1 分钟内完成）：**
+1. 你的名字或昵称？（让 AI 以合适称呼回应）
+2. 主要关注哪个市场？（A股 / 港股 / 美股 / 加密货币）
+3. 投资风格大致是？（短线交易 / 中长线投资 / 量化研究 / 学习为主）
+4. 最关注哪类标的？（大盘蓝筹 / 成长股 / ETF / 行业板块 / 个股自选）
+5. 希望 AI 的沟通风格？（简洁直接 / 详细分析 / 带数据图表）
+
+**自动写入格式（示例）：**
+```markdown
+# 用户画像
+
+- **昵称**：小明
+- **关注市场**：A股为主，偶尔关注港股
+- **投资风格**：中长线价值投资
+- **关注标的类型**：消费、科技板块，偏好行业龙头
+- **偏好沟通方式**：简洁直接，数据支撑
+
+> 首次生成于 2026-04-20，可在 ~/.sage/user.md 手动编辑
+```
+
+#### 实现思路
+
+**方案 A（推荐）：UI 引导卡片 + Agent 写入**
+- 前端检测 `GET /memory/user-profile-exists`（或直接读 settings）
+- 若不存在，显示 onboarding 欢迎界面（覆盖主聊天区域）
+- 用户填写表单后，前端 `POST /memory/init-user-profile`，后端格式化写入 `user.md`
+
+**方案 B（轻量）：第一条消息触发**
+- 用户发第一条消息时，Agent system prompt 中注入引导指令
+- Agent 在回复中主动询问用户信息，收集后调用 `write_file` Tool 写入 `user.md`
+- 优点：无需新增 UI；缺点：体验不够主动
+
+#### 相关文件（待创建/修改）
+- `src/components/onboarding/OnboardingWizard.tsx` — 引导界面
+- `src-api/src/app/api/memory.ts` — 新增 `POST /memory/init-user-profile` 端点
+- `src/App.tsx` 或 `src/components/setup-guard.tsx` — 引导触发逻辑
+
+---
+
+### P1.6 — 系统预设 Cron 任务：盘前/盘后简报
+
+**状态：** 待实现（2026-04-20，来源：竞品分析 Stockie）
+
+#### 背景
+
+Stockie（腾讯玩虾）默认开启两个定时简报任务，使用户开箱即能感受到 AI 的价值。Sage 已有完整的 Cron 基础设施（`scheduler.ts` + `sys-market-*` 系统 Job 扩展点），**几乎零成本**即可实现类似体验。
+
+#### 新增系统 Job
+
+| ID | 名称 | 默认时间 | 默认状态 | Prompt 方向 |
+|----|------|---------|---------|------------|
+| `sys-premarket-brief` | 盘前简报 | 每个工作日 08:45 | **启用** | 今日重点财经日历、昨日美股收盘、期货开盘情况、主要板块预期 |
+| `sys-postmarket-brief` | 盘后简报 | 每个工作日 16:30 | **启用** | 今日 A 股收盘总结、主力资金流向、异动个股、明日关注点 |
+
+#### 实现要点
+
+- 在 `scheduler.ts` 的系统 Job 初始化列表追加两条（类似 `sys-memory-consolidation`）
+- Prompt 内嵌对应金融技能调用指令（盘前 Skill + 盘后 Skill）
+- 工作日过滤：cron 表达式 `45 8 * * 1-5` / `30 16 * * 1-5`
+- 用户可在设置面板「定时任务」中禁用，但不可删除
+- 输出通过已有 `pushToChannel()` 推送到飞书（如已配置）
+
+#### 相关文件
+
+- `src-api/src/shared/cron/scheduler.ts` — 追加两条系统 Job
+- `~/.sage/AGENTS.md` — 盘前/盘后 Prompt 模板示例
+
+---
+
+### P1.7 — 动画化启动引导页
+
+**状态：** 待实现（2026-04-20，来源：竞品分析 Stockie）
+
+#### 背景
+
+Stockie 的首次启动是一个 5 步序列动画，把"等待初始化"变成有仪式感的产品体验。Sage 当前的 `setup-guard.tsx` 是静态检查页，缺乏品牌感。
+
+#### 设计方案
+
+5 步序列，每步持续约 0.8s，配合淡入/滑动动画：
+
+```
+1. 启动 Sage 引擎           — 检查 API 连接、config.json
+2. 加载金融技能库           — 扫描 ~/.sage/skills/ 注册 Skills
+3. 读取你的投资偏好         — 加载 user.md（有则读取，无则标记待引导）
+4. 初始化记忆系统           — 加载向量索引 / daily memory
+5. 准备就绪 ✦              — 进入主界面
+```
+
+每步有小号副标题说明（如"已加载 12 个技能"、"发现 3 天的记忆"）。
+
+#### 实现要点
+
+- 组件：`src/components/onboarding/StartupLoader.tsx` + `StartupLoader.css`
+- 在 Tauri `main.tsx` 或 App 初始化流程中替换当前静态 setup-guard
+- 实际后台工作与动画并行执行（不纯粹是假进度），每步有真实 API 调用
+- 若初始化失败（API 无法连接），在对应步骤展示错误态并停止
+
+---
+
+### P1.8 — 「Sage 秘籍」场景化教程
+
+**状态：** 待实现（2026-04-20，来源：竞品分析 Stockie）
+
+#### 背景
+
+Stockie 内置「玩虾秘籍」：5 个精选使用场景，每个提供完整 Prompt 示例，用户点击直接发送。这解决了新用户"不知道能问什么"的核心痛点。
+
+#### 方案
+
+在主界面空聊天状态（无对话时）展示「Sage 秘籍」卡片网格，每张卡片点击后自动填充 Prompt 到输入框并发送。
+
+**初始 6 个场景（可扩展）：**
+
+| 场景 | 示例 Prompt |
+|------|------------|
+| 个股全面分析 | "帮我全面分析宁德时代，包括行情、估值和研报评级" |
+| 板块热力图 | "今天各行业板块涨跌怎么样，用热力图展示" |
+| 财务健康检查 | "帮我做一份贵州茅台的财务健康仪表盘" |
+| 市场情绪资讯 | "最近 AI 芯片板块有什么重要新闻，带情绪分析" |
+| 设置价格提醒 | "帮我设置一个 BTC 跌破 80000 美元就提醒我的任务" |
+| 盘后复盘 | "今天 A 股市场怎么样，帮我做个收盘总结" |
+
+#### 相关文件
+
+- `src/components/chat/EmptyState.tsx`（或新建）— 空状态页面含秘籍卡片
+- 卡片数据可硬编码或读取 `~/.sage/scenarios.json`（支持用户自定义）
+
+---
+
+### P1.9 — 用户档案页（Settings > 我的 Sage）
+
+**状态：** 待实现（2026-04-20，来源：竞品分析 Stockie + P1.5 Onboarding）
+
+#### 背景
+
+Stockie 有专门的「我的龙虾」设置页，展示用户偏好摘要和关联账户。Sage 的 `user.md` 目前只是后端文件，缺少对应的 UI 展示和编辑能力，导致 P1.5 Onboarding 完成后用户无法回看和修改已填写的信息。
+
+#### 功能
+
+- 展示 `user.md` 解析后的内容（昵称、关注市场、投资风格等）
+- 允许编辑各字段（提交后后端覆写 `user.md`）
+- 展示记忆统计：已归纳天数、MEMORY.md 条数、最后归纳时间
+- 快捷入口：「重新引导」（清空 user.md 重走 onboarding）、「导出记忆」
+
+#### 相关文件
+
+- `src/components/settings/UserProfilePage.tsx` — 新建
+- `src-api/src/app/api/memory.ts` — 新增 `GET /memory/user-profile`、`PUT /memory/user-profile` 端点
+
+---
+
 ### P2 — 自选股/关注列表
 
 **状态：** 待实现
 
-- `~/.htclaw/watchlist.json` 持久化存储
+- `~/.sage/watchlist.json` 持久化存储
 - 「我的自选怎么样」批量查询，并行调用行情技能
 - 设置面板支持增删改查自选股
+
+---
+
+### P2.5 — 视觉/图片分析能力
+
+**状态：** 待实现（2026-04-20，来源：竞品分析 Stockie）
+
+#### 背景
+
+Stockie 支持截图分析：用户截取券商 App 持仓截图，AI 通过 OCR 识别持仓内容并给出分析建议。Claude API 原生支持图片输入（`image/png`、`image/jpeg` base64 或 URL），实现成本低。
+
+#### 方案
+
+- 输入框支持粘贴/拖拽图片（Tauri 文件 drop 或剪贴板读取）
+- 图片 base64 编码后作为 `image` content block 随消息发送给 Claude
+- `AGENTS.md` 追加视觉分析场景路由（持仓截图 → 持仓分析、K线截图 → 形态识别）
+
+#### 典型场景
+
+- 粘贴券商 App 持仓截图 → AI 识别持仓并分析
+- 上传财报表格截图 → AI 解读关键数据
+- 截取 K 线图 → AI 分析技术形态
+
+#### 相关文件
+
+- `src/components/chat/MessageInput.tsx` — 支持图片拖拽/粘贴
+- `src-api/src/shared/agent/runner.ts` — 消息构建支持 image content block
 
 ---
 
@@ -391,4 +668,197 @@ okx-trade (真实环境，小额测试) → 上线
 
 ## 技术债 🔧
 
-（暂无）
+### TD-01 — fin-copilot「结论先行」模板未全面落地
+
+**来源**：stockit `fin-copilot` 扩展的 12 个场景 Prompt 模板
+
+**问题**：
+- 现有 `SOUL.md` / `AGENTS.md` 中的财务分析场景未严格遵循「2句结论 + 1句行动建议 + 细节」结构
+- LLM 在股票分析场景下仍会先给大段背景铺垫，用户体验不如 Robinhood/fin-copilot
+
+**优化方向**：
+- 在 `AGENTS.md` 针对股票/财务/研报分析场景追加 Prompt 约束：「第一段必须是结论和评级，第二段才允许展开数据」
+- 禁止在财务分析场景输出 Markdown 大表格（改用卡片组件 `financial-health`、`research-consensus`）
+- 使用 ↑↓→ 符号替代文字描述趋势
+
+---
+
+### TD-02 — westock-tool 筛选语法文档缺失
+
+**来源**：stockit `westock-tool` 扩展的 `TOOL.md`
+
+**问题**：
+- `intersect([cond1, cond2])` 为 AND 语法，**不支持** `&`/`&&`/`AND`
+- `union([cond1, cond2])` 为 OR 语法
+- 现有 `AGENTS.md` 中股票筛选路由规则未明确标注这一限制，LLM 容易生成错误语法
+
+**优化方向**：
+- 在 `AGENTS.md` 的选股场景路由中追加 **Filter 语法约束块**，并给出正确/错误示例
+- 考虑在 `SOUL.md` 全局规则中写入「筛选条件必须用 `intersect([])`，禁止 AND/&&」
+
+---
+
+### TD-03 — 市值单位不一致（A股 vs 港股/美股）
+
+**来源**：stockit `westock-tool` TOOL.md 的 Schema 注释
+
+**问题**：
+- A 股 `TotalMV` 单位为**元**，港股/美股 `TotalMV` 单位为**亿元**
+- 混用时 LLM 直接拿数值比较会产生数量级错误（如「市值大于 1000 亿」在 A 股应填 `100000000000`，港股填 `1000`）
+
+**优化方向**：
+- `AGENTS.md` 中为选股场景补充单位换算说明
+- 前端 `StockSnapshot`、`FinancialHealth` 等组件的市值显示统一用 `formatAmount()` 自动换算亿/万亿
+
+---
+
+### TD-04 — 每日记忆截断限制过短
+
+**来源**：stockit `self-improving-agent` 的记忆写入逻辑
+
+**问题**：
+- 日记忆条目 summary 截断为 200 字符，长期记忆 200 字符——在复杂交易场景下信息丢失严重
+- 当前 `~/.sage/memory/YYYY-MM-DD.md` 写入无字数限制，但 `consolidator` 合并时可能截断
+
+**优化方向**：
+- 评估是否将截断阈值提升至 400–600 字符
+- 对「用户持仓变更」「重要决策」等高价值条目标记 `priority: high`，合并时不截断
+
+---
+
+### TD-05 — consolidator LLM 超时设置偏低
+
+**来源**：stockit `self-improving-agent` consolidator 逻辑
+
+**问题**：
+- 合并大量学习条目时单次 LLM 调用可能超 60s，导致记忆合并静默失败
+- 失败时无降级策略（保留原始条目 vs 丢弃）
+
+**优化方向**：
+- 超时配置提升至 120s，或拆分批次合并
+- 失败时写入 `.learnings/ERRORS.md` 并保留原条目，下次重试
+
+---
+
+### TD-06 — 自改进 Agent 模式尚未引入
+
+**来源**：stockit `self-improving-agent` 扩展完整架构
+
+**问题**：
+- HTclaw 目前无错误/学习日志记录机制
+- Agent 运行失败的原因（工具调用错误、LLM幻觉、用户纠正）无法积累
+
+**优化方向**：
+- 在 `src-api` 引入轻量 learning-logger：捕获工具调用异常 → 写入 `~/.sage/.learnings/ERRORS.md`
+- 用户发送「纠正」类消息时（含「不对」「你搞错了」「应该是」等）自动触发 learning entry 写入
+- 定期（每周一）consolidator 将 ERRORS + LEARNINGS 中的通用规则提升到 `SOUL.md`/`AGENTS.md`
+
+---
+
+### TD-07 — market-pulse 盘前/盘后 Prompt 模板缺失
+
+**来源**：stockit `market-pulse` 扩展 + `openclaw-plugin-yuanbao` 定时推送模式
+
+**问题**：
+- HTclaw 的 P1.6「预设 Cron」计划中只列了时间点，未设计盘前/盘后的具体 Prompt 内容
+- 盘前应关注：隔夜美股、期货、大宗商品、重要新闻；盘后应关注：主力资金流向、龙虎榜、北向资金
+
+**优化方向**：
+- 在 P1.6 实现时参照 market-pulse 的 `focusAreas` 配置：
+  - 盘前 08:45：`"隔夜美股收盘、期货开盘、今日重点事件，给出今日操作预判"`
+  - 盘后 16:30：`"今日 A股 收盘总结：主力资金、北向资金、涨跌停统计、明日预判"`
+- 结合 `news-feed` 组件输出市场情绪流
+
+---
+
+### TD-08 — Canvas/WebView 交互输出能力缺失
+
+**来源**：stockit `canvas/index.html` + `openclaw-plugin-yuanbao` WebSocket bridge
+
+**问题**：
+- HTclaw 所有输出均为静态 artifact 卡片，无法承载交互操作（点击板块 → 下钻明细、拖拽调仓等）
+- 移动端 iOS Bridge (`window.webkit.messageHandlers.openclawCanvasA2UIAction`) 已有规范但未实现
+
+**优化方向**：
+- 长期：评估引入 Canvas artifact 类型（`type: 'canvas'`），data 为 HTML + JS 字符串，在 WebView/iframe 中渲染
+- 短期：`sector-heatmap` 组件添加点击事件，点击板块 → 触发新消息查询该板块成分股
+
+---
+
+### TD-09 — 主动推送（Proactive Push）能力缺失
+
+**来源**：stockit `openclaw-plugin-wzq-channel` `sendText` + `openclaw-qqbot` 主动推送
+
+**问题**：
+- 当前 HTclaw 为纯问答模式，无法在价格预警触发、重要新闻发布时主动通知用户
+- Cron 任务执行后结果只写入日志，不推送到 UI
+
+**优化方向**：
+- 在 Cron 任务完成后，通过 WebSocket/SSE 将结果推送到前端消息流（不需要用户刷新）
+- 长期：支持价格预警（用户设置「茅台跌破 1500 提醒我」）→ 后台轮询 → 触发推送
+
+---
+
+### TD-10 — 渠道扩展架构评估
+
+**来源**：stockit 完整渠道扩展生态（wzq/yuanbao/ddingtalk/qqbot/weixin/adp）
+
+**问题**：
+- HTclaw 当前仅有桌面 UI 一个输入渠道
+- 用户出行时无法通过移动 App / 微信 / 钉钉 访问
+
+**优化方向（P3+ 长期规划）**：
+- **P3.1** 微信个人号渠道：基于 weixin 扩展模式（QR 扫码登录 + AES 媒体解密）
+- **P3.2** 钉钉企业机器人：Stream Mode，无需公网 IP，适合内部团队使用
+- **P3.3** QQ Bot v2：STT 语音转文字输入 + TTS 语音播报结果
+- 所有渠道共享同一 Agent 运行时，通过 `sessionKey` 隔离上下文
+
+---
+
+### TD-11 — 技能（Skill）文件结构规范未文档化
+
+**来源**：stockit `skill-creator` 扩展的 Skill 目录规范
+
+**问题**：
+- HTclaw 自定义技能（`~/.sage/skills/`）目录存在但格式约定未写入开发文档
+- 新技能缺少 `SKILL.md` → `name`/`description` frontmatter → 导致意图匹配失败
+
+**优化方向**：
+- 在 `docs/` 新增 `SKILL_AUTHORING.md`，记录：
+  - 必填：`SKILL.md`（含 `name`, `description` frontmatter）
+  - 可选：`scripts/`（执行脚本）、`references/`（RAG 文档）、`assets/`（静态资源）
+  - 命名规范：简短、动词开头、英文（`analyze-portfolio`、`screen-stocks`）
+  - **「简洁是关键」**：description ≤ 50 字，避免过度描述导致误触发
+
+---
+
+### TD-13 — Logo / App Icon 细化与最终交付
+
+**来源**：2026-04-20 品牌设计阶段
+
+**现状**：
+- SVG 四角星（冰蓝色）已完成，存放于 `src/assets/sage-logo.svg` 及桌面备份
+- Nano Banana 生成了 Void 风格 + Frosted 风格两张 16:9 展示图
+- App Icon（1:1）版本存在白色描边 + 蓝色光晕过重问题
+
+**待处理**：
+- [ ] App Icon 重新生成：去除白色描边，光晕限 80px、6% 透明度，纯黑背景
+- [ ] 导出 Figma 标准尺寸集：1024×1024 / 512×512 / 256×256 / 128×128 / 64×64 / 32×32
+- [ ] 用 `iconutil` 或 Tauri 脚本替换 `src-tauri/icons/` 中所有图标文件
+- [ ] 评估 SVG 比例微调：垂直花瓣与水平花瓣宽度比是否需要调整（当前 66px : 46px）
+- [ ] 准备 App Store / 宣传用封面图（1200×628，带品牌字）
+
+---
+
+### TD-12 — ADP 会话历史 API 未利用
+
+**来源**：stockit `adp-openclaw` 扩展的会话历史读取能力
+
+**问题**：
+- HTclaw 本地会话历史存储在 SQLite，但跨设备/跨 Session 的历史无法统一检索
+- 用户「上次说的那只股票」类请求在新会话中无法响应
+
+**优化方向**：
+- 评估将重要会话摘要写入 `~/.sage/memory/YYYY-MM-DD.md`（已有基础）
+- 在向量索引就绪后，历史会话可通过语义搜索检索（已有 `hybridSearch` 能力）
+- 短期：在系统 Prompt 中注入最近 3 次会话的摘要（类似 ADP 的 `sessionHistory` 参数）

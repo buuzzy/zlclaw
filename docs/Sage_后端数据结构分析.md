@@ -1,4 +1,4 @@
-# HTclaw 后端数据结构完整分析报告
+# Sage 后端数据结构完整分析报告
 **生成时间**: 2026-04-19
 **范围**: 所有可用的 Skill 数据能力与字段映射
 
@@ -16,7 +16,7 @@
 
 ## 系统架构概览
 
-HTclaw 采用 **多数据源 + 多 Skill 协作** 的架构：
+Sage 采用 **多数据源 + 多 Skill 协作** 的架构：
 
 ### 数据源组成
 - **腾讯金融 API** (westock-* 系列): 实时行情、研报、市场数据
@@ -832,6 +832,6 @@ A: ✓ 行情数据实时更新。财务/宏观数据按季度/月度更新
 ## 关键文件位置
 
 - **Skill 文档**: `/Users/nakocai/.htclaw/skills/*/SKILL.md`
-- **Westock Skill**: `/Users/nakocai/Documents/Projects/Start/HTclaw/htclaw-app/src-api/resources/skills/westock-*/`
+- **Westock Skill**: `/Users/nakocai/Documents/Projects/Start/Sage/htclaw-app/src-api/resources/skills/westock-*/`
 - **工具策略**: `/Users/nakocai/.htclaw/AGENTS.md` (## 工具调用策略 部分)
 

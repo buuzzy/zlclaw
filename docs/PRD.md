@@ -100,7 +100,7 @@
 **用户**：我最近在关注半导体板块
 
 **系统**：
-1. 记录到 `~/.htclaw/MEMORY.md`
+1. 记录到 `~/.sage/MEMORY.md`
 2. 后续对话中，Agent 自动关联半导体相关信息
 3. 每日 23:00 自动归纳对话要点，更新长期记忆
 4. 用户说「我关注的板块怎么样」时，Agent 知道指半导体
@@ -206,7 +206,7 @@
 | F37 | OKX 行情技能 (okx-market) | P1 | 现货/合约实时报价、K线、资金费率、多空比 |
 | F38 | OKX 账户技能 (okx-account) | P1 | 账户余额、持仓、挂单（只读） |
 | F39 | OKX 交易技能 (okx-trade) | P1 | 下单/撤单，必须用户确认（artifact:trade-confirm） |
-| F40 | 自选股/关注列表 | P2 | `~/.htclaw/watchlist.json`，「我的自选怎么样」批量查询 |
+| F40 | 自选股/关注列表 | P2 | `~/.sage/watchlist.json`，「我的自选怎么样」批量查询 |
 | F41 | Hook/Plugin 系统 | P3 | 允许外部扩展（审计、内容过滤、自动标签等） |
 | F42 | WebChat 渠道 | P3 | 独立 Web 聊天界面 |
 | F43 | 多 Agent 路由 | P3 | 不同渠道/用户路由到不同 Agent |
