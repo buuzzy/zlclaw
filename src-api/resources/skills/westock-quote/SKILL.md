@@ -45,10 +45,11 @@ whenToUse: 股价,行情,现价,涨跌,K线,日K,周K,均线,MACD,KDJ,RSI,布林
 
 ```bash
 BASE_URL="https://proxy.finance.qq.com/cgi/cgi-bin/openai/openclaw/proxy"
-API_KEY="***WESTOCK_KEY_REDACTED***"
+API_KEY="${WESTOCK_API_KEY}"
 ```
 
-请求时需带 query 参数：`?app=openclaw&token=<API_KEY>&skill_channel=stockclaw`
+- 环境变量：`WESTOCK_API_KEY`（在设置 → 环境变量中配置）
+- 请求时需带 query 参数：`?app=openclaw&token=<API_KEY>&skill_channel=stockclaw`
 
 ---
 
@@ -58,9 +59,12 @@ API_KEY="***WESTOCK_KEY_REDACTED***"
 
 ```python3
 import urllib.request
-import json
+import json, os, sys
 
-API_KEY = "***WESTOCK_KEY_REDACTED***"
+API_KEY = os.environ.get('WESTOCK_API_KEY', '')
+if not API_KEY:
+    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请在 Sage 设置 → 环境变量中填入腾讯金融数据接口 Key（WESTOCK_API_KEY）后重试。"}, ensure_ascii=False))
+    sys.exit(0)
 BASE_URL = "https://proxy.finance.qq.com/cgi/cgi-bin/openai/openclaw/proxy"
 url = f"{BASE_URL}?app=openclaw&token={API_KEY}&skill_channel=stockclaw"
 
