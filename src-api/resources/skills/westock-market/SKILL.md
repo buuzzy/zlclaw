@@ -18,18 +18,25 @@ whenToUse: 热门,热搜,热股,今日热点,板块排行,涨幅榜,板块资金
 ## 公共参数
 
 ```bash
-API_KEY="30fc4280ff39cf4caa1c909cc8778af5ed6f3de82e6ff5b4768d4906ca079f0e"
+API_KEY="${WESTOCK_API_KEY}"
 QUERY="?app=openclaw&token=${API_KEY}&skill_channel=stockclaw"
 ```
+
+- 环境变量：`WESTOCK_API_KEY`（在设置 → 环境变量中配置）
+- 若未配置，脚本输出错误 JSON 并退出，由 Agent 提示用户填入
 
 ---
 
 ## 接口一：股票搜索 `GET /smartbox/search`
 
 ```python3
-import urllib.request, json
+import urllib.request, json, os, sys
 
-API_KEY = "30fc4280ff39cf4caa1c909cc8778af5ed6f3de82e6ff5b4768d4906ca079f0e"
+API_KEY = os.environ.get('WESTOCK_API_KEY', '')
+if not API_KEY:
+    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请在 Sage 设置 → 环境变量中填入腾讯金融数据接口 Key（WESTOCK_API_KEY）后重试。"}, ensure_ascii=False))
+    sys.exit(0)
+
 url = (
     f"https://proxy.finance.qq.com/cgi/cgi-bin/smartbox/search"
     f"?app=openclaw&token={API_KEY}&skill_channel=stockclaw"
@@ -169,9 +176,12 @@ with urllib.request.urlopen(url) as resp:
 ## 接口六：热门股单排行 `GET /watchlist/rank`
 
 ```python3
-import urllib.request, json
+import urllib.request, json, os, sys
 
-API_KEY = "30fc4280ff39cf4caa1c909cc8778af5ed6f3de82e6ff5b4768d4906ca079f0e"
+API_KEY = os.environ.get('WESTOCK_API_KEY', '')
+if not API_KEY:
+    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请在 Sage 设置 → 环境变量中填入腾讯金融数据接口 Key（WESTOCK_API_KEY）后重试。"}, ensure_ascii=False))
+    sys.exit(0)
 url = (
     f"https://proxy.finance.qq.com/cgi/cgi-bin/watchlist/rank"
     f"?app=openclaw&token={API_KEY}&skill_channel=stockclaw"
