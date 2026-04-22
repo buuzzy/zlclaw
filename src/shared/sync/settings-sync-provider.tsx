@@ -35,7 +35,7 @@ import { markFailed, markOk, markSyncing, registerRetryHandler } from './sync-st
 const PUSH_DEBOUNCE_MS = 1000;
 
 export function SettingsSyncProvider({ children }: { children: ReactNode }) {
-  const { user, status } = useAuth();
+  const { user, status, dbReady } = useAuth();
 
   // 记录云端当前已知快照，用于比较是否真的需要 push
   const lastPushedRef = useRef<SyncablePartial | null>(null);
@@ -47,11 +47,15 @@ export function SettingsSyncProvider({ children }: { children: ReactNode }) {
 
   // ── 登录时：fetch 云端 → merge 到本地 → 若云端无记录则 push 建档 ───────────
   // 同时订阅 Realtime：其他设备改了 user_settings 时立刻 merge 到本地
+  //
+  // 等 dbReady：getSettings() 读的是 settingsCache，而 cache 在 user 切换时
+  // 会由 subscribeUserBinding 清空，必须等 AuthProvider 的 reloadSettingsForCurrentUser()
+  // 跑完再执行 hydrate，否则可能用错误的旧缓存和云端做比较。
   useEffect(() => {
     let cancelled = false;
 
     const hydrate = async () => {
-      if (status !== 'authenticated' || !user) {
+      if (status !== 'authenticated' || !user || !dbReady) {
         lastPushedRef.current = null;
         return;
       }
@@ -143,7 +147,7 @@ export function SettingsSyncProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [status, user]);
+  }, [status, user, dbReady]);
 
   // ── 本地 saveSettings → debounced push ────────────────────────────────────
   useEffect(() => {

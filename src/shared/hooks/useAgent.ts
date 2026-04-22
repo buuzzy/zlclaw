@@ -27,6 +27,25 @@ import {
   type BackgroundTask,
 } from '@/shared/lib/background-tasks';
 import { getAppDataDir, getFileName } from '@/shared/lib/paths';
+import { getUserSessionsDir } from '@/shared/lib/user-scoped-paths';
+import { getCurrentBoundUid } from '@/shared/db/database';
+
+/**
+ * 计算当前用户的 sessions 目录：`~/.sage/users/{uid}/sessions`。
+ * 若尚未绑定 user（理论上不该发生在已登录态），回退到 legacy 共享目录
+ * `~/.sage/sessions`，保证不崩溃但打印警告。
+ */
+async function getSessionsBaseDir(): Promise<string> {
+  const uid = getCurrentBoundUid();
+  if (uid) {
+    return getUserSessionsDir(uid);
+  }
+  console.warn(
+    '[useAgent] no bound user, falling back to legacy shared sessions dir'
+  );
+  const appDir = await getAppDataDir();
+  return `${appDir}/sessions`;
+}
 
 const AGENT_SERVER_URL = API_BASE_URL;
 
@@ -1157,8 +1176,8 @@ export function useAgent(): UseAgentReturn {
 
           // Compute and set session folder
           try {
-            const appDir = await getAppDataDir();
-            const computedSessionFolder = `${appDir}/sessions/${task.session_id}`;
+            const base = await getSessionsBaseDir();
+            const computedSessionFolder = `${base}/${task.session_id}`;
             setSessionFolder(computedSessionFolder);
             console.log(
               '[useAgent] Loaded sessionFolder from task:',
@@ -1980,8 +1999,8 @@ export function useAgent(): UseAgentReturn {
       let computedSessionFolder: string | null = null;
       if (sessId) {
         try {
-          const appDir = await getAppDataDir();
-          computedSessionFolder = `${appDir}/sessions/${sessId}`;
+          const base = await getSessionsBaseDir();
+          computedSessionFolder = `${base}/${sessId}`;
           setSessionFolder(computedSessionFolder);
         } catch (error) {
           console.error('Failed to compute session folder:', error);
@@ -2085,8 +2104,8 @@ export function useAgent(): UseAgentReturn {
         let saveFolder = computedSessionFolder;
         if (!saveFolder) {
           try {
-            const appDir = await getAppDataDir();
-            saveFolder = `${appDir}/sessions/temp-${Date.now()}`;
+            const base = await getSessionsBaseDir();
+            saveFolder = `${base}/temp-${Date.now()}`;
           } catch {
             // ignore
           }

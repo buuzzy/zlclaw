@@ -18,6 +18,8 @@ import {
   type Settings,
 } from '@/shared/db/settings';
 import { getSessionsDir } from '@/shared/lib/paths';
+import { getUserSessionsDir } from '@/shared/lib/user-scoped-paths';
+import { getCurrentBoundUid } from '@/shared/db/database';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import {
@@ -166,12 +168,20 @@ export function DataSettings() {
     }
   };
 
-  // Clear workspace files (sessions directory)
+  // Clear workspace files (sessions directory for the CURRENT user only).
+  //
+  // M1 隔离后 sessions 目录按账号独立：`~/.sage/users/{uid}/sessions`。
+  // 清理操作严格限定在当前登录用户的目录下；未绑定 user 时静默 no-op，
+  // 避免误删 legacy 共享目录影响其他账号。
   const clearWorkspaceFiles = async () => {
     if (!isTauri()) return;
 
     try {
-      const sessionsDir = await getSessionsDir();
+      const uid = getCurrentBoundUid();
+      // 优先走 user-scoped；若没绑定（理论上不该发生），退回 legacy 路径
+      const sessionsDir = uid
+        ? await getUserSessionsDir(uid)
+        : await getSessionsDir();
       const { remove, exists } = await import('@tauri-apps/plugin-fs');
 
       // Check if sessions directory exists
