@@ -130,9 +130,9 @@ export function AboutSettings() {
       {/* Product Info */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <img src={ImageLogo} alt="Sage" className="size-16 rounded-xl" />
+          <img src={ImageLogo} alt="涨乐金融龙虾" className="size-16 rounded-xl" />
           <div>
-            <h2 className="text-foreground text-xl font-bold">Sage</h2>
+            <h2 className="text-foreground text-xl font-bold">涨乐金融龙虾</h2>
             <p className="text-muted-foreground text-sm">
               {t.settings.aiPlatform}
             </p>
@@ -184,7 +184,7 @@ export function AboutSettings() {
             {t.settings.author}
           </span>
           <span className="text-foreground flex items-center gap-1 text-sm font-medium">
-            idoubi
+            nakocai
             <ExternalLink className="size-3" />
           </span>
         </div>
@@ -193,7 +193,7 @@ export function AboutSettings() {
             {t.settings.copyright}
           </span>
           <span className="text-foreground flex items-center gap-1 text-sm font-medium">
-            © 2026 Sage
+            © 2026 涨乐金融龙虾
           </span>
         </div>
         <div className="border-border flex items-center justify-between rounded-lg border p-3">
@@ -201,7 +201,7 @@ export function AboutSettings() {
             {t.settings.license}
           </span>
           <span className="text-foreground flex items-center gap-1 text-sm font-medium">
-            Sage Community License
+            涨乐金融龙虾 Community License
           </span>
         </div>
       </div>
@@ -249,10 +249,10 @@ export function AboutSettings() {
         </button>
       </div>
 
-      {/* Based on WorkAny by idoubi + 环境标签（M4） */}
+      {/* Based on WorkAny by nakocai + 环境标签（M4） */}
       <div className="border-border flex items-center justify-between border-t pt-4">
         <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
-          Based on WorkAny by idoubi
+          Based on WorkAny by nakocai
         </span>
         <span className="text-muted-foreground/60 text-xs">
           {supabaseMeta.env === 'dev'

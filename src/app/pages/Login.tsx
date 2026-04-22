@@ -82,12 +82,12 @@ export function LoginPage() {
         <div className="mb-8 flex flex-col items-center gap-3">
           <img
             src="/logo.png"
-            alt="Sage"
+            alt="涨乐金融龙虾"
             className="size-12 rounded-xl object-contain"
           />
           <div className="text-center">
             <h1 className="text-foreground font-serif text-2xl font-normal tracking-tight">
-              Sage
+              涨乐金融龙虾
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
               登录以开始你的金融 AI 之旅
@@ -155,7 +155,7 @@ export function LoginPage() {
 
       {/* Bottom brand */}
       <p className="text-muted-foreground mt-6 text-xs">
-        Sage · 金融 AI Agent
+        涨乐金融龙虾 · 金融 AI Agent
       </p>
     </div>
   );
