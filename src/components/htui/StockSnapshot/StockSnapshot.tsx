@@ -28,7 +28,8 @@ const RATING_COLOR: Record<string, string> = {
   回避: 'var(--color-danger)',
 };
 
-function formatTurnoverRate(v: number): string {
+function formatTurnoverRate(v: number | null | undefined): string {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return '—';
   return v.toFixed(2) + '%';
 }
 
