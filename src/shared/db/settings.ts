@@ -682,6 +682,31 @@ export function saveSettings(settings: Settings): void {
     .catch((error) => {
       console.error('[Settings] Failed to save settings async:', error);
     });
+
+  // Fire post-save observers (e.g. cloud sync). Never throw out of here.
+  for (const observer of postSaveObservers) {
+    try {
+      observer(settings);
+    } catch (err) {
+      console.error('[Settings] post-save observer error:', err);
+    }
+  }
+}
+
+// ─── Post-save observers ───────────────────────────────────────────────────
+//
+// Allows external modules (cloud sync) to react to settings changes without
+// creating a circular dependency on React/providers. Observers run synchronously
+// after localStorage is written; errors in one observer don't affect others.
+
+type SettingsObserver = (settings: Settings) => void;
+const postSaveObservers = new Set<SettingsObserver>();
+
+export function subscribeSettingsSaved(fn: SettingsObserver): () => void {
+  postSaveObservers.add(fn);
+  return () => {
+    postSaveObservers.delete(fn);
+  };
 }
 
 // Initialize settings - call this on app startup

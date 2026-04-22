@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ImageLogo from '@/assets/logo.png';
 import type { Task } from '@/shared/db';
-import { getSettings, type UserProfile } from '@/shared/db/settings';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
+import { useAuth } from '@/shared/providers/auth-provider';
+import { useDisplayIdentity } from '@/shared/sync';
 import {
   Calendar,
   ChevronsUpDown,
@@ -12,6 +13,7 @@ import {
   Globe,
   ListTodo,
   Loader2,
+  LogOut,
   MoreHorizontal,
   PanelLeft,
   Pencil,
@@ -21,10 +23,11 @@ import {
   SquarePen,
   Star,
   Trash2,
-  User,
 } from 'lucide-react';
 
 import { SettingsModal } from '@/components/settings';
+import { AvatarImage } from './avatar-image';
+import { SyncStatusIndicator } from './sync-status-indicator';
 import {
   Dialog,
   DialogContent,
@@ -136,12 +139,13 @@ export function LeftSidebar({
 }: LeftSidebarProps) {
   const navigate = useNavigate();
   const { leftOpen, toggleLeft } = useSidebar();
+  const { signOut } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [profile, setProfile] = useState<UserProfile>({
-    nickname: 'Guest User',
-    avatar: '',
-  });
   const { t } = useLanguage();
+
+  // 用户必须已登录才能看到 sidebar（AuthGuard 保证），直接读云端 profile
+  const { displayName, avatarUrl } = useDisplayIdentity();
+  const profile = { nickname: displayName, avatar: avatarUrl };
 
   // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -197,20 +201,6 @@ export function LeftSidebar({
     setRenameDialogOpen(false);
     setTaskToRename(null);
   };
-
-  // Load profile from settings
-  useEffect(() => {
-    const settings = getSettings();
-    setProfile(settings.profile);
-  }, []);
-
-  // Reload profile when settings modal closes
-  useEffect(() => {
-    if (!settingsOpen) {
-      const settings = getSettings();
-      setProfile(settings.profile);
-    }
-  }, [settingsOpen]);
 
   const handleNewTask = () => {
     navigate('/');
@@ -406,19 +396,17 @@ export function LeftSidebar({
 
             {/* Bottom Section - Avatar with Dropdown */}
             <div className="border-sidebar-border mt-auto shrink-0 border-none p-3">
+              <SyncStatusIndicator />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="hover:bg-sidebar-accent group flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 transition-colors duration-200">
                     <div className="bg-sidebar-accent flex size-9 items-center justify-center overflow-hidden rounded-lg">
-                      {profile.avatar ? (
-                        <img
-                          src={profile.avatar}
-                          alt={profile.nickname}
-                          className="size-full object-cover"
-                        />
-                      ) : (
-                        <User className="text-sidebar-foreground/70 size-5" />
-                      )}
+                      <AvatarImage
+                        src={profile.avatar}
+                        alt={profile.nickname}
+                        className="size-full object-cover"
+                        iconClassName="text-sidebar-foreground/70 size-5"
+                      />
                     </div>
                     <div className="min-w-0 flex-1 text-left">
                       <p className="text-sidebar-foreground truncate text-sm font-medium">
@@ -437,15 +425,12 @@ export function LeftSidebar({
                   <DropdownMenuLabel className="p-0 font-normal">
                     <div className="flex items-center gap-3 px-2 py-2 text-left">
                       <div className="bg-muted flex size-9 items-center justify-center overflow-hidden rounded-lg">
-                        {profile.avatar ? (
-                          <img
-                            src={profile.avatar}
-                            alt={profile.nickname}
-                            className="size-full object-cover"
-                          />
-                        ) : (
-                          <User className="text-muted-foreground size-5" />
-                        )}
+                        <AvatarImage
+                          src={profile.avatar}
+                          alt={profile.nickname}
+                          className="size-full object-cover"
+                          iconClassName="text-muted-foreground size-5"
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">
@@ -464,6 +449,14 @@ export function LeftSidebar({
                       <span>{t.nav.settings}</span>
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="cursor-pointer text-red-500 focus:text-red-500"
+                    onClick={signOut}
+                  >
+                    <LogOut className="size-4" />
+                    <span>{t.nav.logOut}</span>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -671,18 +664,16 @@ export function LeftSidebar({
 
             {/* Bottom - User Avatar with Dropdown */}
             <div className="flex shrink-0 flex-col items-center gap-1 px-2 pb-6">
+              <SyncStatusIndicator compact />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="bg-sidebar-accent hover:ring-sidebar-foreground/20 flex size-8 cursor-pointer items-center justify-center overflow-hidden rounded-lg transition-all hover:ring-2">
-                    {profile.avatar ? (
-                      <img
-                        src={profile.avatar}
-                        alt={profile.nickname}
-                        className="size-full object-cover"
-                      />
-                    ) : (
-                      <User className="text-sidebar-foreground/70 size-4" />
-                    )}
+                    <AvatarImage
+                      src={profile.avatar}
+                      alt={profile.nickname}
+                      className="size-full object-cover"
+                      iconClassName="text-sidebar-foreground/70 size-4"
+                    />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -695,15 +686,12 @@ export function LeftSidebar({
                   <DropdownMenuLabel className="p-0 font-normal">
                     <div className="flex items-center gap-3 px-2 py-2 text-left">
                       <div className="bg-muted flex size-9 items-center justify-center overflow-hidden rounded-lg">
-                        {profile.avatar ? (
-                          <img
-                            src={profile.avatar}
-                            alt={profile.nickname}
-                            className="size-full object-cover"
-                          />
-                        ) : (
-                          <User className="text-muted-foreground size-5" />
-                        )}
+                        <AvatarImage
+                          src={profile.avatar}
+                          alt={profile.nickname}
+                          className="size-full object-cover"
+                          iconClassName="text-muted-foreground size-5"
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">
@@ -722,6 +710,14 @@ export function LeftSidebar({
                       <span>{t.nav.settings}</span>
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="cursor-pointer text-red-500 focus:text-red-500"
+                    onClick={signOut}
+                  >
+                    <LogOut className="size-4" />
+                    <span>{t.nav.logOut}</span>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

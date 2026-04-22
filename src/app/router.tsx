@@ -1,31 +1,44 @@
 import { createBrowserRouter } from 'react-router-dom';
-import { HomePage, LibraryPage, SetupPage, TaskDetailPage } from '@/app/pages';
+import { HomePage, LibraryPage, LoginPage, SetupPage, TaskDetailPage } from '@/app/pages';
 
+import { AuthGuard } from '@/components/auth-guard';
 import { SetupGuard } from '@/components/setup-guard';
 
 export const router = createBrowserRouter([
+  // 登录页（无需守卫）
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  // 主应用页面（AuthGuard > SetupGuard > 页面）
   {
     path: '/',
     element: (
-      <SetupGuard>
-        <HomePage />
-      </SetupGuard>
+      <AuthGuard>
+        <SetupGuard>
+          <HomePage />
+        </SetupGuard>
+      </AuthGuard>
     ),
   },
   {
     path: '/task/:taskId',
     element: (
-      <SetupGuard>
-        <TaskDetailPage />
-      </SetupGuard>
+      <AuthGuard>
+        <SetupGuard>
+          <TaskDetailPage />
+        </SetupGuard>
+      </AuthGuard>
     ),
   },
   {
     path: '/library',
     element: (
-      <SetupGuard>
-        <LibraryPage />
-      </SetupGuard>
+      <AuthGuard>
+        <SetupGuard>
+          <LibraryPage />
+        </SetupGuard>
+      </AuthGuard>
     ),
   },
   {

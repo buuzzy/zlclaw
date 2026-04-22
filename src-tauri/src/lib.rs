@@ -1,4 +1,3 @@
-#[cfg(not(debug_assertions))]
 use tauri::Manager;
 #[cfg(not(debug_assertions))]
 use tauri_plugin_shell::ShellExt;
@@ -189,6 +188,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:sage.db", migrations)
@@ -252,10 +252,12 @@ pub fn run() {
 
             #[cfg(debug_assertions)]
             {
-                // Suppress unused variable warning in debug mode
-                let _ = app;
                 println!("[Tauri Dev] API sidecar disabled. Run `pnpm dev:api` for the API server on port 2026.");
             }
+
+            // Deep link: the frontend uses @tauri-apps/plugin-deep-link's
+            // onOpenUrl + getCurrent to handle OAuth callbacks. The Rust side
+            // only needs to register the plugin (done above in the builder).
 
             Ok(())
         })
@@ -270,7 +272,8 @@ pub fn run() {
                     println!("[App] Cleaning up API sidecar...");
                     if let Some(state) = app_handle.try_state::<ApiSidecar>() {
                         if let Ok(mut guard) = state.0.lock() {
-                            if let Some(child) = guard.take() as Option<CommandChild> {
+                            if let Some(child) = guard.take() {
+                                let child: CommandChild = child;
                                 println!("[App] Killing API sidecar process...");
                                 let _ = child.kill();
                             }

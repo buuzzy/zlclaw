@@ -1681,6 +1681,7 @@ function AgentActionBar({
   const [bugDesc, setBugDesc] = useState('');
   const [bugSubmitting, setBugSubmitting] = useState(false);
   const [bugSubmitted, setBugSubmitted] = useState(false);
+  const [bugIncludeTranscript, setBugIncludeTranscript] = useState(false);
   const bugPopoverRef = useRef<HTMLDivElement>(null);
 
   // Close popover when clicking outside
@@ -1778,14 +1779,13 @@ function AgentActionBar({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         timestamp: new Date().toISOString(),
         taskId: taskId ?? null,
-        // TODO: add userId when user system is implemented
         category: bugCategory,
         description: bugDesc.trim() || null,
         messageCount: allMessages.length,
       };
       const line = JSON.stringify(report) + '\n';
 
-      // Write to ~/.sage/feedback/bug-reports.jsonl via Tauri fs
+      // Write to ~/.sage/feedback/bug-reports.jsonl via Tauri fs (本地备份)
       const { appDataDir } = await import('@tauri-apps/api/path');
       const { writeTextFile, mkdir } = await import(
         '@tauri-apps/plugin-fs'
@@ -1812,8 +1812,78 @@ function AgentActionBar({
         await writeTextFile(filePath, line);
       }
 
+      // ── 构造排查上下文 ──────────────────────────────────────────
+      // 默认上报：轻量摘要（最近 3 条 user / 2 条 text，各截 240 字）+ 当前 provider/model
+      // 可选附加：完整对话（用户勾选后才上传）
+      const trunc = (s: string | null | undefined, max: number): string | null => {
+        if (!s) return null;
+        const t = s.trim();
+        return t.length <= max ? t : t.slice(0, max) + '…';
+      };
+
+      const userMessages = allMessages.filter((m) => m.type === 'user');
+      const textMessages = allMessages.filter((m) => m.type === 'text');
+      const recentUserMessages = userMessages
+        .slice(-3)
+        .map((m) => trunc(m.content, 240))
+        .filter((x): x is string => !!x);
+      const recentAgentReplies = textMessages
+        .slice(-2)
+        .map((m) => trunc(m.content, 240))
+        .filter((x): x is string => !!x);
+
+      // 找最近一条 result / error 消息的 subtype（发生过失败会有）
+      const lastSystemMsg = [...allMessages]
+        .reverse()
+        .find((m) => m.type === 'result' || m.type === 'error');
+      const lastSubtype = lastSystemMsg?.subtype ?? null;
+
+      // 当前 AI 配置（不含 apiKey）
+      const settings = getSettings();
+      const aiConfig = {
+        provider: settings.defaultProvider || null,
+        model: settings.defaultModel || null,
+        sandbox: settings.defaultSandboxProvider || null,
+        agent_runtime: settings.defaultAgentRuntime || null,
+      };
+
+      const context: Record<string, unknown> = {
+        local_report_id: report.id,
+        task_id: taskId ?? null,
+        ui_message_count: allMessages.length,
+        recent_user_messages: recentUserMessages,
+        recent_agent_replies: recentAgentReplies,
+        last_system_subtype: lastSubtype,
+        ai_config: aiConfig,
+      };
+
+      // 可选：完整对话（保留 type + content + tool 信息，去掉可能超大的 output）
+      if (bugIncludeTranscript) {
+        context.full_transcript = allMessages.map((m) => ({
+          type: m.type,
+          content: m.content ?? null,
+          subtype: m.subtype ?? null,
+          tool_name: m.name ?? null,
+          // tool_use 的 input 保留结构；tool_result 的 output 保留但截断
+          tool_input: m.input ?? null,
+          tool_output: trunc(m.output, 2000),
+          is_error: m.isError ?? null,
+          message: m.message ?? null,
+        }));
+      }
+
+      // 同步上报到云端 error_logs（error_type='feedback'）
+      const { reportError } = await import('@/shared/sync');
+      void reportError({
+        error_type: 'feedback',
+        error_code: bugCategory,
+        message: bugDesc.trim() || `(${bugCategory} - 无描述)`,
+        context,
+      });
+
       setBugSubmitted(true);
       setBugDesc('');
+      setBugIncludeTranscript(false);
       setTimeout(() => {
         setBugOpen(false);
         setBugSubmitted(false);
@@ -1908,6 +1978,20 @@ function AgentActionBar({
                   rows={2}
                   className="border-border bg-muted text-foreground placeholder:text-muted-foreground w-full resize-none rounded border px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-offset-0"
                 />
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={bugIncludeTranscript}
+                    onChange={(e) => setBugIncludeTranscript(e.target.checked)}
+                    className="accent-primary mt-0.5"
+                  />
+                  <span className="text-muted-foreground text-xs leading-snug">
+                    附上完整对话帮助排查
+                    <span className="text-muted-foreground/70 block">
+                      将包含你的完整对话内容用于问题定位
+                    </span>
+                  </span>
+                </label>
                 <div className="flex justify-end gap-2">
                   <button
                     onClick={() => setBugOpen(false)}
