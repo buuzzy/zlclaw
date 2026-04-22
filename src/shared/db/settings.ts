@@ -424,7 +424,11 @@ export const defaultSettings: Settings = {
   language: '', // Empty string triggers system language detection on first run
 };
 
+// Legacy shared-DB connection string — kept here only as a reference constant,
+// no longer used to open connections directly (settings reuse the user-scoped
+// connection from database.ts via getDatabase()).
 const DB_NAME = 'sqlite:sage.db';
+void DB_NAME;
 
 // Check if running in Tauri environment synchronously
 function isTauriSync(): boolean {
@@ -439,27 +443,32 @@ function isTauriSync(): boolean {
 // In-memory cache for settings
 let settingsCache: Settings | null = null;
 
-// Tauri database instance
-let db: Awaited<
-  ReturnType<typeof import('@tauri-apps/plugin-sql').default.load>
-> | null = null;
+// Subscribe to user binding changes: clear cache when user switches.
+// We lazy-import to avoid circular init; the subscription is one-time.
+(async () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const { subscribeUserBinding } = await import('./database');
+    subscribeUserBinding(() => {
+      settingsCache = null;
+    });
+  } catch {
+    /* ignore - database module may not be available in all contexts */
+  }
+})();
 
-// Initialize database connection (only in Tauri)
+/**
+ * Initialize database connection (only in Tauri).
+ *
+ * M1 之后：共用 database.ts 的 user-scoped 连接，避免维护两份连接导致
+ * 用户切换时有一份没关闭。未绑定用户时返回 null（调用方会降级到 localStorage）。
+ */
 async function getDatabase() {
   if (!isTauriSync()) {
     return null;
   }
-
-  if (!db) {
-    try {
-      const Database = (await import('@tauri-apps/plugin-sql')).default;
-      db = await Database.load(DB_NAME);
-    } catch (error) {
-      console.error('[Settings] Failed to connect to SQLite:', error);
-      return null;
-    }
-  }
-  return db;
+  const { getSQLiteDatabase } = await import('./database');
+  return getSQLiteDatabase();
 }
 
 // Get settings from database (async version)
@@ -775,6 +784,18 @@ export async function initializeSettings(): Promise<Settings> {
   syncWithRetry().catch(() => {});
 
   return settings;
+}
+
+/**
+ * Reload settings from the freshly bound user DB.
+ *
+ * 用于 AuthProvider 在 bindUserId 成功后调用：清空内存 cache，下一次
+ * `getSettingsAsync()` 会从 user-scoped SQLite 读出该用户自己的偏好。
+ * 若 DB 里没有条目（新账号首次登录）会 fallback 到 localStorage / defaults。
+ */
+export async function reloadSettingsForCurrentUser(): Promise<Settings> {
+  settingsCache = null;
+  return getSettingsAsync();
 }
 
 // Update a single AI provider

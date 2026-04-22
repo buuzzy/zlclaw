@@ -13,8 +13,33 @@ import {
   markSessionDeleted,
   markSessionDirty,
 } from '@/shared/sync/session-dirty-queue';
+import {
+  ensureUserDirs,
+  getUserDbConnString,
+} from '@/shared/lib/user-scoped-paths';
 
-const SQLITE_DB_NAME = 'sqlite:sage.db';
+// ─── User-scoped DB binding ──────────────────────────────────────────────────
+//
+// M1 —— 按账号隔离本地数据。
+//
+// 核心变化：
+//   - 不再使用固定的 `sqlite:sage.db` 连接（那是 Rust 端 migrations 注册的路径，
+//     位于 ~/Library/Application Support/ai.sage.desktop/sage.db）。
+//   - 改为按 user.id 懒加载 `sqlite:~/.sage/users/{uid}/sage.db`。
+//   - Rust 端 migrations 不会对这些动态路径生效，所以 schema 由 JS 端的
+//     `ensureSchema()` 幂等建表负责。
+//
+// bind/unbind 时序：
+//   - AuthProvider 在 getSession() resolve / SIGNED_IN / TOKEN_REFRESHED /
+//     超时兜底解析 JWT 成功时调 `bindUserId(uid)`。
+//   - AuthProvider 在 SIGNED_OUT / 显式登出 时调 `unbindUser()`。
+//   - 切换用户（A 登出 → B 登录）：unbindUser 关闭旧连接，bindUserId 打开新连接。
+//
+// 并发保护：
+//   - 使用 inFlight Promise 串行化 bind/unbind，避免两个 auth 事件同时触发
+//     竞争关闭/打开。
+//   - getSQLiteDatabase() 在未 bind 时返回 null（与浏览器模式行为一致）。
+
 const IDB_NAME = 'sage';
 const IDB_VERSION = 2; // Bump version for sessions support
 
@@ -105,25 +130,276 @@ function idbRequest<T>(request: IDBRequest<T>): Promise<T> {
 }
 
 // ============ Tauri SQLite ============
-let sqliteDb: Awaited<
+type SqliteHandle = Awaited<
   ReturnType<typeof import('@tauri-apps/plugin-sql').default.load>
-> | null = null;
+>;
 
-async function getSQLiteDatabase() {
+let sqliteDb: SqliteHandle | null = null;
+let currentUid: string | null = null;
+let bindInFlight: Promise<void> | null = null;
+// 监听器：供 settings 缓存失效 / UI 重新查询使用
+const bindListeners = new Set<(uid: string | null) => void>();
+
+/**
+ * 订阅 user binding 变化。
+ * 回调参数：新的 uid（null 表示已 unbind）。
+ * 触发时机：bindUserId / unbindUser 成功完成之后。
+ */
+export function subscribeUserBinding(
+  cb: (uid: string | null) => void
+): () => void {
+  bindListeners.add(cb);
+  return () => {
+    bindListeners.delete(cb);
+  };
+}
+
+function notifyBindChange() {
+  for (const cb of bindListeners) {
+    try {
+      cb(currentUid);
+    } catch (err) {
+      console.error('[DB] bind listener error:', err);
+    }
+  }
+}
+
+/**
+ * 获取当前绑定的 user id（未绑定时为 null）。
+ * 用于 useAgent 等需要推导用户作用域路径的地方。
+ */
+export function getCurrentBoundUid(): string | null {
+  return currentUid;
+}
+
+/**
+ * 幂等建表。把 src-tauri/src/lib.rs 中 7 条 migrations 平展成
+ * `CREATE TABLE IF NOT EXISTS` + 缺列时的 `ALTER TABLE`。
+ *
+ * 这个函数每次 bind 都跑一次，成本小，保证空 DB 也能用。
+ */
+async function ensureSchema(db: SqliteHandle): Promise<void> {
+  // tasks（合并 v1 + v5 + v7：session_id / task_index / favorite）
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id TEXT PRIMARY KEY NOT NULL,
+      prompt TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'running',
+      cost REAL,
+      duration INTEGER,
+      session_id TEXT,
+      task_index INTEGER DEFAULT 1,
+      favorite INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // messages（合并 v1 + v2 + v6：tool_output / tool_use_id / attachments）
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      content TEXT,
+      tool_name TEXT,
+      tool_input TEXT,
+      tool_output TEXT,
+      tool_use_id TEXT,
+      subtype TEXT,
+      error_message TEXT,
+      attachments TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    )
+  `);
+
+  // files（v3）
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      path TEXT NOT NULL,
+      preview TEXT,
+      thumbnail TEXT,
+      is_favorite INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    )
+  `);
+
+  // settings（v4）
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // sessions（v5）
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY NOT NULL,
+      prompt TEXT NOT NULL,
+      task_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  // Indexes
+  await db.execute(
+    `CREATE INDEX IF NOT EXISTS idx_messages_task_id ON messages(task_id)`
+  );
+  await db.execute(
+    `CREATE INDEX IF NOT EXISTS idx_files_task_id ON files(task_id)`
+  );
+  await db.execute(
+    `CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id)`
+  );
+
+  // 迁移过来的旧 DB 可能缺列：逐个 ALTER，已存在就吞错
+  const alters = [
+    'ALTER TABLE tasks ADD COLUMN session_id TEXT',
+    'ALTER TABLE tasks ADD COLUMN task_index INTEGER DEFAULT 1',
+    'ALTER TABLE tasks ADD COLUMN favorite INTEGER DEFAULT 0',
+    'ALTER TABLE messages ADD COLUMN tool_output TEXT',
+    'ALTER TABLE messages ADD COLUMN tool_use_id TEXT',
+    'ALTER TABLE messages ADD COLUMN attachments TEXT',
+  ];
+  for (const sql of alters) {
+    try {
+      await db.execute(sql);
+    } catch {
+      /* column already exists */
+    }
+  }
+}
+
+/**
+ * 绑定指定 uid 的 DB 连接。
+ *
+ * 幂等：若当前已绑定相同 uid，则 no-op。
+ * 并发安全：同时多次调用会串行执行。
+ *
+ * 抛错时机：
+ *   - uid 非法 UUID
+ *   - Tauri fs/sql 插件不可用
+ */
+export async function bindUserId(uid: string): Promise<void> {
+  if (!isTauriSync()) return;
+
+  // 串行化：等待任何 in-flight bind/unbind 先完成
+  if (bindInFlight) {
+    await bindInFlight.catch(() => {});
+  }
+
+  if (sqliteDb && currentUid === uid) {
+    return; // 已绑定到同一 uid
+  }
+
+  bindInFlight = (async () => {
+    // 1. 关闭旧连接（若有）
+    if (sqliteDb) {
+      try {
+        await sqliteDb.close();
+      } catch (err) {
+        console.warn('[DB] close old connection failed:', err);
+      }
+      sqliteDb = null;
+    }
+
+    // 2. 确保目录 + 解析新连接串
+    await ensureUserDirs(uid);
+    const connStr = await getUserDbConnString(uid);
+
+    // 3. 一次性迁移 legacy 数据（仅第一次绑定触发；见 user-scope-migration.ts）
+    //    在打开连接之前 copy DB 文件，避免 sqlx 持有旧文件的锁
+    try {
+      const { maybeMigrateLegacyData } = await import(
+        '@/shared/lib/user-scope-migration'
+      );
+      await maybeMigrateLegacyData(uid);
+    } catch (err) {
+      // 迁移失败不应阻塞登录 —— 用户至少能使用空 DB
+      console.error('[DB] legacy migration failed (continuing):', err);
+    }
+
+    // 4. 打开新连接 + 幂等建表
+    const Database = (await import('@tauri-apps/plugin-sql')).default;
+    const db = await Database.load(connStr);
+    await ensureSchema(db);
+
+    sqliteDb = db;
+    currentUid = uid;
+    console.log(
+      `[DB] bound to user ${uid.slice(0, 8)}… at ${connStr.replace(/^sqlite:/, '')}`
+    );
+  })();
+
+  try {
+    await bindInFlight;
+  } finally {
+    bindInFlight = null;
+  }
+
+  notifyBindChange();
+}
+
+/**
+ * 解除 user 绑定。关闭当前连接，后续 `getSQLiteDatabase()` 返回 null。
+ * 用于登出流程。
+ */
+export async function unbindUser(): Promise<void> {
+  if (!isTauriSync()) return;
+
+  if (bindInFlight) {
+    await bindInFlight.catch(() => {});
+  }
+
+  bindInFlight = (async () => {
+    if (sqliteDb) {
+      try {
+        await sqliteDb.close();
+      } catch (err) {
+        console.warn('[DB] close on unbind failed:', err);
+      }
+      sqliteDb = null;
+    }
+    currentUid = null;
+  })();
+
+  try {
+    await bindInFlight;
+  } finally {
+    bindInFlight = null;
+  }
+
+  notifyBindChange();
+}
+
+export async function getSQLiteDatabase() {
   if (!isTauriSync()) {
     return null;
   }
 
-  if (!sqliteDb) {
+  // 等待任何 in-flight bind/unbind 先完成
+  if (bindInFlight) {
     try {
-      const Database = (await import('@tauri-apps/plugin-sql')).default;
-      sqliteDb = await Database.load(SQLITE_DB_NAME);
-      console.log('[SQLite] Database connected successfully');
-    } catch (error) {
-      console.error('[SQLite] Failed to connect:', error);
-      return null;
+      await bindInFlight;
+    } catch {
+      /* 失败不在这里抛，返回 null 让调用方走浏览器/空数据路径 */
     }
   }
+
+  // 未绑定 user → 返回 null（调用方已有 null-handling）
+  if (!currentUid || !sqliteDb) {
+    return null;
+  }
+
   return sqliteDb;
 }
 

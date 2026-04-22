@@ -36,7 +36,7 @@ import {
 import { markFailed, markOk, markSyncing } from './sync-status';
 
 export function SessionSyncProvider({ children }: { children: ReactNode }) {
-  const { user, status } = useAuth();
+  const { user, status, dbReady } = useAuth();
   const userIdRef = useRef<string | null>(null);
 
   // 保持 userId 最新，订阅回调里用 ref 读（避免频繁 re-subscribe）
@@ -46,11 +46,13 @@ export function SessionSyncProvider({ children }: { children: ReactNode }) {
   }, [status, user]);
 
   // ── 登录后：fetch + backfill ──────────────────────────────────────────────
+  // 必须等 dbReady 才能遍历本地 sessions，否则 getAllLocalSessionIds 会
+  // 因为 user-scoped DB 还没绑定完成而返回空数组，漏掉老数据的 backfill。
   useEffect(() => {
     let cancelled = false;
 
     const bootstrap = async () => {
-      if (status !== 'authenticated' || !user) return;
+      if (status !== 'authenticated' || !user || !dbReady) return;
 
       try {
         // 1) 先 fetch 云端（当前只打印）
@@ -82,7 +84,7 @@ export function SessionSyncProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [status, user]);
+  }, [status, user, dbReady]);
 
   // ── 订阅 dirty queue，执行实际的云端 upsert / delete ──────────────────────
   useEffect(() => {
