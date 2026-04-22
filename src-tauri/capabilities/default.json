@@ -15,9 +15,12 @@
     "fs:default",
     "fs:allow-read-file",
     "fs:allow-write-file",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
     "fs:allow-read-dir",
     "fs:allow-remove",
     "fs:allow-exists",
+    "fs:allow-mkdir",
     "fs:read-files",
     "fs:allow-home-read-recursive",
     "fs:allow-home-write-recursive",
@@ -29,6 +32,7 @@
       "allow": [
         "$HOME/.htclaw/**",
         "$HOME/.sage/**",
+        "$HOME/.sage/.*",
         "$HOME/.claude/**",
         "$DOWNLOAD/**",
         "$DESKTOP/**",
@@ -51,6 +55,9 @@
       ]
     },
     "deep-link:default",
-    "deep-link:allow-get-current"
+    "deep-link:allow-get-current",
+    "updater:default",
+    "process:default",
+    "process:allow-restart"
   ]
 }
