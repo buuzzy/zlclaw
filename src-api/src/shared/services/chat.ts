@@ -135,6 +135,28 @@ async function* runOpenAICompatibleChat(
   yield { type: 'done' };
 }
 
+/**
+ * Strip `<think>...</think>` blocks (DeepSeek-R1 / MiniMax thinking / o1 等推理模型
+ * 会把内部推理混在普通 content 里返回)。
+ *
+ * 匹配所有形态：
+ *   - `<think>...</think>` 完整成对
+ *   - `<think>...` 后面没闭合（超时截断 / 被 max_tokens 截断）
+ *   - 多段重复
+ *
+ * 主要服务 generateTitle()：标题请求只允许返回干净文本，否则 `<think>` 内容
+ * 会直接被存成 task.prompt，污染 session 标题、UI 气泡和 cloud preview。
+ */
+function stripThinking(text: string): string {
+  if (!text) return text;
+  // 先去成对的 <think>...</think>
+  let out = text.replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, '');
+  // 再去残留的开头或结尾半截标签（被截断的情况）
+  out = out.replace(/<think\b[^>]*>[\s\S]*$/i, '');
+  out = out.replace(/^[\s\S]*<\/think>/i, '');
+  return out.trim();
+}
+
 async function openAICompatibleCreate(
   messages: Array<{ role: string; content: string }>,
   systemPrompt: string,
@@ -360,8 +382,25 @@ export async function generateTitle(
         .trim();
     }
 
-    logger.info('[ChatService] Generated title:', { prompt: prompt.slice(0, 50), title });
-    return title || prompt.slice(0, 30);
+    logger.info('[ChatService] Generated title (raw):', { prompt: prompt.slice(0, 50), title });
+
+    // 去掉 <think>...</think>（thinking 模型会把推理混进 content）
+    let cleaned = stripThinking(title);
+
+    // 模型可能返回多行、前后空白、或"标题: xxx"这种引导；取首行并截断长度
+    cleaned = cleaned.split(/\r?\n/)[0].trim();
+    // 去头尾引号
+    cleaned = cleaned.replace(/^["'「『]+|["'」』]+$/g, '').trim();
+    // 长度保底：超过 40 字符就被视为异常输出，回退到 prompt 截断
+    if (cleaned.length === 0 || cleaned.length > 40) {
+      logger.warn('[ChatService] title sanitize rejected output:', {
+        rawLen: title.length,
+        cleanedLen: cleaned.length,
+      });
+      return prompt.slice(0, 30) + (prompt.length > 30 ? '...' : '');
+    }
+
+    return cleaned;
   } catch (error) {
     logger.error('[ChatService] Title generation failed:', error);
     return prompt.slice(0, 30) + (prompt.length > 30 ? '...' : '');

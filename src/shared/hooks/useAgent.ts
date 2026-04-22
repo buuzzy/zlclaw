@@ -31,6 +31,23 @@ import { getUserSessionsDir } from '@/shared/lib/user-scoped-paths';
 import { getCurrentBoundUid } from '@/shared/db/database';
 
 /**
+ * 清洗 backend /agent/title 的输出，防止 thinking 模型的 `<think>...</think>`
+ * 推理内容污染 task.prompt。返回空串表示"拒绝使用此 title"，调用方应保留原 prompt。
+ *
+ * 后端 chat.ts:generateTitle 已有同样处理，此处是防御性兜底。
+ */
+function sanitizeTitle(raw: string): string {
+  if (!raw) return '';
+  let out = raw.replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, '');
+  out = out.replace(/<think\b[^>]*>[\s\S]*$/i, '');
+  out = out.replace(/^[\s\S]*<\/think>/i, '');
+  out = out.split(/\r?\n/)[0].trim();
+  out = out.replace(/^["'「『]+|["'」』]+$/g, '').trim();
+  if (out.length === 0 || out.length > 40) return '';
+  return out;
+}
+
+/**
  * 计算当前用户的 sessions 目录：`~/.sage/users/{uid}/sessions`。
  * 若尚未绑定 user（理论上不该发生在已登录态），回退到 legacy 共享目录
  * `~/.sage/sessions`，保证不崩溃但打印警告。
@@ -2057,9 +2074,18 @@ export function useAgent(): UseAgentReturn {
                 const data = await res.json();
                 console.log('[useAgent] Title response data:', data);
                 if (data.title) {
-                  await updateTask(currentTaskId, { prompt: data.title });
-                  setGeneratedTitle(data.title);
-                  console.log('[useAgent] Updated task title:', data.title);
+                  // 前端兜底 sanitize：即便后端失灵吐了 <think>...</think>，也不让污染本地 task
+                  const cleaned = sanitizeTitle(data.title);
+                  if (cleaned) {
+                    await updateTask(currentTaskId, { prompt: cleaned });
+                    setGeneratedTitle(cleaned);
+                    console.log('[useAgent] Updated task title:', cleaned);
+                  } else {
+                    console.warn(
+                      '[useAgent] title sanitize rejected, keeping original prompt:',
+                      data.title.slice(0, 60)
+                    );
+                  }
                 }
               } else {
                 const errorText = await res.text();
