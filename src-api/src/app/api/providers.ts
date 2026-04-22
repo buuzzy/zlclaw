@@ -403,8 +403,8 @@ providersRoutes.post('/detect', async (c) => {
   }
 
   const requestBody = isOpenAI
-    ? { model: testModel, messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }], max_tokens: 1, stream: false }
-    : { model: testModel, messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }], max_tokens: 1 };
+    ? { model: testModel, messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }], max_tokens: 1, stream: true }
+    : { model: testModel, messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }], max_tokens: 1, stream: true };
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -420,25 +420,34 @@ providersRoutes.post('/detect', async (c) => {
     clearTimeout(timeoutId);
 
     if (response.ok) {
-      const data = await response.json();
+      // Drain the stream body to avoid resource leaks, but we don't need to parse it —
+      // HTTP 200 from a streaming endpoint is sufficient proof of a valid connection.
+      try { await response.text(); } catch { /* best-effort drain */ }
+
       const successResponse: DetectSuccessResponse = {
         success: true,
         message: 'Connection successful! Configuration valid',
         model: testModel,
-        response: data,
+        response: {},
       };
       return c.json(successResponse);
     }
 
-    const errorData = await response.json().catch(() => ({}));
+    const errorText = await response.text().catch(() => '');
+    let errorMsg = `HTTP ${response.status}`;
+    try {
+      const errorData = JSON.parse(errorText);
+      errorMsg = errorData.error?.message || errorData.message || errorMsg;
+    } catch { /* non-JSON error body, use HTTP status */ }
+
     console.error('[ProvidersAPI] Detection failed:', {
       status: response.status,
-      error: errorData,
+      error: errorMsg,
     });
 
     const errorResponse: DetectErrorResponse = {
       success: false,
-      error: errorData.error?.message || `HTTP ${response.status}`,
+      error: errorMsg,
     };
     return c.json(errorResponse, 200);
   } catch (error) {
