@@ -67,3 +67,13 @@ src-api/dist/bundle.cjs
 
 # Tauri sidecar binaries (build output)
 src-tauri/binaries/
+
+# Local-only UI research docs (kept on disk, not tracked)
+/DESIGN_TOKENS.md
+/LOGIN_PAGE_EXAMPLE.tsx
+/README_UI_ANALYSIS.md
+/UI_QUICK_REFERENCE.md
+/UI_STYLE_GUIDE.md
+
+# Supabase CLI local state (project ref / credentials cache)
+supabase/.temp/

@@ -2,11 +2,17 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import { readFileSync } from "fs";
 
 const host = process.env.TAURI_DEV_HOST;
 
 // Generate build date in YYYY.MM.DD format
 const buildDate = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+
+// Read app version from package.json for runtime reporting (profile/error logs)
+const pkg = JSON.parse(
+  readFileSync(path.resolve(__dirname, "./package.json"), "utf-8")
+);
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
@@ -14,6 +20,7 @@ export default defineConfig(async () => ({
 
   define: {
     __BUILD_DATE__: JSON.stringify(buildDate),
+    __APP_VERSION__: JSON.stringify(pkg.version),
   },
 
   resolve: {

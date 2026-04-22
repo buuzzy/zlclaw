@@ -49,6 +49,8 @@
           "sidecar": true
         }
       ]
-    }
+    },
+    "deep-link:default",
+    "deep-link:allow-get-current"
   ]
 }

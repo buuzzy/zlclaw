@@ -9,6 +9,10 @@ import type {
   Task,
   UpdateTaskInput,
 } from './types';
+import {
+  markSessionDeleted,
+  markSessionDirty,
+} from '@/shared/sync/session-dirty-queue';
 
 const SQLITE_DB_NAME = 'sqlite:sage.db';
 const IDB_NAME = 'sage';
@@ -161,6 +165,7 @@ export async function createSession(
         [input.id, input.prompt, 0]
       );
     }
+    markSessionDirty(input.id);
     return session;
   } else {
     // IndexedDB (Browser)
@@ -169,6 +174,7 @@ export async function createSession(
     const store = tx.objectStore('sessions');
     await idbRequest(store.put(session));
     console.log('[IDB] Created session:', input.id);
+    markSessionDirty(input.id);
     return session;
   }
 }
@@ -248,6 +254,7 @@ export async function updateSessionTaskCount(
       await idbRequest(store.put(updatedSession));
     }
   }
+  markSessionDirty(sessionId);
 }
 
 export async function getTasksBySessionId(sessionId: string): Promise<Task[]> {
@@ -390,6 +397,7 @@ export async function updateTask(
 ): Promise<Task | null> {
   const database = await getSQLiteDatabase();
 
+  let result: Task | null;
   if (database) {
     const updates: string[] = [];
     const values: (string | number | null)[] = [];
@@ -443,7 +451,7 @@ export async function updateTask(
       }
     }
 
-    return getTask(id);
+    result = await getTask(id);
   } else {
     const db = await getIndexedDB();
     const task = await getTask(id);
@@ -456,20 +464,33 @@ export async function updateTask(
       const tx = db.transaction('tasks', 'readwrite');
       const store = tx.objectStore('tasks');
       await idbRequest(store.put(updatedTask));
-      return updatedTask;
+      result = updatedTask;
+    } else {
+      result = null;
     }
-    return null;
   }
+
+  // 影响 session 的只有 prompt（title 来源）和 status（间接通过 preview 不变，但语义上是活跃）
+  if (result?.session_id) {
+    markSessionDirty(result.session_id);
+  }
+
+  return result;
 }
 
 export async function deleteTask(id: string): Promise<boolean> {
   const database = await getSQLiteDatabase();
 
+  // 先记下 session_id，删除前拿到，删除后用它来更新 task_count / 判断是否清空 session
+  const task = await getTask(id);
+  const sessionId = task?.session_id ?? null;
+
+  let ok: boolean;
   if (database) {
     const result = await database.execute('DELETE FROM tasks WHERE id = $1', [
       id,
     ]);
-    return result.rowsAffected > 0;
+    ok = result.rowsAffected > 0;
   } else {
     const db = await getIndexedDB();
     const tx = db.transaction('tasks', 'readwrite');
@@ -477,8 +498,24 @@ export async function deleteTask(id: string): Promise<boolean> {
     await idbRequest(store.delete(id));
     // Also delete related messages
     await deleteMessagesByTaskId(id);
-    return true;
+    ok = true;
   }
+
+  // Refresh parent session：若 session 还剩 task 则 markDirty，否则 markDeleted
+  if (ok && sessionId) {
+    try {
+      const remaining = await getTasksBySessionId(sessionId);
+      if (remaining.length === 0) {
+        markSessionDeleted(sessionId);
+      } else {
+        markSessionDirty(sessionId);
+      }
+    } catch {
+      /* best effort */
+    }
+  }
+
+  return ok;
 }
 
 // ============ Message Operations ============
@@ -487,6 +524,8 @@ export async function createMessage(
 ): Promise<Message> {
   const now = new Date().toISOString();
   const database = await getSQLiteDatabase();
+
+  let created: Message;
 
   if (database) {
     // Try with attachments column first, fallback to without
@@ -512,7 +551,7 @@ export async function createMessage(
         'SELECT * FROM messages WHERE id = $1',
         [result.lastInsertId]
       );
-      return messages[0];
+      created = messages[0];
     } catch {
       // Fallback: add attachments column if it doesn't exist
       try {
@@ -544,7 +583,7 @@ export async function createMessage(
         'SELECT * FROM messages WHERE id = $1',
         [result.lastInsertId]
       );
-      return messages[0];
+      created = messages[0];
     }
   } else {
     const db = await getIndexedDB();
@@ -565,8 +604,18 @@ export async function createMessage(
     const tx = db.transaction('messages', 'readwrite');
     const store = tx.objectStore('messages');
     const id = await idbRequest(store.add(message));
-    return { ...message, id: id as number } as Message;
+    created = { ...message, id: id as number } as Message;
   }
+
+  // Mark parent session dirty (preview / message_count / updated_at 都可能变)
+  try {
+    const task = await getTask(input.task_id);
+    if (task?.session_id) markSessionDirty(task.session_id);
+  } catch {
+    /* best effort */
+  }
+
+  return created;
 }
 
 export async function getMessagesByTaskId(taskId: string): Promise<Message[]> {
@@ -652,6 +701,7 @@ export async function createFile(input: CreateFileInput): Promise<LibraryFile> {
   const now = new Date().toISOString();
   const database = await getSQLiteDatabase();
 
+  let file: LibraryFile;
   if (database) {
     const result = await database.execute(
       `INSERT INTO files (task_id, name, type, path, preview, thumbnail)
@@ -670,10 +720,10 @@ export async function createFile(input: CreateFileInput): Promise<LibraryFile> {
       'SELECT * FROM files WHERE id = $1',
       [result.lastInsertId]
     );
-    return files[0];
+    file = files[0];
   } else {
     const db = await getIndexedDB();
-    const file: Omit<LibraryFile, 'id'> & { id?: number } = {
+    const newFile: Omit<LibraryFile, 'id'> & { id?: number } = {
       task_id: input.task_id,
       name: input.name,
       type: input.type,
@@ -686,9 +736,19 @@ export async function createFile(input: CreateFileInput): Promise<LibraryFile> {
 
     const tx = db.transaction('files', 'readwrite');
     const store = tx.objectStore('files');
-    const id = await idbRequest(store.add(file));
-    return { ...file, id: id as number } as LibraryFile;
+    const id = await idbRequest(store.add(newFile));
+    file = { ...newFile, id: id as number } as LibraryFile;
   }
+
+  // 新增 file 会让 session 的 has_artifacts 变成 true
+  try {
+    const task = await getTask(input.task_id);
+    if (task?.session_id) markSessionDirty(task.session_id);
+  } catch {
+    /* best effort */
+  }
+
+  return file;
 }
 
 export async function getFilesByTaskId(taskId: string): Promise<LibraryFile[]> {
@@ -763,18 +823,50 @@ export async function toggleFileFavorite(
 export async function deleteFile(fileId: number): Promise<boolean> {
   const database = await getSQLiteDatabase();
 
+  // 删除前记下 task_id，用于刷新对应 session 的 has_artifacts
+  let taskId: string | null = null;
+  try {
+    if (database) {
+      const rows = await database.select<{ task_id: string }[]>(
+        'SELECT task_id FROM files WHERE id = $1',
+        [fileId]
+      );
+      taskId = rows[0]?.task_id ?? null;
+    } else {
+      const db = await getIndexedDB();
+      const tx = db.transaction('files', 'readonly');
+      const store = tx.objectStore('files');
+      const file = await idbRequest(store.get(fileId));
+      taskId = file?.task_id ?? null;
+    }
+  } catch {
+    /* best effort */
+  }
+
+  let ok: boolean;
   if (database) {
     const result = await database.execute('DELETE FROM files WHERE id = $1', [
       fileId,
     ]);
-    return result.rowsAffected > 0;
+    ok = result.rowsAffected > 0;
   } else {
     const db = await getIndexedDB();
     const tx = db.transaction('files', 'readwrite');
     const store = tx.objectStore('files');
     await idbRequest(store.delete(fileId));
-    return true;
+    ok = true;
   }
+
+  if (ok && taskId) {
+    try {
+      const task = await getTask(taskId);
+      if (task?.session_id) markSessionDirty(task.session_id);
+    } catch {
+      /* best effort */
+    }
+  }
+
+  return ok;
 }
 
 // Get files grouped by task with task info
