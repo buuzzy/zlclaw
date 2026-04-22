@@ -2,7 +2,7 @@
 
 > 记录已完成、进行中和待实现的功能。
 > 每个功能标注优先级（P0~P3）和状态。
-> 最后更新：2026-04-21
+> 最后更新：2026-04-22
 
 ---
 
@@ -49,6 +49,13 @@
 | westock-quote | 个股行情 |
 | westock-research | 研报分析 |
 | westock-screener | 选股器 |
+
+#### 模型测试连接兼容性修复
+修复「测试连接」对 MiniMax 等非极速版模型始终失败的问题。
+根因：detect 端点使用 `stream: false` 发送探活请求，但 MiniMax 非极速版模型不接受非流式请求（返回 HTTP 529）。
+实际对话走 Agent SDK 的流式路径（`stream: true`）所以正常。
+修复方案：detect 统一改为 `stream: true`，HTTP 200 即判定连接有效，不解析响应体。
+同时改进错误分支：用 `response.text()` 替代 `response.json()` 读取失败响应，兼容流式/非 JSON 错误格式。
 
 #### build.sh 兼容性修复
 修复 `update_tauri_config()` 函数中 `resources` 字段的数组/对象格式兼容问题，
@@ -181,9 +188,9 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 
 #### M1 — 本地数据按账号隔离（P0）
 
-**状态：** 📋 待实现
+**状态：** ✅ 已完成（2026-04-22）
 
-**问题：** 当前本地 SQLite (`~/.sage/sage.db`) 和 session 文件 (`~/.sage/sessions/*.json`) 没有 user 维度。用户 A 登录后创建会话 → 登出 → 用户 B 登录 → 能看到 A 的全部会话。这是**数据隔离 bug，不是 UX 问题**，内测不能带此问题上线。
+**问题：** 当前本地 SQLite (`~/Library/Application Support/ai.sage.desktop/sage.db`) 和 session 文件 (`~/.sage/sessions/*.json`) 没有 user 维度。用户 A 登录后创建会话 → 登出 → 用户 B 登录 → 能看到 A 的全部会话。这是**数据隔离 bug，不是 UX 问题**，内测不能带此问题上线。
 
 **方案：** 用户作用域化数据根目录
 ```
@@ -209,93 +216,109 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 5. **一次性迁移**：首次升级后若发现 `~/.sage/sage.db` 存在（历史数据），把它移到当前登录用户的目录。写迁移标记避免重复。
 6. **登出时**：不清除本地数据（用户再登录回来要能继续用），只把数据路径置空（切回 login 页）
 
-**验收：**
-- [ ] 用户 A 登录创建会话 → 登出 → 用户 B 登录 → 看不到 A 的任何会话
-- [ ] B 创建会话 → 登出 → A 重新登录 → 看到自己的会话
-- [ ] 现有用户升级后数据正常迁移到 `users/{自己的 uid}/`，会话不丢
-- [ ] `~/.sage/skills/` 和 `~/.sage/defaults/` 两个用户共用同一份
+**实际实现要点（与原计划的差异）：**
+- DB 物理位置：`~/.sage/users/{uid}/sage.db`（而非原计划里错误的 "~/.sage/sage.db"；真实 legacy 位置是 `~/Library/Application Support/ai.sage.desktop/sage.db`）
+- 利用 Tauri SQL plugin 的 `PathBuf::push` 绝对路径特性绕开 `app_config_dir` 限制
+- Rust migrations 只对固定 `sqlite:sage.db` 生效，所以 schema 由 JS 幂等 `ensureSchema()` 负责
+- JWT 解析兜底：断网启动时从 `sb-*-auth-token` 解析 user.id 提前 bind，避免 30s 卡顿
+- `dbReady` 信号加入 AuthGuard：避免 cloud session 已 resolve 但本地 DB 还没切完时显示旧账号残影
+- 迁移策略：复制而非移动（rollback safety），全局标记 `~/.sage/.user-scope-migration-v1` 只让第一个登录的用户继承 legacy 数据
 
-**成本：** 1-2 天
+**验收：**
+- [x] 用户 A 登录创建会话 → 登出 → 用户 B 登录 → 看不到 A 的任何会话（TS/Vite/Rust build 通过，待 dmg 实机验收）
+- [x] B 创建会话 → 登出 → A 重新登录 → 看到自己的会话（同上）
+- [x] 现有用户升级后数据正常迁移到 `users/{自己的 uid}/`，会话不丢（migration 函数已实现 copy-not-move，待实机验收）
+- [x] `~/.sage/skills/` 和 `~/.sage/defaults/` 两个用户共用同一份（设计保留，未动这些目录）
+
+**成本：** 实际 ~1 天（含方案调整、circular dep 排查）
 
 ---
 
 #### M2 — App 内手动检查 / 下载更新（P0）
 
-**状态：** 📋 待实现
+**状态：** ✅ 已完成（2026-04-22）
 
 **需求：** 设置 > 关于 > "检查更新"按钮，点击后若有新版则下载、校验签名、安装、重启。
 
 **方案：** `tauri-plugin-updater` 官方插件 + GitHub Releases 托管 manifest
 
 **实施步骤：**
-1. Rust 端：添加 `tauri-plugin-updater` 依赖，`capabilities/default.json` 加权限
-2. 生成 updater 的 Ed25519 签名密钥对，公钥写入 `tauri.conf.json`，私钥保管（GitHub Secrets）
-3. `tauri.conf.json` 的 `plugins.updater.endpoints` 指向 GitHub Releases 的 `latest.json`
-4. AboutSettings.tsx 添加"检查更新"按钮 + 状态（检查中 / 已是最新 / 发现新版 v1.0.1 / 下载中 x%）
-5. 下载完成后弹确认 → `update.install()` → app 自动重启
-6. 失败场景：网络错误、签名验证失败、磁盘写入失败全部要有用户可见反馈
+1. Rust 端：添加 `tauri-plugin-updater` + `tauri-plugin-process` 依赖，`capabilities/default.json` 加权限 ✅
+2. 生成 updater 的 Ed25519 签名密钥对，公钥写入 `tauri.conf.json`，私钥保管于 `.env.tauri-signing`（gitignored）+ 用户 1Password ✅
+3. `tauri.conf.json` 的 `plugins.updater.endpoints` 指向 `https://github.com/buuzzy/HTclaw/releases/latest/download/latest.json` ✅
+4. AboutSettings.tsx 添加"检查更新"按钮 + 状态（checking / up-to-date / available / downloading / ready / installing / error）✅
+5. 下载完成后走 `downloadAndInstall()` + `relaunch()` ✅
+6. 失败场景：网络错误、签名验证失败、磁盘写入失败都显示红色 error 条 ✅
+
+**方案变更：** 启动 banner 改为 "设置 > 关于" 红点提示（参见下方 M3-dropped）
+
+**待人工：**
+- 真正发布 v1.0.1 时要跑 `pnpm tauri:build:signed:mac-arm` 打签名包，把 DMG + `.sig` + `latest.json` 传到 GitHub Releases
+- `latest.json` 的写法参考 https://tauri.app/plugin/updater/#dynamic-update-server（后续补 `docs/RELEASE.md`）
 
 **验收：**
-- [ ] 当前版本 v1.0.0，发布 v1.0.1 后点"检查更新"能发现
-- [ ] 下载进度可见、签名校验通过、安装成功、自动重启
-- [ ] 签名错误的 manifest 会被拒绝（安全验证）
-- [ ] 断网时按钮显示"检查失败"而不是卡住
+- [ ] 打 v1.0.0 安装 → 发布 v1.0.1 release + manifest → 点"检查更新"能发现 ← 实机验收
+- [ ] 下载进度可见、签名校验通过、安装成功、自动重启 ← 实机验收
+- [ ] 签名错误的 manifest 会被拒绝（安全验证）← 实机验收
+- [x] 断网时按钮显示"检查失败"而不是卡住
 
-**成本：** 1 天（含首次密钥配置）
+**成本：** 实际 ~0.5 天
 
 ---
 
 #### M3 — 启动时自动检查更新 + 内推送 UI（P0）
 
-**状态：** 📋 待实现
+**状态：** ⛔ 已变更方案（2026-04-22）
 
-**需求：** 用户打开 Sage 时后台自动检查，若有新版则顶部显示 banner："v1.0.1 已发布，点击更新"。不打扰正在使用，用户自主决定。
+**变更原因：** 用户不希望顶部 banner 挤压主内容区。改为设置弹窗"关于" Tab 内部已有的检查更新状态 + 红点提示导航到该 Tab。
 
-**方案：** 复用 M2 的 updater 插件。app 启动时 fire-and-forget 调 `check()`，返回新版本信息时渲染一个顶部固定 banner。
-
-**实施步骤：**
-1. 新建 `UpdateBannerProvider` 或类似机制：app 启动后延迟 3s 调 `check()`（避免阻塞首屏）
-2. 发现新版 → 存入 Context / Zustand store
-3. 顶部 banner 组件：显示版本号、更新日志摘要（取自 Release body 前 100 字）、"稍后"和"立即更新"按钮
-4. 用户选择"稍后"→ 本地标记该版本号 dismissed，本次 app 生命周期不再提示
-5. 可选：定时每 6 小时后台再 check 一次（内测期用户可能开一整天）
+**当前实现：**
+- `UpdateProvider` 启动后 3s 仍会静默 `check()`（保留，这是红点的数据源）
+- sidebar user avatar 右上角红点：`status === 'available' && version !== dismissedVersion && version !== aboutSeenVersion`
+- sidebar dropdown menu 里"设置"item 右侧红点：同条件
+- 设置弹窗左侧 nav "关于" item 右侧红点：同条件
+- 用户打开"关于" Tab → `markAboutSeen()` 同步把 `aboutSeenVersion` 设为当前版本 → sidebar 两处红点消失
+- "关于" Tab 的红点持续到用户点"下载更新"或下一个版本号到来
 
 **验收：**
-- [ ] 启动 Sage 时 3 秒后 banner 滑入
-- [ ] 点击"立即更新"走 M2 的流程
-- [ ] 点击"稍后"→ banner 消失，关闭重开后如果版本没变不再弹
-- [ ] 网络异常时 banner 不显示（不打扰）
+- [ ] 启动 Sage 3 秒后，若有新版，sidebar 用户头像右上角红点出现 ← 实机验收
+- [ ] 打开设置（点 sidebar 头像 → Settings，或直接看到 dropdown 里红点）→ sidebar 红点消失，"关于" Tab 仍保留红点
+- [ ] 切到"关于" Tab → "关于" Tab 的红点也消失，按钮显示 `发现新版本 v1.0.1`
+- [ ] 点击按钮 → 下载 + 安装 + 重启
 
-**成本：** 0.5 天
+**成本：** 实际 ~0.5 天
 
 ---
 
 #### M4 — Dev / Prod Supabase 环境分离（P0）
 
-**状态：** 📋 待实现
+**状态：** 🟡 M4a 完成，M4b 待手动（2026-04-22）
 
 **问题：** 当前 `SUPABASE_URL` 硬编码到 `supabase.ts`。开发构建和 release 构建用同一个数据库，一旦内测启动，我们本地 debug 任何改动都会影响真实用户数据。
 
-**方案：**
-1. Supabase 再建一个 project（dev 环境），migration 同步推一遍
-2. 两套 OAuth 配置（GitHub / Google 的 redirect URL 分别指向两个 supabase URL）
-3. Vite define / 环境变量切换：`import.meta.env.DEV` 走 dev，release 走 prod
-4. `.env.local` / `.env.production` 分别存两组 URL + anon key（anon key 不敏感，可以进仓库）
+**拆分：**
 
-**实施步骤：**
-1. Supabase Dashboard 新建 `sage-dev` project
-2. `supabase link --project-ref <dev-ref>` + `supabase db push` 同步 schema
-3. 分别配好两个 project 的 OAuth（GitHub + Google），两套 redirect URL
-4. 代码里用 `import.meta.env.VITE_SUPABASE_URL` 读取，`.env.development` / `.env.production` 各自赋值
-5. 打 release 时确认读到 prod URL（可在 About 面板的内部版本信息里打印当前环境）
+**M4a — 代码层（✅ 已完成）**
+- `src/shared/lib/supabase.ts` 读 `import.meta.env.VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`，未设置时 fallback 到 prod 硬编码值
+- `src/vite-env.d.ts` 加上类型声明
+- `.env.development` / `.env.production` 模板已建（gitignored）
+- AboutSettings 底部显示当前环境标签：`Development · xxxxxxx.supabase.co`
+- `scripts/build-signed.sh` 打包前会 source `.env.production`
+
+**M4b — 手动配置（📋 待做，在首次发包前）**
+1. ✅ Supabase dashboard 建 `sage-dev` project（用户 2026-04-22 已建，password `nILtMNNsO2i8RoyM`）
+2. 🟡 把 schema 同步到 dev project：`supabase link --project-ref <dev-ref>` + `SUPABASE_DB_PASSWORD=... supabase db push`（2026-04-22 已对 sage-dev 做过一次）
+3. 🟡 Database > Publications 打开 `profiles` + `user_settings` 的 Realtime（勾选对应 table 的 Source toggle）
+4. 🟡 Authentication > URL Configuration 加 `sage://auth/callback` 到 Redirect URLs
+5. 🟡 GitHub OAuth App + Google OAuth Client 分别指向 dev project 的 callback URL
+6. 🟡 把 dev project 的 URL + anon key 填进 `.env.development`
 
 **验收：**
-- [ ] `pnpm tauri dev` 启动 → 操作走 dev Supabase（可在 dashboard 看到数据）
-- [ ] `pnpm tauri build` 出的 DMG → 走 prod Supabase
-- [ ] 用 release DMG 登录不会污染 dev 数据
-- [ ] 反之亦然
+- [ ] `pnpm tauri dev` 启动 → AboutSettings 底部显示 "Development · <dev-host>" ← 等 M4b 完成后实机
+- [ ] `pnpm tauri:build:signed:mac-arm` 出的 DMG → AboutSettings 显示 "Production · wymqgwtagpsjuonsclye.supabase.co"
+- [ ] 用 release DMG 登录不会污染 dev 数据（两个 project 完全独立）
 
-**成本：** 0.5 天
+**成本：** M4a 实际 ~0.5 小时，M4b 估计 ~20-30 分钟（你手动）
 
 ---
 
@@ -378,6 +401,81 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 - [ ] 设置面板可查看已安装 / 可安装 skills，支持删除释放空间
 
 **成本：** 2-3 天（含 CDN 方案选型）
+
+---
+
+### ⚡ L2 — Supabase Level 2 → Level 3 迁移（工程基建）
+
+**状态：** 🔴 **重要：当前 .env.development 已暂时指向 prod**，触发以下任一条件必须立刻切回 dev / 搬到 L3：
+- 发出第一个 DMG 给任何除你之外的人
+- 邀请团队成员加入开发
+- 开始做破坏性 schema 改动（ALTER TABLE 删列、DROP 索引等）
+
+**当前决策的代价：** 本地 dev 模式产生的测试数据会进 sage project（prod）。建议测试会话在 prompt 里带标签 `[DEV-TEST]`，将来用 `DELETE FROM sessions WHERE preview LIKE '%[DEV-TEST%'` 清理。
+
+**sage-dev 已创建且 schema 已推送**（project ref: `pskweazwczdgtohkdmee`），credentials 保存在 `.env.development` 注释里，切换时把注释里的值启用即可。差 OAuth 配置未做。
+
+**背景：** M4 当前走的是"两 remote project"（sage + sage-dev）方案：
+
+| Level | 描述 | 问题 |
+|-------|------|------|
+| L1 | 单一 prod project | 本地 debug 污染真实数据 |
+| **L2（当前）** | sage + sage-dev 两个 remote project | schema 靠手动同步易漂移；多人协作互相踩；OAuth 要配两套 |
+| **L3（目标）** | `supabase start` 本地 Docker + prod remote | schema as code + 每人独立环境 + 免 dev OAuth |
+| L4 | + staging 三层 | 有 QA / 付费用户时再上 |
+| L5 | Supabase Branching（Pro plan） | 团队 + CI 成熟再上 |
+
+**L2 → L3 的核心改造：**
+
+1. 引入 Supabase CLI：
+   ```bash
+   brew install supabase/tap/supabase
+   cd ~/Documents/Projects/Start/HTclaw/htclaw-app
+   supabase init                                      # 标准化 supabase/ 目录
+   supabase link --project-ref wymqgwtagpsjuonsclye   # link prod
+   supabase db pull                                   # 把 prod schema 拉成 migrations/*.sql
+   ```
+
+2. Schema as code：
+   - 以后所有表 / RLS / trigger / function 改动都走 `supabase migration new <name>` 生成带时间戳的 SQL 文件
+   - 本地 `supabase db reset` 验迁移无误后 `supabase db push` 到 prod
+
+3. 本地 Docker stack 替代 sage-dev：
+   ```bash
+   supabase start   # docker-compose 起本地 Postgres + Auth + Realtime + Storage
+   ```
+   - `.env.development` 改为 `VITE_SUPABASE_URL=http://127.0.0.1:54321`
+   - `VITE_SUPABASE_ANON_KEY` 用本地 stack 启动时打印的 anon key
+   - 本地用 Email/password 或 magic link 登录即可 debug，不用配 OAuth
+
+4. 退役 sage-dev project（Free tier 不占配额，留着或删）
+
+**收益：**
+- ✅ Schema 有 git history，3 个月后能 bisect 哪天改了什么
+- ✅ `supabase db reset` 随时得到干净初态
+- ✅ 新加入的开发者 `git clone` + `supabase start` 即有完整环境
+- ✅ CI 能跑 `supabase db reset && pytest`（未来）
+- ✅ 不用维护 sage-dev 的 OAuth
+
+**实施步骤（约 2-3 小时）：**
+1. 装 CLI + `supabase login`
+2. `supabase init`（会在现有 `supabase/` 目录里补结构）
+3. `supabase link --project-ref wymqgwtagpsjuonsclye`
+4. `supabase db pull` → 验证生成的 `supabase/migrations/*.sql` 能完整重建 schema
+5. 验证 sage-dev 的 schema 可用后，不再需要手工 SQL 备份（早期的 `supabase/dev-bootstrap.sql` 已删，迁移文件是唯一源）
+6. `supabase start` 起本地 Docker stack
+7. 更新 `.env.development` 指向 localhost
+8. 在 README / `docs/ENV.md` 写下本地环境搭建步骤
+9. TODO.md 里 M4b（远程 dev OAuth）打死标记"不再做，已迁 L3"
+
+**风险 & 缓解：**
+- Docker 安装 + 资源占用：用 OrbStack 比 Docker Desktop 轻
+- 本地 OAuth：暂时不在本地跑 OAuth，用 email/password 或 magic link 替代
+- 迁移文件漂移：每次改 prod schema 都必须先生成 migration 文件，不允许 Dashboard 直接改表
+
+**触发时机：** 发第一个内测 DMG 之后的第一周。在此之前 L2 足够用。
+
+**成本：** 2-3 小时
 
 ---
 
@@ -526,6 +624,10 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 - [ ] **last_system_subtype 永远是 null**（P3）：UI 层 AgentMessage 在某些路径下丢失了 DB 的 subtype 字段。排查时我们有 full_transcript 就够用，优先级低。
 - [ ] **tool_input 没截断上限**（P3）：当前只截断 tool_output 到 2000 字。如果某天有超长 URL 或大 JSON payload 塞给 MCP 会撑大 JSONB。加一行代码即可解决，集中到下次同步模块优化时做。
 - [ ] **反馈不带时间戳**（P3）：allMessages 是 UI state，不带 created_at。多轮对话间隔（秒 / 小时）看不出来。真正需要时可改为从 DB 重读 messages 表。
+- [ ] **M1 迁移 bug fixes 追记 — Tauri fs scope 隐藏文件问题**（已修 ✅，记录备忘）：首次实机验收 M1 时发现 `~/.sage/.user-scope-migration-v1` 写不成功，错误 `forbidden path`。根因：Tauri v2 的 fs scope glob `**` **不匹配以 `.` 开头的隐藏文件**（和 bash shopt dotglob 同逻辑）。修复：capabilities/default.json 额外加 `$HOME/.sage/.*` 规则。未来再往 `.sage` 下写任何隐藏文件（marker、缓存、配置）都要确认这个规则还在。
+- [ ] **M1 迁移 bug fixes 追记 — writeTextFile vs writeFile 权限路径**（已修 ✅，记录备忘）：首次实机发现 `writeTextFile` 有权限问题即使 `fs:allow-write-text-file` 在 capabilities 里。最终改用 `writeFile(..., TextEncoder().encode(payload))`。未来新增代码优先用 `writeFile` 写文本，避免类似坑。
+- [ ] **Updater 签名密钥第一版作废**（已弃用 ⛔）：v1 密钥用 `--password ""` 生成，被 tauri build 拒收（"Wrong password"）。v2 用真实密码（`Sage-Updater-48f601110be9bfdd`）重新生成。公钥已更新到 `tauri.conf.json`。**影响**：如果以后需要重新生成密钥，**必须传非空 password**，否则 build 时会签名失败。
+- [ ] **dev Sage 与 release Sage 的 sage:// deep link 冲突**（P3，未修）：dev 模式（`pnpm tauri:dev`）下 OAuth 回调会被 `/Applications/Sage.app`（release 版）拦截，因为 macOS LaunchServices 把 `sage://` 分配给注册过的 `.app` bundle，不分配给 `target/debug/sage`。workaround：dev 验收 OAuth 前临时把 release Sage 改名（`mv /Applications/Sage.app /Applications/Sage-backup.app`），验完再 rename 回来。**根治方案**：dev 模式改用不同的 scheme（如 `sage-dev://`）+ Supabase dev project 的 redirect URL 配套。和 L2→L3 迁移一起做。
 
 **关键原则：**
 - Local-first：所有完整数据在本地，云端只同步元数据/偏好
