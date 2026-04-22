@@ -170,7 +170,390 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 
 ---
 
-## 待实现 📋
+## 🔥 P0 小范围内测 Roadmap
+
+**目标**：让 5~10 位内测用户能稳定使用 Sage、我们能收到反馈、能持续推送更新。
+**时间线**：按下方顺序做，前 4 项必须全部完成才开放内测。
+
+---
+
+### 🚧 MUST-HAVE（内测启动前必须完成）
+
+#### M1 — 本地数据按账号隔离（P0）
+
+**状态：** 📋 待实现
+
+**问题：** 当前本地 SQLite (`~/.sage/sage.db`) 和 session 文件 (`~/.sage/sessions/*.json`) 没有 user 维度。用户 A 登录后创建会话 → 登出 → 用户 B 登录 → 能看到 A 的全部会话。这是**数据隔离 bug，不是 UX 问题**，内测不能带此问题上线。
+
+**方案：** 用户作用域化数据根目录
+```
+~/.sage/
+  users/
+    {user-uuid}/
+      sage.db
+      sessions/*.json
+      memory/
+      logs/
+      cache/
+      cron/
+  skills/           ← 共享（用户无关）
+  defaults/         ← 共享
+  mcp.json          ← 共享（MCP 配置和运行环境相关）
+```
+
+**实施步骤：**
+1. 新建 `src/shared/lib/user-scoped-paths.ts`，根据当前登录 user.id 动态解析出各数据路径
+2. `database.ts` 的 `getSQLiteDatabase()` 改为按 user.id 懒加载连接；切换用户时先 close 旧连接
+3. session 文件层（`~/.sage/sessions/*.json` 的读写）全部走用户作用域路径
+4. AuthProvider 在 `SIGNED_IN` 事件时触发一次"数据路径切换"
+5. **一次性迁移**：首次升级后若发现 `~/.sage/sage.db` 存在（历史数据），把它移到当前登录用户的目录。写迁移标记避免重复。
+6. **登出时**：不清除本地数据（用户再登录回来要能继续用），只把数据路径置空（切回 login 页）
+
+**验收：**
+- [ ] 用户 A 登录创建会话 → 登出 → 用户 B 登录 → 看不到 A 的任何会话
+- [ ] B 创建会话 → 登出 → A 重新登录 → 看到自己的会话
+- [ ] 现有用户升级后数据正常迁移到 `users/{自己的 uid}/`，会话不丢
+- [ ] `~/.sage/skills/` 和 `~/.sage/defaults/` 两个用户共用同一份
+
+**成本：** 1-2 天
+
+---
+
+#### M2 — App 内手动检查 / 下载更新（P0）
+
+**状态：** 📋 待实现
+
+**需求：** 设置 > 关于 > "检查更新"按钮，点击后若有新版则下载、校验签名、安装、重启。
+
+**方案：** `tauri-plugin-updater` 官方插件 + GitHub Releases 托管 manifest
+
+**实施步骤：**
+1. Rust 端：添加 `tauri-plugin-updater` 依赖，`capabilities/default.json` 加权限
+2. 生成 updater 的 Ed25519 签名密钥对，公钥写入 `tauri.conf.json`，私钥保管（GitHub Secrets）
+3. `tauri.conf.json` 的 `plugins.updater.endpoints` 指向 GitHub Releases 的 `latest.json`
+4. AboutSettings.tsx 添加"检查更新"按钮 + 状态（检查中 / 已是最新 / 发现新版 v1.0.1 / 下载中 x%）
+5. 下载完成后弹确认 → `update.install()` → app 自动重启
+6. 失败场景：网络错误、签名验证失败、磁盘写入失败全部要有用户可见反馈
+
+**验收：**
+- [ ] 当前版本 v1.0.0，发布 v1.0.1 后点"检查更新"能发现
+- [ ] 下载进度可见、签名校验通过、安装成功、自动重启
+- [ ] 签名错误的 manifest 会被拒绝（安全验证）
+- [ ] 断网时按钮显示"检查失败"而不是卡住
+
+**成本：** 1 天（含首次密钥配置）
+
+---
+
+#### M3 — 启动时自动检查更新 + 内推送 UI（P0）
+
+**状态：** 📋 待实现
+
+**需求：** 用户打开 Sage 时后台自动检查，若有新版则顶部显示 banner："v1.0.1 已发布，点击更新"。不打扰正在使用，用户自主决定。
+
+**方案：** 复用 M2 的 updater 插件。app 启动时 fire-and-forget 调 `check()`，返回新版本信息时渲染一个顶部固定 banner。
+
+**实施步骤：**
+1. 新建 `UpdateBannerProvider` 或类似机制：app 启动后延迟 3s 调 `check()`（避免阻塞首屏）
+2. 发现新版 → 存入 Context / Zustand store
+3. 顶部 banner 组件：显示版本号、更新日志摘要（取自 Release body 前 100 字）、"稍后"和"立即更新"按钮
+4. 用户选择"稍后"→ 本地标记该版本号 dismissed，本次 app 生命周期不再提示
+5. 可选：定时每 6 小时后台再 check 一次（内测期用户可能开一整天）
+
+**验收：**
+- [ ] 启动 Sage 时 3 秒后 banner 滑入
+- [ ] 点击"立即更新"走 M2 的流程
+- [ ] 点击"稍后"→ banner 消失，关闭重开后如果版本没变不再弹
+- [ ] 网络异常时 banner 不显示（不打扰）
+
+**成本：** 0.5 天
+
+---
+
+#### M4 — Dev / Prod Supabase 环境分离（P0）
+
+**状态：** 📋 待实现
+
+**问题：** 当前 `SUPABASE_URL` 硬编码到 `supabase.ts`。开发构建和 release 构建用同一个数据库，一旦内测启动，我们本地 debug 任何改动都会影响真实用户数据。
+
+**方案：**
+1. Supabase 再建一个 project（dev 环境），migration 同步推一遍
+2. 两套 OAuth 配置（GitHub / Google 的 redirect URL 分别指向两个 supabase URL）
+3. Vite define / 环境变量切换：`import.meta.env.DEV` 走 dev，release 走 prod
+4. `.env.local` / `.env.production` 分别存两组 URL + anon key（anon key 不敏感，可以进仓库）
+
+**实施步骤：**
+1. Supabase Dashboard 新建 `sage-dev` project
+2. `supabase link --project-ref <dev-ref>` + `supabase db push` 同步 schema
+3. 分别配好两个 project 的 OAuth（GitHub + Google），两套 redirect URL
+4. 代码里用 `import.meta.env.VITE_SUPABASE_URL` 读取，`.env.development` / `.env.production` 各自赋值
+5. 打 release 时确认读到 prod URL（可在 About 面板的内部版本信息里打印当前环境）
+
+**验收：**
+- [ ] `pnpm tauri dev` 启动 → 操作走 dev Supabase（可在 dashboard 看到数据）
+- [ ] `pnpm tauri build` 出的 DMG → 走 prod Supabase
+- [ ] 用 release DMG 登录不会污染 dev 数据
+- [ ] 反之亦然
+
+**成本：** 0.5 天
+
+---
+
+### 📋 NICE-TO-HAVE（内测启动后第一周补）
+
+#### N1 — 账号注销入口 + 数据导出
+
+**状态：** 📋 待实现
+
+**需求：** 用户在设置 > 账号里能"注销账号"。前置：提示"这将永久删除你的所有云端数据，建议先导出"，附数据导出按钮。
+
+**注销：** edge function 级联删除 profiles + sessions + user_settings + error_logs（RLS 会自动限定 user_id），再清本地用户目录 + signOut。
+**导出：** 打包当前用户的云端 + 本地数据为 JSON zip，用户可以下载保存。
+
+**成本：** 1 天
+
+#### N2 — 启动加载 UX 优化
+
+**状态：** 📋 待实现
+
+**问题：** 当前 AuthGuard 的"转圈"只有一个 spinner，没有文案。3 秒超时兜底虽已处理，但正常启动 1-2 秒的等待体验也不够好。
+**方案：** 加 "正在连接..." / Logo 动画 / 启动阶段提示。另外评估启动时序——能否并行 initializeSettings 和 getSession。
+
+**成本：** 0.5 天
+
+#### N3 — 基础隐私政策与 TOS 占位页
+
+**状态：** 📋 待实现
+
+登录页底部有"同意服务条款和隐私政策"的文字但没链接。内测期至少要有 notion / 简单静态页承载内容，不然内测用户问起会尴尬。
+
+**成本：** 半天（内容撰写占大头，技术是一个 webview 跳转）
+
+---
+
+### 🧊 LATER（等内测反馈再评估）
+
+- 同步状态 UI 重构（迁移到头像角标 + 遮罩）—— 详见下方 P1 条目
+- 跨设备看会话列表（只元数据不加载内容）
+- 跨设备消息体同步（加密 blob）
+- 后台排查面板（内测期直接 Supabase Dashboard 看表即可）
+- 多窗口 / 多实例同步验证
+
+---
+
+### ⚡ L1 — 打包体积优化：按需下载 coding 工具
+
+**状态：** 📋 待实现（P2）
+
+**问题：** 当前 Sage.app DMG 约 **270MB**，主要体积来自：
+- `sage-api` sidecar：~60MB（Node 二进制 + 应用代码）
+- 内置 `claude` / `codex` 二进制：各 ~30KB（只是 launcher，实际也小）
+- **真正的大头是 skills 资源目录**（Python runtime + 依赖）
+
+但绝大多数用户首次启动不会立刻使用所有 skills。这让下载和首次安装体验很慢。
+
+**方案：**
+1. **默认包只含必须资源**：Tauri bundle 只保留核心 Sage app + API sidecar + defaults（AGENTS.md、SOUL.md、skills-config.json）
+2. **Skills 按需下载**：用户首次需要某个 skill 时，app 提示"该功能需要下载运行环境（~XX MB），是否继续？"，用户点确认后从 CDN 拉取到 `~/.sage/skills/{skill-name}/`
+3. **coding 工具（claude / codex 等外部 CLI）**：同样按需。当前 bundle 里的 launcher 改为"未安装时提示用户 Settings > 工具里下载"
+4. **Skills 清单（manifest）**：托管一个 `skills-manifest.json`（体积、依赖、下载 URL、版本），Settings 面板提供勾选 UI
+
+**收益：**
+- DMG 体积可降到 **50~80MB**，首次下载从 30 秒缩到 5 秒
+- 安装后磁盘占用减少（未使用的 skill 不占空间）
+- 更新体积也更小（只传 app 不传 skills）
+
+**实施步骤：**
+1. 新建 `src-api/resources-manifest.json` 描述各 skill 的元数据 + 下载地址
+2. Tauri bundle 配置移除 `resources/skills/**`、`resources/coding-tools/**`（或改为极简）
+3. 前端 Settings 新增"技能 / 工具管理"面板：列表展示可用 skills，勾选即下载
+4. API sidecar 增加 skill 不存在时的降级：返回明确的 "skill_not_installed" 错误码，前端提示用户去下载
+5. CDN 选型：GitHub Releases（免费、稳定）还是 Supabase Storage（同数据平台）—— 待评估
+
+**验收：**
+- [ ] 新 DMG 体积 < 100MB
+- [ ] 首次打开 Sage 所有 UI 正常（不依赖 skill）
+- [ ] 尝试使用任一 skill → 提示下载
+- [ ] 下载进度可见、校验后可用
+- [ ] 设置面板可查看已安装 / 可安装 skills，支持删除释放空间
+
+**成本：** 2-3 天（含 CDN 方案选型）
+
+---
+
+## 其他 P0 ~ P3 条目
+
+### P0 — 云端数据同步
+
+**状态：** ✅ Phase 1-5 主功能完成，跨设备 Realtime 待第二台设备验收
+
+**文档：** [`Sage_云端同步设计.md`](./Sage_云端同步设计.md)
+
+**背景：** Supabase 已创建 4 张表（`profiles`、`sessions`、`user_settings`、`error_logs`）并启用 RLS，OAuth 流程跑通。前端同步逻辑分阶段落地中。
+
+**分阶段：**
+
+| Phase | 内容 | 状态 | 完成时间 |
+|-------|------|------|---------|
+| Phase 1 | Profile 统一（sidebar 从 `profiles` 表读写，替代直读 `user_metadata`） | ✅ 完成 | 2026-04-21 |
+| Phase 2 | Settings 云备份（主题、语言、enabledSkills 等非敏感偏好） | ✅ 完成 | 2026-04-21 |
+| Phase 3 | Session 元数据同步（最小闭环，元数据 only 单向上云） | ✅ 完成 | 2026-04-21 |
+| Phase 4 | Error Logs 上报（全局错误 + React Error Boundary + 反馈上云 + 排查上下文） | ✅ 完成 | 2026-04-22 |
+| Phase 5 | Sync 状态 UI + Realtime 订阅 | ✅ 完成（单机验收） | 2026-04-22 |
+
+**Phase 1 完成项：**
+- 新增 `src/shared/sync/` 模块（`profile-sync.ts` + `profile-provider.tsx`）
+- Sidebar + AccountSettings 改为通过 `useDisplayIdentity` / `useProfile` 读写云端 `public.profiles`
+- Vite 暴露 `__APP_VERSION__`，登录时自动上报 `app_version` / `platform`
+- localStorage 按 `user.id` 缓存 profile，重启/重登时秒显避免闪烁
+- 验证通过：修改昵称/头像生效、退出重登保留、跨设备同步、无闪烁
+- 清理了"未登录 fallback"死代码（产品设计上必须登录）
+
+**Phase 2 完成项：**
+- 新增 `settings-sync.ts`（白名单 + fetch/push/merge/diff 工具）+ `settings-sync-provider.tsx`
+- `saveSettings` 新增 `subscribeSettingsSaved` 观察者机制，云同步模块不依赖 React providers
+- 登录时 hydrate + debounced 1s push，去重避免无意义写入
+- 白名单 16 个字段（主题、语言、AI/Sandbox/Agent 选择、对话上限、能力开关）
+- 验证通过：主题/语言/模型选择跨设备同步，API Key 等敏感字段确认不上云
+
+**Phase 3 完成项：**
+- 新增 `session-dirty-queue.ts`（零依赖 dirty 队列 kernel）+ `session-sync.ts`（payload 构造 + CRUD）+ `session-sync-provider.tsx`（React 编排）
+- `database.ts` 关键出口（createSession / updateSessionTaskCount / createMessage / updateTask / deleteTask / createFile / deleteFile）插入 markSessionDirty hooks
+- 登录后自动 backfill：扫描本地所有 session id 触发一次全量 upsert
+- 500ms debounce + 同一 tick 合并，upsert/delete 互斥去重
+- preview 语义 = 用户最后一问（user 类型消息最新一条，极端情况回退到 session.prompt）
+- 本期最小闭环：只做单向上云，不把云端独有 session merge 到本地（留给将来消息体同步一起做）
+- 验证通过：新建/追问/删除会话在 Supabase 实时反映，preview/message_count/has_artifacts 字段语义正确
+
+**Phase 4 完成项：**
+- 新增 `error-sync.ts`（reportError + 离线队列 + env 探测）+ `error-boundary.tsx`（React 错误边界）
+- main.tsx 挂载 ErrorBoundary + 注册 window.onerror / onunhandledrejection + 启动时 flushErrorQueue
+- TaskDetail 反馈提交同步写 Supabase `error_logs`，本地 JSONL 保留做备份
+- 反馈排查上下文：`recent_user_messages` / `recent_agent_replies` / `ai_config` / `last_system_subtype` / `ui_message_count` 默认携带
+- 可选 checkbox "附上完整对话帮助排查"：勾选后 `context.full_transcript` 包含整个 task 的 messages，tool_output 截 2000 字避免 JSONB 膨胀
+- 验证通过：反馈记录在 Supabase 正确落盘，user_id 匹配；排查信息充分足以定位"用户抱怨"背后的真实工程问题
+
+**Phase 5 完成项：**
+- 新增 `sync-status.ts`（全局状态 store + `useSyncStatus()` hook）+ `sync-status-indicator.tsx`（侧栏底部指示器）
+- Profile / Settings / Sessions / Error 四条同步链路全部接入状态上报（markSyncing / markOk / markFailed）
+- Profile + Settings 订阅 Supabase Realtime，其他设备的变更通过 `postgres_changes` 推送，自动合并到本地
+- **底层 sync 函数语义修正**：原本"失败返回 null"改为"失败抛出 Error"，让上层能准确区分"成功但云端无记录" vs "失败"。解决了断网时 markOk 误报的 bug。
+- `sync-status` 引入 retry 注册机制 + `retryFailedChannels({force})` + 指数退避（15s → 30s → 60s → 120s），定时 5s 轮询兜底 `window.online` 事件（macOS WKWebView 常不 emit），避免长期断网时反复闪烁同步中→失败
+- 失败态指示器可点击触发 force retry
+- `AvatarImage` 组件：`<img>` onError 回退 User icon；监听 sync-status failed→ok/syncing 跃迁时 bust URL 参数强制重载（修复断网启动时头像问号残留、网络恢复不自动重载）
+- `AuthProvider` 断网启动兜底：3s 超时从 localStorage 读 `sb-*-auth-token` 决定 authenticated，真正 `getSession` 完成后校正。避免 token 临近过期 + 断网时 supabase-js 的 `_refreshAccessToken` 卡 30s 造成的"启动转圈"。
+- 单机验收全部通过。跨设备 Realtime 验收项见下方遗留。
+
+**跨设备 Realtime 待验收（缺第二台设备）：**
+
+- [ ] 两台 Mac 同账号登录 Sage
+- [ ] 设备 A 改昵称 → 设备 B sidebar 在 1-2 秒内自动更新（无需重启）
+- [ ] 设备 A 改头像 → 设备 B 同步
+- [ ] 设备 A 切换主题（浅 ↔ 深）→ 设备 B 自动应用
+- [ ] 设备 A 切换语言 → 设备 B 自动切换
+- [ ] 设备 A 改默认 AI provider / model → 设备 B 设置面板选择同步
+- [ ] 多台设备同时改同一字段 → 最后写入者胜（LWW），没有死循环
+- [ ] 断网设备恢复网络后自动拉取缺失的变更
+
+---
+
+### P1 — 同步状态 UI 重构：迁移到头像角标 + 遮罩
+
+**状态：** 📋 待实现（设计已确定 2026-04-22）
+
+**背景：** 当前 `SyncStatusIndicator` 以独立一行文字 + 圆点的形式挂在 sidebar 底部（展开/折叠两种态），桌面端视觉干扰偏强。用户反馈"同步状态不需要在用户头像上方明显展示"。目标：**默认态极简、异常态强介入**，符合 macOS native 产品风格。
+
+**设计：**
+
+**1. 正常态（overall ∈ {ok, idle}）**
+- 头像**左上角**贴一个小圆点（size-2，类 macOS 通知角标）
+  - `ok` → 绿色静止点
+  - `idle` → 不显示圆点（app 刚启动瞬间，用户感知不到）
+- 头像本身无任何装饰，点击正常展开下拉菜单（Settings / 退出登录）
+
+**2. 同步中（overall === 'syncing'）**
+- **不显示圆点**（几百毫秒的状态切换反而闪动干扰，不展示更平静）
+- 头像行为保持不变
+
+**3. 失败态（overall === 'failed'）**
+- 头像外层蒙一层**半透明遮罩**（建议 `bg-background/60` + 轻微 blur，或纯黑 40% alpha）
+- 遮罩中央放一个 **`WifiOff` icon**（lucide-react），尺寸约 `size-4`
+- **整个头像区域变成重试按钮**：点击立即触发 `retryFailedChannels({ force: true })`（不再打开下拉菜单）
+- 点击后遮罩不消失，icon 换成 `Loader2` 旋转动画（直到 overall 变 ok）
+- 重试成功 → 遮罩淡出 → 恢复绿色角标 + 菜单交互
+- 重试失败 → 保持遮罩 + `WifiOff`，等用户下次点击或定时轮询兜底
+
+**4. 过渡态：已登录但 user 为 null（断网 3s fallback 那一刻）**
+- 头像本身显示 `User` icon 占位（`AvatarImage` 已实现）
+- 不叠加 failed 遮罩（占位 icon 再盖一层噪音太大）
+- 只在左上角显示红/灰角标
+
+**5. 完全移除底部状态栏**
+- 删除 sidebar 展开态和折叠态的 `<SyncStatusIndicator />` 挂点
+- `sync-status-indicator.tsx` 文件废弃，可删除
+- 详细信息（上次同步时间、哪条链路失败）通过头像 **hover tooltip** 展示
+
+**实施步骤：**
+
+1. 新建 `src/components/layout/avatar-status-badge.tsx`：接收 `<AvatarImage>` 作为 children，根据 `useSyncStatus()` 决定叠加角标 / 遮罩
+2. `left-sidebar.tsx`：
+   - 用 `<AvatarStatusBadge>` 包裹 4 处 `<AvatarImage>`
+   - 失败态时点击头像应调 retry 而非打开 DropdownMenu —— 需把 DropdownMenuTrigger 的 `onClick` 在 failed 态下拦截
+   - 移除 `<SyncStatusIndicator />` 两处挂点
+3. 删除 `src/components/layout/sync-status-indicator.tsx`
+
+**edge cases：**
+- DropdownMenu 触发器在失败态被拦截时，radix 的 asChild 行为需要测试，可能要改用 `onPointerDown` 或 event.preventDefault
+- 折叠态头像按钮和失败态重试按钮的视觉尺寸要一致（避免按钮抖动）
+- 头像左上角角标定位：`absolute -top-0.5 -left-0.5`，加 `ring-2 ring-sidebar`（和 sidebar 背景色同色的描边让点从头像上"浮起来"）
+
+**验收点：**
+- [ ] 正常联网 → 头像左上角绿点，点击正常展开菜单
+- [ ] 切换主题 / 改昵称等 syncing 瞬间 → 角标不变（保持绿色，不闪烁）
+- [ ] 断网 → 头像遮罩 + `WifiOff` icon
+- [ ] 断网态点击头像 → icon 变 Loader 旋转（不打开菜单）
+- [ ] 恢复网络 → 遮罩淡出，恢复绿点
+- [ ] 底部不再有同步状态栏
+- [ ] 头像 hover 显示 tooltip：状态 + 上次同步时间 + 失败时哪条链路（可选）
+- [ ] 折叠态和展开态行为一致
+
+---
+
+**遗留 / 合并到后续阶段：**
+
+- [ ] **message_count 数字偏大**（P2）：当前值约等于用户实际轮次 × 3~4。根因在 `useAgent.ts` 流式输出时同时写入中间态和终态多条 `type: 'text'` 消息，所以本地 `messages` 表对同一轮 Agent 回复会有多条记录。cloud payload 忠实聚合这个数。**修复方案**：等一次 `useAgent.ts` 写 DB 逻辑重构，把一轮对话收敛为"1 条 user + 1 条 text"。本期同步任务先不动 Agent 层。
+- [ ] **full_transcript 里 text 有 content=null 的条目**（P3）：和上面 message_count 同根——流式 chunk 空消息被落盘。在 `useAgent.ts` 重构时一并清理。
+- [ ] **last_system_subtype 永远是 null**（P3）：UI 层 AgentMessage 在某些路径下丢失了 DB 的 subtype 字段。排查时我们有 full_transcript 就够用，优先级低。
+- [ ] **tool_input 没截断上限**（P3）：当前只截断 tool_output 到 2000 字。如果某天有超长 URL 或大 JSON payload 塞给 MCP 会撑大 JSONB。加一行代码即可解决，集中到下次同步模块优化时做。
+- [ ] **反馈不带时间戳**（P3）：allMessages 是 UI state，不带 created_at。多轮对话间隔（秒 / 小时）看不出来。真正需要时可改为从 DB 重读 messages 表。
+
+**关键原则：**
+- Local-first：所有完整数据在本地，云端只同步元数据/偏好
+- 不上云：API Key、消息体、MCP 配置等敏感或大体量数据
+- LWW 冲突解决 + 离线队列
+
+---
+
+### P2 — OAuth 浏览器回调页优化
+
+**状态：** 📋 待实现
+
+**背景：** 桌面 app 的 OAuth 流程完成后（GitHub / Google），浏览器标签页会停留在 Supabase 的 `/auth/v1/callback` 页面上，用户需要手动关闭。体验上像"还在进行中"。
+
+**问题流程：**
+1. Google/GitHub 认证成功 → 浏览器跳转 `https://<proj>.supabase.co/auth/v1/callback?code=...`
+2. Supabase 服务器 302 → `sage://auth/callback?code=...`
+3. macOS 把 deep link 投给 app，app 完成 `exchangeCodeForSession`
+4. 浏览器那个 tab 已经完成使命但**没人关它**，停留在 Supabase 中转页（空白或很朴素）
+
+**候选方案：**
+- **A（推荐）**：自托管一个极简回调页（如 `https://auth.sage.ai/callback`），显示"登录成功，正在返回 Sage…"，用 `window.location = 'sage://auth/callback?code=...'` 触发 deep link，再 `window.close()` 或让用户手动关闭。需要一个可用域名或 Vercel/Netlify 部署。
+- **B**：用 Supabase Edge Function 托管一个 HTML 响应，逻辑同上，不需要额外域名。
+- **C**：最便宜的方案——接受现状，只在 LoginPage 或文档里提示一下"看到这个页面可以关闭"。
+
+**决策待定**，先记录。
+
+---
 
 ### P1 — OKX 全链路交易集成
 
