@@ -1,26 +1,129 @@
 import { useEffect, useState } from 'react';
 import ImageLogo from '@/assets/logo.png';
 import { useLanguage } from '@/shared/providers/language-provider';
+import { useUpdate } from '@/shared/providers/update-provider';
+import { supabaseMeta } from '@/shared/lib/supabase';
 import { getVersion } from '@tauri-apps/api/app';
 import {
+  CheckCircle,
   Download,
   ExternalLink,
   Github,
   Globe,
+  Loader2,
   MessageSquareWarning,
+  Sparkles,
+  XCircle,
 } from 'lucide-react';
 
 const noop = () => {};
 
+/**
+ * AboutSettings
+ *
+ * M2: "检查更新"按钮 + 状态反馈（checking / up-to-date / available / error）
+ * M4: 底部显示当前 Supabase 环境（dev / prod / other）供排查
+ */
 export function AboutSettings() {
   const { t } = useLanguage();
   const [version, setVersion] = useState('0.0.0');
+  const {
+    status,
+    latestVersion,
+    errorMessage,
+    checkForUpdates,
+    downloadAndInstall,
+  } = useUpdate();
 
   useEffect(() => {
     getVersion()
       .then(setVersion)
       .catch(() => setVersion('0.0.0'));
   }, []);
+
+  // ─── "检查更新"按钮的动态 UI ──────────────────────────────────────────────
+  // 状态 → (Icon, label, onClick, variant)
+  type ButtonVariant = 'primary' | 'neutral' | 'danger';
+  const btn: {
+    icon: React.ReactNode;
+    label: string;
+    onClick: () => void;
+    variant: ButtonVariant;
+    disabled?: boolean;
+  } = (() => {
+    if (status === 'checking') {
+      return {
+        icon: <Loader2 className="size-4 animate-spin" />,
+        label: t.update.checking,
+        onClick: noop,
+        variant: 'neutral',
+        disabled: true,
+      };
+    }
+    if (status === 'downloading' || status === 'ready' || status === 'installing') {
+      return {
+        icon: <Loader2 className="size-4 animate-spin" />,
+        label:
+          status === 'downloading'
+            ? t.update.downloading
+            : status === 'ready'
+              ? t.update.readyToInstall
+              : t.update.installing,
+        onClick: noop,
+        variant: 'neutral',
+        disabled: true,
+      };
+    }
+    if (status === 'available' && latestVersion) {
+      return {
+        icon: <Sparkles className="size-4" />,
+        label: t.update.updateAvailable.replace('{version}', latestVersion),
+        onClick: () => {
+          void downloadAndInstall();
+        },
+        variant: 'primary',
+      };
+    }
+    if (status === 'up-to-date') {
+      return {
+        icon: <CheckCircle className="size-4" />,
+        label: t.update.upToDate,
+        onClick: () => {
+          // 允许再点一次（轮询 re-check，很便宜）
+          void checkForUpdates().catch(() => {});
+        },
+        variant: 'neutral',
+      };
+    }
+    if (status === 'error') {
+      return {
+        icon: <XCircle className="size-4" />,
+        label: t.update.tryAgain,
+        onClick: () => {
+          void checkForUpdates().catch(() => {});
+        },
+        variant: 'danger',
+      };
+    }
+    // idle
+    return {
+      icon: <Download className="size-4" />,
+      label: t.update.checkForUpdates,
+      onClick: () => {
+        void checkForUpdates().catch(() => {});
+      },
+      variant: 'primary',
+    };
+  })();
+
+  const variantClasses: Record<ButtonVariant, string> = {
+    primary:
+      'bg-primary text-primary-foreground hover:bg-primary/90',
+    neutral:
+      'border-border bg-muted text-foreground hover:bg-accent border',
+    danger:
+      'border-destructive/50 bg-destructive/10 text-destructive hover:bg-destructive/20 border',
+  };
 
   return (
     <div className="space-y-6">
@@ -36,13 +139,23 @@ export function AboutSettings() {
           </div>
         </div>
         <button
-          onClick={noop}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+          onClick={btn.onClick}
+          disabled={btn.disabled}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${variantClasses[btn.variant]} ${
+            btn.disabled ? '' : 'cursor-pointer'
+          }`}
         >
-          <Download className="size-4" />
-          {t.settings.downloadNewVersion}
+          {btn.icon}
+          {btn.label}
         </button>
       </div>
+
+      {/* 检查失败时的错误提示 */}
+      {status === 'error' && errorMessage && (
+        <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-lg border p-3 text-xs">
+          {t.update.checkFailed}: {errorMessage}
+        </div>
+      )}
 
       {/* Version & Info */}
       <div className="grid grid-cols-2 gap-4">
@@ -136,10 +249,19 @@ export function AboutSettings() {
         </button>
       </div>
 
-      {/* Based on WorkAny by idoubi */}
-      <div className="border-border border-t pt-4">
+      {/* Based on WorkAny by idoubi + 环境标签（M4） */}
+      <div className="border-border flex items-center justify-between border-t pt-4">
         <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
           Based on WorkAny by idoubi
+        </span>
+        <span className="text-muted-foreground/60 text-xs">
+          {supabaseMeta.env === 'dev'
+            ? t.update.envDev
+            : supabaseMeta.env === 'prod'
+              ? t.update.envProd
+              : t.update.envOther}
+          <span className="mx-1">·</span>
+          {new URL(supabaseMeta.url).hostname}
         </span>
       </div>
     </div>
