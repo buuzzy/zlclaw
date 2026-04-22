@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import ImageLogo from '@/assets/logo.png';
 import type { Task } from '@/shared/db';
 import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
 import { useAuth } from '@/shared/providers/auth-provider';
+import { useLanguage } from '@/shared/providers/language-provider';
+import { useUpdate } from '@/shared/providers/update-provider';
 import { useDisplayIdentity } from '@/shared/sync';
 import {
   Calendar,
@@ -26,9 +27,6 @@ import {
 } from 'lucide-react';
 
 import { SettingsModal } from '@/components/settings';
-import { AvatarImage } from './avatar-image';
-import { SyncStatusIndicator } from './sync-status-indicator';
-import { useUpdate } from '@/shared/providers/update-provider';
 import {
   Dialog,
   DialogContent,
@@ -52,6 +50,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
+import { AvatarImage } from './avatar-image';
+import { AvatarStatusBadge } from './avatar-status-badge';
 import { useSidebar } from './sidebar-context';
 
 interface LeftSidebarProps {
@@ -257,12 +257,12 @@ export function LeftSidebar({
                 <div className="flex size-9 items-center justify-center rounded-xl">
                   <img
                     src={ImageLogo}
-                    alt="Sage"
+                    alt="涨乐金融龙虾"
                     className="text-primary size-9"
                   />
                 </div>
                 <span className="text-sidebar-foreground font-mono text-lg font-medium tracking-wide">
-                  Sage
+                  涨乐金融龙虾
                 </span>
               </div>
               <button
@@ -406,18 +406,22 @@ export function LeftSidebar({
 
             {/* Bottom Section - Avatar with Dropdown */}
             <div className="border-sidebar-border mt-auto shrink-0 border-none p-3">
-              <SyncStatusIndicator />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="hover:bg-sidebar-accent group relative flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 transition-colors duration-200">
-                    <div className="bg-sidebar-accent flex size-9 items-center justify-center overflow-hidden rounded-lg">
-                      <AvatarImage
-                        src={profile.avatar}
-                        alt={profile.nickname}
-                        className="size-full object-cover"
-                        iconClassName="text-sidebar-foreground/70 size-5"
-                      />
-                    </div>
+                    <AvatarStatusBadge
+                      ringClassName="ring-sidebar"
+                      tooltipSide="right"
+                    >
+                      <div className="bg-sidebar-accent flex size-9 items-center justify-center overflow-hidden rounded-lg">
+                        <AvatarImage
+                          src={profile.avatar}
+                          alt={profile.nickname}
+                          className="size-full object-cover"
+                          iconClassName="text-sidebar-foreground/70 size-5"
+                        />
+                      </div>
+                    </AvatarStatusBadge>
                     <div className="min-w-0 flex-1 text-left">
                       <p className="text-sidebar-foreground truncate text-sm font-medium">
                         {profile.nickname || 'Guest User'}
@@ -428,7 +432,7 @@ export function LeftSidebar({
                       // 绝对定位在头像右上角（avatar div 的 top-right）
                       <span
                         aria-label="new update available"
-                        className="absolute top-1.5 left-[38px] size-2 rounded-full bg-red-500 ring-2 ring-sidebar"
+                        className="ring-sidebar absolute top-1.5 left-[38px] size-2 rounded-full bg-red-500 ring-2"
                       />
                     )}
                   </button>
@@ -497,9 +501,9 @@ export function LeftSidebar({
               >
                 {logoHovered ? (
                   // <PanelLeftOpen className="text-sidebar-foreground size-5" />
-                  <img src={ImageLogo} alt="Sage" className="size-9" />
+                  <img src={ImageLogo} alt="涨乐金融龙虾" className="size-9" />
                 ) : (
-                  <img src={ImageLogo} alt="Sage" className="size-9" />
+                  <img src={ImageLogo} alt="涨乐金融龙虾" className="size-9" />
                 )}
               </button>
             </div>
@@ -687,20 +691,25 @@ export function LeftSidebar({
 
             {/* Bottom - User Avatar with Dropdown */}
             <div className="flex shrink-0 flex-col items-center gap-1 px-2 pb-6">
-              <SyncStatusIndicator compact />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="bg-sidebar-accent hover:ring-sidebar-foreground/20 relative flex size-8 cursor-pointer items-center justify-center overflow-hidden rounded-lg transition-all hover:ring-2">
-                    <AvatarImage
-                      src={profile.avatar}
-                      alt={profile.nickname}
-                      className="size-full object-cover"
-                      iconClassName="text-sidebar-foreground/70 size-4"
-                    />
+                    <AvatarStatusBadge
+                      ringClassName="ring-sidebar"
+                      tooltipSide="right"
+                      className="block size-full"
+                    >
+                      <AvatarImage
+                        src={profile.avatar}
+                        alt={profile.nickname}
+                        className="size-full object-cover"
+                        iconClassName="text-sidebar-foreground/70 size-4"
+                      />
+                    </AvatarStatusBadge>
                     {showUpdateDot && (
                       <span
                         aria-label="new update available"
-                        className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red-500 ring-2 ring-sidebar"
+                        className="ring-sidebar absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red-500 ring-2"
                       />
                     )}
                   </button>
