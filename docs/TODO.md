@@ -249,7 +249,7 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 **实施步骤：**
 1. Rust 端：添加 `tauri-plugin-updater` + `tauri-plugin-process` 依赖，`capabilities/default.json` 加权限 ✅
 2. 生成 updater 的 Ed25519 签名密钥对，公钥写入 `tauri.conf.json`，私钥保管于 `.env.tauri-signing`（gitignored）+ 用户 1Password ✅
-3. `tauri.conf.json` 的 `plugins.updater.endpoints` 指向 `https://github.com/buuzzy/HTclaw/releases/latest/download/latest.json` ✅
+3. `tauri.conf.json` 的 `plugins.updater.endpoints` 指向 `https://github.com/buuzzy/zlclaw/releases/latest/download/latest.json` ✅
 4. AboutSettings.tsx 添加"检查更新"按钮 + 状态（checking / up-to-date / available / downloading / ready / installing / error）✅
 5. 下载完成后走 `downloadAndInstall()` + `relaunch()` ✅
 6. 失败场景：网络错误、签名验证失败、磁盘写入失败都显示红色 error 条 ✅
