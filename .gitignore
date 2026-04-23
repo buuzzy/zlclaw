@@ -81,3 +81,6 @@ supabase/.temp/
 # Release artifacts (per-release generated, uploaded to GitHub Releases)
 /latest.json
 
+# Internal docs (PRD / SPEC / TODO / release notes / research) — kept local only
+/docs/
+
