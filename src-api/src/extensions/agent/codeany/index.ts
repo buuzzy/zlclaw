@@ -543,8 +543,14 @@ export class CodeAnyAgent extends BaseAgent {
         if ((message as any).type === 'assistant' && (message as any).message?.content) {
           for (const block of (message as any).message.content) {
             if ('text' in block) {
-              fullResponse += block.text;
-              yield { type: 'text', content: block.text };
+              // planning phase 必须和 run() 一样走 sanitizeText，
+              // 否则 MiniMax 等 thinking 模型的 <think>...</think> 原文会直接
+              // 漏到 UI / transcript 里（已见于线上 minimax 反馈日志）。
+              const sanitizedText = this.sanitizeText(block.text);
+              fullResponse += block.text; // fullResponse 给 parser 用原文
+              if (sanitizedText) {
+                yield { type: 'text', content: sanitizedText };
+              }
             }
           }
         }
@@ -563,7 +569,16 @@ export class CodeAnyAgent extends BaseAgent {
           this.storePlan(plan);
           yield { type: 'plan', plan };
         } else {
-          yield { type: 'direct_answer', content: fullResponse.trim() };
+          // Fallback: 当 parser 识别不出任何结构化产物时，
+          // 上面的循环已经把 block.text 作为 text 消息流式 yield 给 UI 了，
+          // 这里如果再把 fullResponse 打包成 direct_answer，UI 会把同样内容
+          // 再追加一次（direct_answer 被渲染为 text）— 造成 transcript 里的
+          // "block 4 = block 1+2+3 合并" 重复问题（见 minimax 反馈日志）。
+          // 仅 yield done，让已经流式输出的 text 自己闭合。
+          logger.warn(
+            `[CodeAny ${session.id}] Planning produced unstructured response; ` +
+            `streamed as text already, skipping duplicate direct_answer fallback.`
+          );
         }
       }
     } catch (error) {
