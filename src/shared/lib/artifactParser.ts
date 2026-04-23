@@ -3,6 +3,7 @@ import type { Artifact, ArtifactType } from '../types/artifact';
 const VALID_TYPES: Set<string> = new Set([
   'quote-card',
   'kline-chart',
+  'intraday-chart',
   'news-list',
   'finance-breakfast',
   'ai-hot-news',

@@ -1,6 +1,7 @@
 export type ArtifactType =
   | 'quote-card'
   | 'kline-chart'
+  | 'intraday-chart'
   | 'news-list'
   | 'finance-breakfast'
   | 'ai-hot-news'
@@ -51,6 +52,42 @@ export interface KLineChartData {
   name: string;
   ktype: 'day' | 'week' | 'month';
   data: KLineDataPoint[];
+}
+
+/**
+ * 分时图单个时间点数据。
+ * 对应 A 股实时分时（tick-by-minute）行情。
+ */
+export interface IntradayPoint {
+  /** 时间，格式 'HH:MM'，如 '09:30'、'14:37'（24 小时制） */
+  time: string;
+  /** 成交价（元） */
+  price: number;
+  /** 累计均价（开盘至当前时刻的 VWAP）*/
+  avgPrice: number;
+  /** 该分钟成交量（股）*/
+  volume: number;
+  /** 该分钟成交额（元），可选 */
+  turnover?: number;
+}
+
+/**
+ * 分时图 artifact 数据。仅支持 A 股（sh/sz），市场在组件内按惯例处理：
+ *   - 交易时段 09:30-11:30 + 13:00-15:00（合计 240 分钟）
+ *   - 11:30-13:00 午间停盘，组件内部灰化展示
+ *   - 配色沿用 TradingView KLine 惯例（绿涨红跌）
+ */
+export interface IntradayChartData {
+  /** 股票代码，如 '600519.SH' */
+  code: string;
+  /** 股票名称 */
+  name: string;
+  /** 昨收价，作为涨跌参考线（红绿分色的基准） */
+  prevClose: number;
+  /** 交易日期（YYYY-MM-DD），用于 tooltip 展示 */
+  tradeDate?: string;
+  /** 按时间升序排列的 tick 数据 */
+  points: IntradayPoint[];
 }
 
 export interface NewsItem {
@@ -221,6 +258,7 @@ export interface Artifact {
   data:
     | QuoteCardData
     | KLineChartData
+    | IntradayChartData
     | NewsListData
     | FinanceBreakfastData
     | AIHotNewsData

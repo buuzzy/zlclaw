@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { KLineChartData, KLineDataPoint } from '@/shared/types/artifact';
 import {
   CandlestickSeries,
@@ -8,6 +8,17 @@ import {
 } from 'lightweight-charts';
 
 import './KLineChart.css';
+
+/**
+ * lightweight-charts 只支持 yyyy-mm-dd 字符串 / UNIX timestamp（秒）/ BusinessDay
+ * 非法格式（如分时数据的 "09:30"）会 throw 并炸整个路由。
+ * 这里做格式白名单过滤，防御上游 agent 误把分时数据塞进 K 线 artifact。
+ */
+function isValidKLineTime(t: unknown): boolean {
+  if (typeof t === 'number' && Number.isFinite(t)) return true; // UNIX ts
+  if (typeof t === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t)) return true;
+  return false;
+}
 
 function calculateMA(
   points: KLineDataPoint[],
@@ -42,8 +53,15 @@ function KLineChart({ data }: KLineChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
+  // 防御：过滤掉 time 字段不合法的数据点（避免 lightweight-charts 抛错炸整页）
+  const validData = useMemo(
+    () => (data.data ?? []).filter((d) => isValidKLineTime(d.time)),
+    [data.data]
+  );
+  const rejectedCount = (data.data?.length ?? 0) - validData.length;
+
   useEffect(() => {
-    if (!containerRef.current || data.data.length === 0) return;
+    if (!containerRef.current || validData.length === 0) return;
 
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
@@ -71,7 +89,7 @@ function KLineChart({ data }: KLineChartProps) {
     });
 
     candleSeries.setData(
-      data.data.map((d) => ({
+      validData.map((d) => ({
         time: d.time,
         open: d.open,
         high: d.high,
@@ -81,7 +99,7 @@ function KLineChart({ data }: KLineChartProps) {
     );
 
     for (const ma of MA_CONFIG) {
-      const maData = calculateMA(data.data, ma.period);
+      const maData = calculateMA(validData, ma.period);
       if (maData.length > 0) {
         const series = chart.addSeries(LineSeries, {
           color: ma.color,
@@ -107,7 +125,7 @@ function KLineChart({ data }: KLineChartProps) {
       chart.remove();
       chartRef.current = null;
     };
-  }, [data]);
+  }, [validData]);
 
   return (
     <div className="kline-chart">
@@ -136,7 +154,22 @@ function KLineChart({ data }: KLineChartProps) {
         ))}
       </div>
 
-      <div className="kline-container" ref={containerRef} />
+      {validData.length === 0 ? (
+        <div
+          style={{
+            padding: '40px 16px',
+            textAlign: 'center',
+            color: 'var(--text-muted)',
+            fontSize: 13,
+          }}
+        >
+          {rejectedCount > 0
+            ? '数据格式不符合日/周/月 K 线要求（time 必须是 yyyy-mm-dd）'
+            : '暂无 K 线数据'}
+        </div>
+      ) : (
+        <div className="kline-container" ref={containerRef} />
+      )}
     </div>
   );
 }
