@@ -296,7 +296,7 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 
 #### M4 — Dev / Prod Supabase 环境分离（P0）
 
-**状态：** 🟡 M4a 完成，M4b 待手动（2026-04-22）
+**状态：** ✅ M4a 完成（2026-04-22）；M4b 已取消（2026-04-23 决策）
 
 **问题：** 当前 `SUPABASE_URL` 硬编码到 `supabase.ts`。开发构建和 release 构建用同一个数据库，一旦内测启动，我们本地 debug 任何改动都会影响真实用户数据。
 
@@ -309,33 +309,86 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 - AboutSettings 底部显示当前环境标签：`Development · xxxxxxx.supabase.co`
 - `scripts/build-signed.sh` 打包前会 source `.env.production`
 
-**M4b — 手动配置（📋 待做，在首次发包前）**
-1. ✅ Supabase dashboard 建 `sage-dev` project（用户 2026-04-22 已建，password `nILtMNNsO2i8RoyM`）
-2. 🟡 把 schema 同步到 dev project：`supabase link --project-ref <dev-ref>` + `SUPABASE_DB_PASSWORD=... supabase db push`（2026-04-22 已对 sage-dev 做过一次）
-3. 🟡 Database > Publications 打开 `profiles` + `user_settings` 的 Realtime（勾选对应 table 的 Source toggle）
-4. 🟡 Authentication > URL Configuration 加 `sage://auth/callback` 到 Redirect URLs
-5. 🟡 GitHub OAuth App + Google OAuth Client 分别指向 dev project 的 callback URL
-6. 🟡 把 dev project 的 URL + anon key 填进 `.env.development`
+**M4b — sage-dev 双 project 方案（⛔ 已取消 2026-04-23）**
 
-**验收：**
-- [ ] `pnpm tauri dev` 启动 → AboutSettings 底部显示 "Development · <dev-host>" ← 等 M4b 完成后实机
-- [ ] `pnpm tauri:build:signed:mac-arm` 出的 DMG → AboutSettings 显示 "Production · wymqgwtagpsjuonsclye.supabase.co"
-- [ ] 用 release DMG 登录不会污染 dev 数据（两个 project 完全独立）
+**取消原因：**
+1. 内测范围小（nakocai 认识的同事），用户数据 schema 在内测期不会有大变动
+2. 维护两个 project + 两套 OAuth 配置的成本 > 风险收益
+3. dev 模式临时调试时，nakocai 会避免触碰生产数据表（通过手工约定，而非架构隔离）
 
-**成本：** M4a 实际 ~0.5 小时，M4b 估计 ~20-30 分钟（你手动）
+**保留的资产：**
+- M4a 的环境变量读取代码保留不动，`.env.development` 文件也保留 —— 未来若决定开 dev project 或走 L3（Supabase local Docker）可直接启用
+- sage-dev project 本身（`pskweazwczdgtohkdmee`）暂不主动删除，保留作为未来备选
+
+**如果未来要恢复 M4b 的步骤（存档）：**
+1. ✅ Supabase dashboard 建 `sage-dev` project（2026-04-22 已建）
+2. schema 同步到 dev project：`supabase link --project-ref <dev-ref>` + `SUPABASE_DB_PASSWORD=... supabase db push`
+3. Database > Publications 打开 `profiles` + `user_settings` 的 Realtime
+4. Authentication > URL Configuration 加 `sage://auth/callback` 到 Redirect URLs
+5. GitHub OAuth App + Google OAuth Client 分别指向 dev project 的 callback URL
+6. 把 dev project 的 URL + anon key 填进 `.env.development`
+
+**验收（M4a）：**
+- [x] `pnpm tauri:build:signed:mac-arm` 出的 DMG → AboutSettings 显示 "Production · wymqgwtagpsjuonsclye.supabase.co"（v1.0.1 实机已确认）
+
+**成本：** M4a 实际 ~0.5 小时
 
 ---
 
 ### 📋 NICE-TO-HAVE（内测启动后第一周补）
 
-#### N1 — 账号注销入口 + 数据导出
+#### N1 — 数据导入 / 导出 / 账号注销
 
-**状态：** 📋 待实现
+拆成三条独立跟踪，避免打包交付。
+
+##### N1a — 数据导出
+
+**状态：** 🟡 基础能用，待补完整（2026-04-23 check）
+
+**现状（`src/components/settings/tabs/DataSettings.tsx:handleExport`）：**
+- Tauri 原生 save dialog → 写 `sage-backup-YYYY-MM-DD.json`
+- JSON 结构：`version, exportedAt, sessions[], tasks[], messages[], files[], settings`
+- M1 隔离后数据自动限定到当前绑定 user（走 user-scoped DB 连接）
+- 内测期用户留底会话历史 / 给开发者发 backup 排查问题，够用
+
+**Known issues（后续补齐）：**
+- [ ] **不含 session attachment 物理文件**：`files[]` 只是 DB 元信息（filename / task_id / size），真实 attachment 在 `~/.sage/users/{uid}/sessions/{sid}/attachments/` 目录下。导出 JSON 不等于完整用户状态。建议方案：改为 zip 格式，JSON + attachments/ 目录一起打包。
+- [ ] **不含云端数据快照**：error_logs / user_settings 云端副本未导出。内测期排查靠 Supabase dashboard 直接看表，这一条优先级最低。
+- [ ] **文件名品牌未更新**：文件名仍是 `sage-backup-*.json`，考虑是否改为 `htclaw-backup-*.json` —— 但 JSON schema 里 `version` 字段暴露了历史，改名意义不大，暂缓。
+
+**成本：** zip 格式 + attachment 打包 ~0.5 天
+
+##### N1b — 数据导入
+
+**状态：** 🟡 UI 存在但半残，**内测版已禁用**（2026-04-23）
+
+**问题（`handleImport`，L153-155 自带 TODO 注释）：**
+```ts
+// Note: Full import would require database insert operations
+// For now, we just import settings
+// TODO: Implement full data import with database operations
+```
+
+导入只恢复 `settings`，sessions / tasks / messages / files **全部丢弃**，但 UI 仍显示"导入成功"，会骗用户。
+
+**临时处理（已完成 2026-04-23）：**
+- 导入按钮 `disabled`，label 改为"即将支持 / Coming soon"
+- 描述文案加 "（内测版尚未启用）"/"(disabled in beta)"
+- 避免内测用户误操作后发现会话全没了
+
+**正式版补齐方案：** 恢复所有表行到 user-scoped DB，配合 zip 解包恢复 attachments 文件，加导入前 dry-run 预览 + 确认对话框。
+
+**成本：** ~0.5 天
+
+##### N1c — 账号注销
+
+**状态：** 📋 正式版实现
 
 **需求：** 用户在设置 > 账号里能"注销账号"。前置：提示"这将永久删除你的所有云端数据，建议先导出"，附数据导出按钮。
 
 **注销：** edge function 级联删除 profiles + sessions + user_settings + error_logs（RLS 会自动限定 user_id），再清本地用户目录 + signOut。
-**导出：** 打包当前用户的云端 + 本地数据为 JSON zip，用户可以下载保存。
+
+**内测期策略：** 内测用户都是认识的同事，结束后由 nakocai 在 Supabase dashboard 手动清数据，无需产品内路径。
 
 **成本：** 1 天
 
@@ -350,9 +403,11 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 
 #### N3 — 基础隐私政策与 TOS 占位页
 
-**状态：** 📋 待实现
+**状态：** 📋 正式版再做（内测跳过）
 
-登录页底部有"同意服务条款和隐私政策"的文字但没链接。内测期至少要有 notion / 简单静态页承载内容，不然内测用户问起会尴尬。
+**决策（2026-04-23）：** 内测用户都是认识的同事，不涉及第三方披露需求，暂不做。登录页底部的"同意服务条款和隐私政策"文字先保持现状（死链但用户不会点）。上正式版时一并补。
+
+**正式版方案：** notion / 简单静态页承载内容 + LoginPage 链接跳出（系统浏览器打开）。
 
 **成本：** 半天（内容撰写占大头，技术是一个 webview 跳转）
 
@@ -410,21 +465,30 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 
 ### ⚡ L2 — Supabase Level 2 → Level 3 迁移（工程基建）
 
-**状态：** 🔴 **重要：当前 .env.development 已暂时指向 prod**，触发以下任一条件必须立刻切回 dev / 搬到 L3：
-- 发出第一个 DMG 给任何除你之外的人
-- 邀请团队成员加入开发
-- 开始做破坏性 schema 改动（ALTER TABLE 删列、DROP 索引等）
+**状态：** 🟡 内测期主动停留在 L1.5（2026-04-23 决策）
 
-**当前决策的代价：** 本地 dev 模式产生的测试数据会进 sage project（prod）。建议测试会话在 prompt 里带标签 `[DEV-TEST]`，将来用 `DELETE FROM sessions WHERE preview LIKE '%[DEV-TEST%'` 清理。
+**当前实际架构：** dev 和 prod 共用同一个 sage project。M4b 双 project 方案已取消（参见 M4 决策），用手工约定 + 小范围内测的方式规避数据污染风险。
 
-**sage-dev 已创建且 schema 已推送**（project ref: `pskweazwczdgtohkdmee`），credentials 保存在 `.env.development` 注释里，切换时把注释里的值启用即可。差 OAuth 配置未做。
+**约束（破坏时必须立即处理）：**
+- 本地 dev 模式调试时，避免执行破坏性 SQL（`DELETE FROM sessions`、`DROP TABLE` 等）
+- 建议测试会话在 prompt 里带标签 `[DEV-TEST]`，以便事后用 `DELETE FROM sessions WHERE preview LIKE '%[DEV-TEST%'` 清理
+- 开始做破坏性 schema 改动（ALTER TABLE 删列、DROP 索引等）前，必须先切回 L2 或 L3
 
-**背景：** M4 当前走的是"两 remote project"（sage + sage-dev）方案：
+**已保留资产（未来启用用）：**
+- sage-dev 项目（ref: `pskweazwczdgtohkdmee`）仍在 Supabase dashboard 存活
+- credentials 存于 `.env.development` 注释里
+- M4a 代码层环境变量切换能力就绪
+
+**背景：** 原方案是 M4b 走"两 remote project"（sage + sage-dev），已取消。未来如果 schema 开始频繁变动 / 多人协作 / 开发团队加入，按下列路线升级：
 
 | Level | 描述 | 问题 |
 |-------|------|------|
+| **L1.5（当前内测）** | 单一 prod project，手工约定避免污染 | 靠纪律，不靠架构 |
 | L1 | 单一 prod project | 本地 debug 污染真实数据 |
-| **L2（当前）** | sage + sage-dev 两个 remote project | schema 靠手动同步易漂移；多人协作互相踩；OAuth 要配两套 |
+| L2 | sage + sage-dev 两个 remote project | schema 靠手动同步易漂移；多人协作互相踩；OAuth 要配两套 |
+| **L3（目标）** | `supabase start` 本地 Docker + prod remote | schema as code + 每人独立环境 + 免 dev OAuth |
+| L4 | + staging 三层 | 有 QA / 付费用户时再上 |
+| L5 | Supabase Branching（Pro plan） | 团队 + CI 成熟再上 |
 | **L3（目标）** | `supabase start` 本地 Docker + prod remote | schema as code + 每人独立环境 + 免 dev OAuth |
 | L4 | + staging 三层 | 有 QA / 付费用户时再上 |
 | L5 | Supabase Branching（Pro plan） | 团队 + CI 成熟再上 |

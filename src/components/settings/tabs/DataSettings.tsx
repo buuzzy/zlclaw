@@ -360,7 +360,8 @@ export function DataSettings() {
           </div>
           <button
             onClick={handleImport}
-            disabled={importStatus === 'loading'}
+            disabled
+            title="Coming soon"
             className={cn(
               'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
               'border-border text-foreground hover:bg-accent border',

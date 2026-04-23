@@ -281,8 +281,8 @@ export default {
   dataExportButton: 'Export',
   dataExporting: 'Exporting...',
   dataImport: 'Import Data',
-  dataImportDescription: 'Import data from a previously exported JSON file.',
-  dataImportButton: 'Import',
+  dataImportDescription: 'Restore data from a previously exported JSON file (coming soon — disabled in beta).',
+  dataImportButton: 'Coming soon',
   dataImporting: 'Importing...',
   dataClear: 'Clear Data',
   dataClearDescription:
