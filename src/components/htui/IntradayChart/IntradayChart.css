@@ -1,0 +1,126 @@
+/* Intraday Chart — A-share minute-level tick layout
+ * 沿用 KLineChart 的 card 视觉语言（背景 / 边框 / 圆角 / padding）
+ */
+
+.intraday-chart {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  width: 100%;
+}
+
+.intraday-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+
+.intraday-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.intraday-code {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.intraday-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Right-side summary: latest price + change */
+.intraday-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  white-space: nowrap;
+}
+
+.intraday-price {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.intraday-chg {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.intraday-price.up,
+.intraday-chg.up {
+  color: #10b981;
+}
+
+.intraday-price.down,
+.intraday-chg.down {
+  color: #ef4444;
+}
+
+.intraday-price.flat,
+.intraday-chg.flat {
+  color: var(--text-muted);
+}
+
+/* "分时" badge — mirrors KLine's ktype-btn.active style */
+.intraday-badge {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid var(--accent-primary);
+  color: var(--accent-primary);
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Series legend (price + avgPrice) */
+.intraday-legend {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 4px;
+  padding: 0 4px;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.intraday-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.intraday-legend-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+/* Chart container */
+.intraday-container {
+  width: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Error / empty state */
+.intraday-empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}

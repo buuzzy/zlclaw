@@ -6,6 +6,7 @@ import type {
   DataTableData,
   FinanceBreakfastData,
   FinancialHealthData,
+  IntradayChartData,
   KLineChartData,
   LineChartData,
   NewsFeedData,
@@ -18,6 +19,7 @@ import type {
 
 const QuoteCard = lazy(() => import('./QuoteCard/QuoteCard'));
 const KLineChart = lazy(() => import('./KLineChart/KLineChart'));
+const IntradayChart = lazy(() => import('./IntradayChart/IntradayChart'));
 const NewsCard = lazy(() => import('./NewsCard/NewsCard'));
 const FinanceBreakfast = lazy(
   () => import('./FinanceBreakfast/FinanceBreakfast')
@@ -46,6 +48,10 @@ function renderSingleArtifact(artifact: Artifact, index: number) {
       return <QuoteCard key={key} data={artifact.data as QuoteCardData} />;
     case 'kline-chart':
       return <KLineChart key={key} data={artifact.data as KLineChartData} />;
+    case 'intraday-chart':
+      return (
+        <IntradayChart key={key} data={artifact.data as IntradayChartData} />
+      );
     case 'news-list':
       return <NewsCard key={key} data={artifact.data as NewsListData} />;
     case 'finance-breakfast':

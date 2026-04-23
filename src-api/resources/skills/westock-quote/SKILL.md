@@ -222,7 +222,35 @@ with urllib.request.urlopen(url) as resp:
 ## 输出建议
 
 - **实时行情**：输出 `artifact:quote-card`，包含代码、名称、价格、涨跌幅、开高低、成交量
-- **K线图表**：输出 `artifact:kline-chart`，提供 series 数组 `[{time, open, high, low, close, volume}]`
+- **K线图表（日/周/月线）**：输出 `artifact:kline-chart`，提供 series 数组 `[{time, open, high, low, close, volume}]`
+  - ⚠️ `time` 字段**必须**是 `YYYY-MM-DD` 格式（如 `"2026-04-23"`），**严禁**使用分钟级时间（如 `"09:30"`），否则前端组件会拒绝渲染
+  - 适用 prompt：「日 K」「周线」「近一年走势」「月 K」
+- **分时图表（当日 tick-by-minute）**：输出 `artifact:intraday-chart`，数据结构：
+  ```json
+  {
+    "code": "600519.SH",
+    "name": "贵州茅台",
+    "prevClose": 1400.00,
+    "tradeDate": "2026-04-23",
+    "points": [
+      { "time": "09:30", "price": 1418.50, "avgPrice": 1418.50, "volume": 4423, "turnover": 6274500 },
+      { "time": "09:31", "price": 1419.20, "avgPrice": 1418.85, "volume": 3120, "turnover": 4427904 }
+    ]
+  }
+  ```
+  - `time` 格式**必须**是 `HH:MM`（24 小时制，如 `"09:30"`、`"14:37"`）
+  - `avgPrice` 是累计均价（从开盘到当前时刻的 VWAP），不是逐分钟均价
+  - `points` 按时间升序排列
+  - **仅支持 A 股**（上证/深证），交易时段 09:30-11:30 + 13:00-15:00，午间停盘前端自动灰化
+  - 适用 prompt：「今天走势」「当天分时」「今日行情」「实时分时图」
 - **技术指标**：表格展示，或结合 K 线图叠加
 - **资金流向/筹码**：表格展示关键指标
 - **股东/机构**：表格展示
+
+### artifact 类型选择提示
+
+| 用户提问关键词 | 推荐 artifact |
+|---|---|
+| 今天 / 当天 / 当日 / 实时分时 | `intraday-chart` |
+| 日 K / 周 K / 月 K / 近 N 天 / 走势（超过 1 天） | `kline-chart` |
+| 现价 / 涨跌 / 实时行情（单点数据） | `quote-card` |
