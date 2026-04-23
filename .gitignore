@@ -77,3 +77,7 @@ src-tauri/binaries/
 
 # Supabase CLI local state (project ref / credentials cache)
 supabase/.temp/
+
+# Release artifacts (per-release generated, uploaded to GitHub Releases)
+/latest.json
+
