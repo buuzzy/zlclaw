@@ -640,7 +640,52 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 
 ---
 
-### P2 — OAuth 浏览器回调页优化
+### P2 — 更新按钮展示下载进度（P2 UX）
+
+**状态：** 📋 待实现（2026-04-23 记录）
+
+**背景：** 当前 `AboutSettings` 的"检查更新"按钮在 downloading / ready / installing 三个阶段都是一个 `<Loader2 className="animate-spin">` 无限旋转图标。DMG 体积 250MB，即便是 100Mbps 带宽也要 20-30 秒，普通家用带宽更慢。用户看不出是"产品卡了"还是"在正常下载"、更看不出"下到多少了"——**焦虑感强烈**。
+
+**数据链已存在**：`UpdateProvider` 的 `state.progress: number | null`（0~1）已在 `downloadAndInstall(event => ...)` 回调里维护，当前只是 `AboutSettings` 没消费它。
+
+**方案：** SVG 环形进度条替换 `Loader2`
+
+1. 新建 `src/components/common/ring-progress.tsx`：
+   - Props: `progress: number | null, size?: number, strokeWidth?: number`
+   - `progress === null` → 退化为 indeterminate（整圈缓慢旋转，提示"准备中"）
+   - `progress >= 0` → 两端弧形（从 12 点钟开始顺时针绘制，`stroke-dasharray` 技巧）
+   - 中心位置可选展示百分比文字（12px）或纯环形
+
+2. `AboutSettings.tsx` 的按钮 UI：
+   ```tsx
+   if (status === 'downloading') {
+     return {
+       icon: <RingProgress progress={progress} size={16} strokeWidth={2} />,
+       label: progress !== null
+         ? t.update.downloading + ` ${Math.round(progress * 100)}%`
+         : t.update.downloading,
+       ...
+     };
+   }
+   ```
+   - `ready` 态 → 展示 `progress=1`（完整圆圈，不旋转）
+   - `installing` 态 → 展示一个带对勾的成功圆圈（或整圈脉冲一下），短暂闪现后 app 就会 relaunch，体感"交付完成"
+
+3. 国际化：`t.update.downloading` 现在是固定字符串"下载中…"，改为支持 `{percent}` 占位符：
+   ```ts
+   downloading: '下载中…',            // 现有，progress=null 时 fallback
+   downloadingPct: '下载中 {percent}%', // 新增
+   ```
+
+**验收：**
+- [ ] 按钮在 downloading 态展示环形进度 + 百分比，数字平滑递增
+- [ ] ready 态展示完整圆圈（不再旋转）
+- [ ] 断网 / 失败态仍走 error 分支，不和进度混淆
+- [ ] 折叠态 / 展开态按钮尺寸一致，不因 icon 宽度变化抖动
+
+**成本：** 0.5 天（RingProgress 组件 + 接入 + i18n）
+
+---
 
 **状态：** 📋 待实现
 
