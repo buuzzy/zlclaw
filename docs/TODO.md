@@ -704,6 +704,66 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 
 ---
 
+### P2 — 导出图片截断（底部黑边）
+
+**状态：** 📋 待修复（2026-04-23 记录）
+
+**现象：** 点击"导出图片"保存出来的 PNG 打开后底部是一片纯黑，对话内容被截断 / 盖住。
+
+**代码位置：** `src/app/pages/TaskDetail.tsx:1726-1773`，`handleExportImage` 用 `html-to-image` 的 `toPng()` 截取 `containerRef`（L928，外层的 `flex overflow-hidden rounded-2xl` 容器）。
+
+**根因分析（~95% 把握）：**
+1. **截取的是"可视视口"而不是"完整内容"**：`containerRef` 指向的外层 div 带 `overflow-hidden` + 固定高度（由 flex 父容器决定）。`html-to-image` 只能拍到这个 viewport 内渲染出来的部分，**滚动区下方的消息完全没被渲染进截图**。底部黑边其实是 viewport 的高度被截取出来、但**没有对应内容**那部分（PNG 默认透明 / 或浏览器把透明 fallback 成黑色）。
+2. **消息列表是内部独立 `overflow-y-auto` 滚动容器**：即便 `containerRef` 没有 overflow-hidden，内部消息列表自己有滚动条，html-to-image 只拍到滚动区内当前可见的那些消息，不会展开全量内容。
+3. **`pixelRatio: 2` 无关**：只放大了 2x，不会让黑边消失。
+
+**可能的补充诱因：**
+- 黑色（而非白色 / 透明）通常意味着 `backgroundColor` 配置缺失 + 元素里某个地方有 `background: #000` 或使用了 CSS `color-scheme: dark` 被 html-to-image 错误继承。
+- 也可能是**滚动容器内 sticky / absolute 定位元素**（比如 input 底栏 `agent-action-bar`）被错误包含/排除导致几何错乱。我们现在 filter 把 `.agent-action-bar` 排掉了，但可能还有别的元素被它遗留的 spacer 影响。
+
+**修复思路（按推荐顺序）：**
+
+1. **临时 expand 到全量高度再截图**（推荐，工作量小）：
+   ```ts
+   // 1. 找真正的滚动容器（messages scroll div）
+   const scrollEl = node.querySelector('[data-messages-scroll]') as HTMLElement;
+   const originalHeight = scrollEl.style.height;
+   const originalOverflow = scrollEl.style.overflow;
+   // 2. 临时解开 overflow 让内容全部撑开
+   scrollEl.style.height = 'auto';
+   scrollEl.style.overflow = 'visible';
+   // 3. 在外层 node 上把 height 也撑开
+   const originalNodeHeight = node.style.height;
+   node.style.height = 'auto';
+   try {
+     const dataUrl = await toPng(node, {
+       pixelRatio: 2,
+       backgroundColor: '#ffffff',  // 显式白底防黑边
+       // ...
+     });
+   } finally {
+     scrollEl.style.height = originalHeight;
+     scrollEl.style.overflow = originalOverflow;
+     node.style.height = originalNodeHeight;
+   }
+   ```
+   需要在 messages scroll container 上加 `data-messages-scroll` 标记供 query。
+
+2. **显式传 `backgroundColor: '#ffffff'`**：哪怕上面方案 1 做不彻底，至少底部黑边会变白边（视觉上不再诡异）。一行改动。
+
+3. **考虑换成 `toJpeg`**：JPEG 不支持透明，html-to-image 会用 backgroundColor fill，比 PNG 更不容易黑。代价是文件稍大，无 alpha。
+
+**验收：**
+- [ ] 任一 task 详情页点"导出图片"→ PNG 打开后**没有底部黑边**，能看到全部对话（可以滚动长对话的每一条）
+- [ ] 浅色主题和深色主题下，背景色应当合理（浅色主题白底，深色主题深底，不是随机黑色）
+- [ ] `agent-action-bar` 仍然被正确排除
+
+**成本：** 0.5 天（含跨主题测试）
+
+**测试点：** 3 轮对话 + 10 轮对话 + 含 artifact 卡片（stock snapshot）的长对话，三种情况都要验。
+
+---
+
 ### P2 — 更新按钮展示下载进度（P2 UX）
 
 **状态：** 📋 待实现（2026-04-23 记录）
