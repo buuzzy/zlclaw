@@ -54,7 +54,7 @@ git push
 
 ## 3. 准备 latest.json
 
-Updater 客户端会 GET `https://github.com/buuzzy/HTclaw/releases/latest/download/latest.json`，所以这个文件必须在 **`releases/latest` 指向的 release** 里。
+Updater 客户端会 GET `https://github.com/buuzzy/zlclaw/releases/latest/download/latest.json`，所以这个文件必须在 **`releases/latest` 指向的 release** 里。
 
 模板 (`latest.json`)：
 ```json
@@ -65,7 +65,7 @@ Updater 客户端会 GET `https://github.com/buuzzy/HTclaw/releases/latest/downl
   "platforms": {
     "darwin-aarch64": {
       "signature": "<paste sig file content verbatim>",
-      "url": "https://github.com/buuzzy/HTclaw/releases/download/v1.0.1/涨乐金融龙虾.app.tar.gz"
+      "url": "https://github.com/buuzzy/zlclaw/releases/download/v1.0.1/zlclaw-1.0.1.app.tar.gz"
     }
   }
 }
@@ -74,13 +74,13 @@ Updater 客户端会 GET `https://github.com/buuzzy/HTclaw/releases/latest/downl
 填字段：
 - `version`：不带 `v` 前缀
 - `pub_date`：ISO 8601 UTC
-- `signature`：`cat Sage-<version>.app.tar.gz.sig` 全部输出粘进来（含末尾换行）
+- `signature`：`cat zlclaw-<version>.app.tar.gz.sig` 全部输出粘进来（含末尾换行）
 - `url`：指向当前 release tag 下的 `.app.tar.gz` 资产
 
 **踩坑记录**：
 - `platforms` 的 key 必须是 tauri target string：mac Intel 是 `darwin-x86_64`，mac ARM 是 `darwin-aarch64`，Win 是 `windows-x86_64`，Linux AppImage 是 `linux-x86_64`。写错会静默 404。
 - 早期版本的 `latest.json` schema 要求 `signature` 字段命名为 `sig` —— 我们用的是 tauri 2.x，字段就叫 `signature`。
-- **GitHub 会吃掉上传文件名里的中文字符**（只保留 ASCII），所以**必须**把产物文件名改成 ASCII 再传。Tauri 打出来的原始名是 `涨乐金融龙虾.app.tar.gz`，上传前 cp 成 `Sage-<version>.app.tar.gz`（以及 `.sig` 和 DMG）。v1.0.1 发版时踩过这个坑。
+- **GitHub 会吃掉上传文件名里的中文字符**（只保留 ASCII），所以**必须**把产物文件名改成 ASCII 再传。Tauri 打出来的原始名是 `涨乐金融龙虾.app.tar.gz`，上传前 cp 成 `zlclaw-<version>.app.tar.gz`（以及 `.sig` 和 DMG）。v1.0.1 发版时踩过这个坑。
 
 ---
 
@@ -94,19 +94,19 @@ git push origin v1.0.1
 # 产物改 ASCII 名（GitHub 会吃掉中文）
 VER=1.0.1
 cp "src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/涨乐金融龙虾_${VER}_aarch64.dmg" \
-   "src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Sage-${VER}.dmg"
+   "src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/zlclaw-${VER}.dmg"
 cp "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/涨乐金融龙虾.app.tar.gz" \
-   "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sage-${VER}.app.tar.gz"
+   "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/zlclaw-${VER}.app.tar.gz"
 cp "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/涨乐金融龙虾.app.tar.gz.sig" \
-   "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sage-${VER}.app.tar.gz.sig"
+   "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/zlclaw-${VER}.app.tar.gz.sig"
 
 # 创建 release 并上传产物
 gh release create v${VER} \
   --title "v${VER} — <标题>" \
   --notes-file docs/release-notes/v${VER}.md \
-  "src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Sage-${VER}.dmg" \
-  "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sage-${VER}.app.tar.gz" \
-  "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sage-${VER}.app.tar.gz.sig" \
+  "src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/zlclaw-${VER}.dmg" \
+  "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/zlclaw-${VER}.app.tar.gz" \
+  "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/zlclaw-${VER}.app.tar.gz.sig" \
   latest.json
 ```
 
