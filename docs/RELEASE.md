@@ -1,7 +1,9 @@
 # RELEASE 流程
 
-> 发一个带 OTA 更新能力的多平台包（macOS Apple Silicon / macOS Intel / Windows x64）。
-> 从 v1.0.3 起走 **GitHub Actions CI 驱动** —— 推 tag 自动打三平台、生成 `latest.json`、创建 Release。
+> 发一个带 OTA 更新能力的多平台包（macOS Apple Silicon / macOS Intel）。
+> 从 v1.0.3 起走 **GitHub Actions CI 驱动** —— 推 tag 自动打各平台、生成 `latest.json`、创建 Release。
+>
+> **Windows x64 暂缓**（v1.0.3-rc1 CI 实测挂在 WiX MSI 中文编码 bug）。workflow 里保留了完整代码 + 恢复步骤注释，v1.0.4+ 可快速恢复。见附录 E。
 
 ---
 
@@ -63,10 +65,10 @@ git push origin v${VER}
 ```
 
 推上去后：
-- `.github/workflows/release.yml` 自动在 `macos-14` / `macos-15-intel` / `windows-latest` 三台 runner 上并行构建
+- `.github/workflows/release.yml` 自动在 `macos-14` / `macos-15-intel` 两台 runner 上并行构建（Windows 暂缓，见附录 E）
 - 每个 job 跑 `pnpm --filter sage-api build:binary:<平台>` → `pnpm tauri build --target <triple>`
 - 产物由 stage 步骤重命名为 ASCII（`zlclaw-<ver>-<triple>[-setup].<ext>`）后上传 artifact
-- 汇总 job 在 `ubuntu-latest` 跑 `scripts/gen-latest-json.sh` 合并三平台 `latest.json`，创建 GitHub Release
+- 汇总 job 在 `ubuntu-latest` 跑 `scripts/gen-latest-json.sh` 合并两平台 `latest.json`，创建 GitHub Release
 
 **观察 CI：**
 ```bash
@@ -84,19 +86,18 @@ git tag -a v${VER} -m "Release v${VER}" && git push origin v${VER}
 
 ## 4. 验证 CI 产物
 
-CI 绿后，Release 应已创建在 `https://github.com/buuzzy/zlclaw/releases/tag/v${VER}`，assets 里应有 **10 个文件**：
+CI 绿后，Release 应已创建在 `https://github.com/buuzzy/zlclaw/releases/tag/v${VER}`，assets 里应有 **7 个文件**：
 
 | 平台 | 安装包 | Updater artifact | 签名 |
 |---|---|---|---|
 | macOS ARM | `zlclaw-${VER}-aarch64-apple-darwin.dmg` | `.app.tar.gz` | `.app.tar.gz.sig` |
 | macOS Intel | `zlclaw-${VER}-x86_64-apple-darwin.dmg` | `.app.tar.gz` | `.app.tar.gz.sig` |
-| Windows x64 | `zlclaw-${VER}-x86_64-pc-windows-msvc-setup.exe` | `.nsis.zip` | `.nsis.zip.sig` |
 | 全平台 | — | `latest.json` | — |
 
 肉眼核对一眼 `latest.json`：
 ```bash
 curl -sL https://github.com/buuzzy/zlclaw/releases/latest/download/latest.json | jq .
-# 期望 platforms 里有 darwin-aarch64 / darwin-x86_64 / windows-x86_64 三把
+# 期望 platforms 里有 darwin-aarch64 / darwin-x86_64 两把
 ```
 
 **踩坑记录**：
@@ -126,11 +127,7 @@ CI 的 `softprops/action-gh-release` 默认会生成一份基于 commit 的 rele
 3. 检查版本号：设置 → 关于 底部应显示新版本号
 4. 跑一次核心场景（MiniMax / 分时图 / K 线 / 股票快照）回归
 
-**Windows**（开发机没有的情况下，借 Windows 同事的机器或开 Parallels）：
-
-1. 装 rc 或历史版本（从 GitHub release 下 `.exe` 双击装）
-2. 确认旧版跑起来后，同样走"设置 → 关于 → 检查更新"流程
-3. 关注 `.nsis.zip` updater 链路是否能自动下载并覆盖安装
+**Windows**：暂缓（见附录 E）。
 
 **失败排查**：
 - `checking failed: Could not fetch a valid release JSON from the remote`
@@ -160,7 +157,7 @@ CI 的 `softprops/action-gh-release` 默认会生成一份基于 commit 的 rele
 | v1.0.0 | 2026-04-22 | 品牌更名 HTclaw → Sage → 涨乐金融龙虾、首次启动初始化、17 金融技能内置 |
 | v1.0.1 | 2026-04-23 | 本地数据按账号隔离 (M1)、App 内更新 (M2)、红点提示 (M3)、Supabase 环境分离 (M4a)、同步状态 UI 重构、title sanitize、股票快照白屏修复 |
 | v1.0.2 | 2026-04-23 | MiniMax 模型兼容性修复：planning 阶段 `<think>` 泄露 + parser 失败时重复 yield `direct_answer` |
-| v1.0.3 | 2026-04-XX | 首发 macOS Intel + Windows x64（CI 驱动构建），移除内置 Claude/Codex CLI sidecar 瘦身约 150MB（CLI 改为后续以插件下载形式，按需启用） |
+| v1.0.3 | 2026-04-XX | 首发 macOS Intel（CI 驱动构建），移除内置 Claude/Codex CLI sidecar 瘦身约 150MB（CLI 改为后续以插件下载形式，按需启用）。Windows x64 暂缓，见附录 E |
 
 ---
 
@@ -187,6 +184,8 @@ macOS 自带的 Gatekeeper 会对从浏览器下载的 app 打 quarantine 标记
 ---
 
 ## 附录 B：Windows SmartScreen 提示解除（必须放进每份 release notes）
+
+> **当前状态（v1.0.3）**：Windows 版本暂缓，此附录为未来恢复时备用。见附录 E。
 
 **背景：** 我们的 Windows 安装包只做了 Tauri 的 Ed25519 updater 签名，**没有做代码签名（EV Code Signing Certificate ≈ 200-400$/年）**。Windows Defender SmartScreen 看到未签名的 exe 就会拦：`Windows 已保护你的电脑`。实际安装包是干净的。
 
@@ -289,3 +288,58 @@ grep -E '^(TAURI_SIGNING_PRIVATE_KEY|TAURI_SIGNING_PRIVATE_KEY_PASSWORD|VITE_SUP
 ```
 
 然后 `gh secret list` 看到四个名字即可（GitHub 不会让你读回值，这是对的）。
+
+---
+
+## 附录 E：Windows x64 暂缓记录 + 恢复步骤
+
+### 暂缓原因
+
+v1.0.3-rc1 的 CI 实测：
+- ✅ Rust 编译成功（7m10s）
+- ✅ NSIS 安装包 `.exe` + updater `.nsis.zip{,.sig}` 都产出了
+- ❌ WiX MSI 打包挂在 `light.exe`：
+  ```
+  Running light to produce ...bundle\msi\涨乐金融龙虾_1.0.3_x64_en-US.msi
+  failed to bundle project `failed to run ...WixTools314\light.exe`
+  ```
+
+**根因**：`tauri.conf.json` 的 `bundle.targets: "all"` 在 Windows 上等于 `nsis + msi` 都打。WiX 3.14 的 `light.exe`（2014 年的 .NET 3.5 老工具）对产品名含中文字符（"涨乐金融龙虾"）的 MSI 文件名有 encoding bug。NSIS 本身已经成功，updater 也只认 `.nsis.zip`——**MSI 压根儿不是我们需要的产物**。
+
+### v1.0.4+ 恢复步骤
+
+1. **取消 `.github/workflows/release.yml` matrix 第 33-35 行注释**（Windows job），加回：
+   ```yaml
+   - platform_name: windows
+     runs-on: windows-latest
+     rust_target: x86_64-pc-windows-msvc
+   ```
+2. **改 Tauri build 步骤**，给 Windows job 加 `--bundles nsis`。最干净的做法是在 matrix 里加个 `bundles_flag` 字段，macOS 留空（走 `targets: "all"`），Windows 固定 `--bundles nsis`：
+   ```yaml
+   matrix:
+     include:
+       - platform_name: mac-arm
+         runs-on: macos-14
+         rust_target: aarch64-apple-darwin
+         bundles_flag: ""
+       - platform_name: mac-intel
+         runs-on: macos-15-intel
+         rust_target: x86_64-apple-darwin
+         bundles_flag: ""
+       - platform_name: windows
+         runs-on: windows-latest
+         rust_target: x86_64-pc-windows-msvc
+         bundles_flag: "--bundles nsis"
+   # Tauri build 步骤：
+   run: pnpm tauri build --target ${{ matrix.rust_target }} ${{ matrix.bundles_flag }}
+   ```
+3. **恢复 `Stage Windows artifacts` 的有效性**（当前保留但 matrix 里没 Windows 就不会跑，矩阵恢复后自动激活）
+4. **把本附录这段"恢复步骤"删掉**，顶部状态和附录 B 的开头警告同步更新
+
+### 可选替代方案（如果 `--bundles nsis` 仍有问题）
+
+改产品名为 ASCII 的"Sage"绕开 WiX 编码问题：
+- `src-tauri/tauri.conf.json` 把 `productName: "涨乐金融龙虾"` 改回 `Sage`
+- 影响：app 显示名、安装包名、Start Menu 里的名字都会变 ASCII
+- **不推荐**——品牌已经定"涨乐金融龙虾"，走 `--bundles nsis` 方案更自然
+

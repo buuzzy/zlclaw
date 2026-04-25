@@ -1,8 +1,10 @@
 name: Release
 
-# 触发：推 tag v* 或 v*-rc* 即构建三平台并创建 Release（见 docs/RELEASE.md）。
-# 决策留痕：macOS Intel + Windows x64（Linux 暂不做）；三平台均不带 Claude/Codex CLI
-# sidecar（只有 sage-api）。Windows 首发不做代码签名，release notes 指引 SmartScreen 绕过。
+# 触发：推 tag v* 或 v*-rc* 即构建并创建 Release（见 docs/RELEASE.md）。
+# 当前发版范围（v1.0.3）：macOS Apple Silicon + macOS Intel。
+# Windows x64 暂缓（v1.0.3-rc1 CI 实测挂在 WiX MSI 打包——中文产品名走 light.exe
+# 编码 bug，非配置问题）。恢复方式见下方 matrix include 里注释的第三条。
+# 三平台均不带 Claude/Codex CLI sidecar（只有 sage-api）。
 
 on:
   push:
@@ -17,7 +19,7 @@ env:
   PNPM_VERSION: "10"
 
 jobs:
-  # ── 三平台构建 matrix ───────────────────────────────────────────────────
+  # ── 多平台构建 matrix ─────────────────────────────────────────────────────
   build:
     strategy:
       fail-fast: false
@@ -29,9 +31,12 @@ jobs:
           - platform_name: mac-intel
             runs-on: macos-15-intel # GitHub 托管 Intel runner（macos-13 已于 2025/12/4 下线）
             rust_target: x86_64-apple-darwin
-          - platform_name: windows
-            runs-on: windows-latest
-            rust_target: x86_64-pc-windows-msvc
+          # TODO(v1.0.4+): 恢复 Windows 构建时取消注释下方并给 Tauri build 加 --bundles nsis
+          # 原因：Tauri 2 默认 targets: "all" 在 Win 会同时打 NSIS + MSI，WiX light.exe 对
+          # 中文产品名（"涨乐金融龙虾"）编码处理有 bug 导致 MSI 失败。NSIS 本身已成功。
+          # - platform_name: windows
+          #   runs-on: windows-latest
+          #   rust_target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 60
@@ -74,6 +79,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        # TODO(v1.0.4+): 恢复 Windows 时 Win job 的这行要改成
+        #   pnpm tauri build --target ${{ matrix.rust_target }} --bundles nsis
+        # 以跳过 WiX MSI（中文产品名会让 light.exe 崩），只打 NSIS（updater 也只吃 nsis.zip）
         run: pnpm tauri build --target ${{ matrix.rust_target }}
 
       # ── 挑出要上传的 artifact，并重命名为 ASCII（GitHub 吃非 ASCII） ──────
