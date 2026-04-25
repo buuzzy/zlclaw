@@ -1,0 +1,207 @@
+name: Release
+
+# 触发：推 tag v* 或 v*-rc* 即构建三平台并创建 Release（见 docs/RELEASE.md）。
+# 决策留痕：macOS Intel + Windows x64（Linux 暂不做）；三平台均不带 Claude/Codex CLI
+# sidecar（只有 sage-api）。Windows 首发不做代码签名，release notes 指引 SmartScreen 绕过。
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # 创建 GitHub Release / 上传 assets
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10"
+
+jobs:
+  # ── 三平台构建 matrix ───────────────────────────────────────────────────
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform_name: mac-arm
+            runs-on: macos-14 # Apple Silicon runner
+            rust_target: aarch64-apple-darwin
+          - platform_name: mac-intel
+            runs-on: macos-15-intel # GitHub 托管 Intel runner（macos-13 已于 2025/12/4 下线）
+            rust_target: x86_64-apple-darwin
+          - platform_name: windows
+            runs-on: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Cargo registry + target
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.rust_target }}
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build sage-api sidecar
+        run: pnpm --filter sage-api build:binary:${{ matrix.platform_name }}
+
+      - name: Tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: pnpm tauri build --target ${{ matrix.rust_target }}
+
+      # ── 挑出要上传的 artifact，并重命名为 ASCII（GitHub 吃非 ASCII） ──────
+      # 约束（参考 docs/RELEASE.md §5 + scripts/gen-latest-json.sh）：
+      #   - mac 两版：DMG（安装包） + .app.tar.gz{,.sig}（updater）
+      #   - windows：NSIS .exe（安装包） + .nsis.zip{,.sig}（updater）
+      #   - 文件名统一 zlclaw-<ver>[-<triple>]，triple 用于区分 mac-arm / mac-intel
+      #   - VERSION 从 tag 去掉前缀 v 即可（tag 形如 v1.0.3 / v1.0.3-rc1）
+      - name: Stage macOS artifacts
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          TRIPLE="${{ matrix.rust_target }}"
+          BUNDLE="src-tauri/target/${TRIPLE}/release/bundle"
+
+          # 发现 DMG / updater artifact 原始文件（名字含中文）
+          DMG_SRC=$(ls "${BUNDLE}/dmg/"*.dmg | head -n1)
+          APP_TGZ_SRC=$(ls "${BUNDLE}/macos/"*.app.tar.gz | head -n1)
+          APP_SIG_SRC="${APP_TGZ_SRC}.sig"
+
+          # 目标 staging 目录
+          STAGE="artifacts-${TRIPLE}"
+          mkdir -p "$STAGE"
+
+          # 三件套重命名为 ASCII（mac-arm / mac-intel 名字里都带 triple 做区分）
+          cp "$DMG_SRC"     "${STAGE}/zlclaw-${VERSION}-${TRIPLE}.dmg"
+          cp "$APP_TGZ_SRC" "${STAGE}/zlclaw-${VERSION}-${TRIPLE}.app.tar.gz"
+          cp "$APP_SIG_SRC" "${STAGE}/zlclaw-${VERSION}-${TRIPLE}.app.tar.gz.sig"
+
+          ls -la "$STAGE"
+
+      - name: Stage Windows artifacts
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          TRIPLE="${{ matrix.rust_target }}"
+          BUNDLE="src-tauri/target/${TRIPLE}/release/bundle"
+
+          # Tauri 2 Windows NSIS 产物位于 bundle/nsis/
+          NSIS_SRC=$(ls "${BUNDLE}/nsis/"*-setup.exe | head -n1)
+          NSIS_ZIP_SRC=$(ls "${BUNDLE}/nsis/"*-setup.nsis.zip | head -n1)
+          NSIS_SIG_SRC="${NSIS_ZIP_SRC}.sig"
+
+          STAGE="artifacts-${TRIPLE}"
+          mkdir -p "$STAGE"
+
+          cp "$NSIS_SRC"     "${STAGE}/zlclaw-${VERSION}-${TRIPLE}-setup.exe"
+          cp "$NSIS_ZIP_SRC" "${STAGE}/zlclaw-${VERSION}-${TRIPLE}-setup.nsis.zip"
+          cp "$NSIS_SIG_SRC" "${STAGE}/zlclaw-${VERSION}-${TRIPLE}-setup.nsis.zip.sig"
+
+          ls -la "$STAGE"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.rust_target }}
+          path: artifacts-${{ matrix.rust_target }}/
+          if-no-files-found: error
+          retention-days: 14
+
+  # ── 汇总：生成 latest.json、创建 Release ───────────────────────────────
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Debug list artifacts
+        run: |
+          find artifacts -type f | sort
+
+      - name: Detect prerelease (tag contains -rc / -beta / -alpha)
+        id: detect
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          if [[ "$TAG" =~ -(rc|beta|alpha) ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate latest.json
+        if: steps.detect.outputs.prerelease == 'false'
+        # 仅正式版才更新 updater。rc/beta tag 只产出 artifacts 供手动下载。
+        run: |
+          chmod +x ./scripts/gen-latest-json.sh
+          ./scripts/gen-latest-json.sh \
+            "${{ steps.detect.outputs.version }}" \
+            ./artifacts \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+
+      - name: Collect release assets
+        id: collect
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          # 把所有平台的产物扁平化到 release-assets/
+          find artifacts -type f \( -name "*.dmg" -o -name "*.app.tar.gz*" -o -name "*.exe" -o -name "*.nsis.zip*" \) \
+            -exec cp {} release-assets/ \;
+          # latest.json 仅正式版产出
+          if [ -f latest.json ]; then
+            cp latest.json release-assets/latest.json
+          fi
+          ls -la release-assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          prerelease: ${{ steps.detect.outputs.prerelease }}
+          draft: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: release-assets/*

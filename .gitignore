@@ -87,5 +87,7 @@ supabase/.temp/
 /latest.json
 
 # Internal docs (PRD / SPEC / TODO / release notes / research) — kept local only
-/docs/
+/docs/*
+# …但发布流程文档进仓库（团队协作 / 换机器 / CI 参考点）
+!/docs/RELEASE.md
 
