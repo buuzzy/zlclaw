@@ -34,6 +34,10 @@ src-tauri/gen/
 .env.*
 !.env.example
 
+# Environment variables (configs/env/)
+configs/env/
+!configs/env/.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -69,6 +73,7 @@ src-api/dist/bundle.cjs
 src-tauri/binaries/
 
 # Local-only UI research docs (kept on disk, not tracked)
+# These files have been moved to docs/design/ but remain untracked
 /DESIGN_TOKENS.md
 /LOGIN_PAGE_EXAMPLE.tsx
 /README_UI_ANALYSIS.md
