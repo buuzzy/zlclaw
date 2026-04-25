@@ -7,8 +7,8 @@
 #   ./scripts/build-signed.sh mac-intel               # x86_64 dmg
 #
 # 作用：
-#   1. 加载 .env.tauri-signing（TAURI_SIGNING_PRIVATE_KEY / PASSWORD）
-#   2. 加载 .env.production（VITE_SUPABASE_URL/KEY，走 prod project）
+#   1. 加载 configs/env/.env.tauri-signing（TAURI_SIGNING_PRIVATE_KEY / PASSWORD）
+#   2. 加载 configs/env/.env.production（VITE_SUPABASE_URL/KEY，走 prod project）
 #   3. 执行对应的 pnpm 脚本，确保 updater .sig / latest.json 产物签名
 #
 # 产物位置（以 mac-arm 为例）：
@@ -24,17 +24,26 @@ cd "$ROOT_DIR"
 
 TARGET="${1:-mac-arm}"
 
-# ── 1. 加载签名密钥（.env.tauri-signing）────────────────────────────────────
-if [ ! -f .env.tauri-signing ]; then
-  echo "❌ .env.tauri-signing 不存在。请先生成更新签名密钥："
+# ── 0. 平台拦截：Mac 上不能交叉编译 Windows ────────────────────────────────
+# 走 CI (.github/workflows/release.yml) 的 windows-latest runner，本地没 MSVC。
+if [[ "$TARGET" == "windows" || "$TARGET" == "win" ]] && [[ "$(uname -s)" == "Darwin" ]]; then
+  echo "❌ Windows 构建无法在 macOS 上跑（缺 MSVC 工具链）。"
+  echo "   正式发版请走 CI：git tag -a v<version> && git push origin v<version>"
+  echo "   （见 .github/workflows/release.yml 与 docs/RELEASE.md）"
+  exit 2
+fi
+
+# ── 1. 加载签名密钥（configs/env/.env.tauri-signing）────────────────────────
+if [ ! -f configs/env/.env.tauri-signing ]; then
+  echo "❌ configs/env/.env.tauri-signing 不存在。请先生成更新签名密钥："
   echo "   pnpm exec tauri signer generate --ci --password '' --write-keys ~/.sage-updater.key"
-  echo "   然后把 ~/.sage-updater.key 内容写入 .env.tauri-signing"
+  echo "   然后把 ~/.sage-updater.key 内容写入 configs/env/.env.tauri-signing"
   exit 1
 fi
 
 # shellcheck disable=SC1091
 set -a
-source .env.tauri-signing
+source configs/env/.env.tauri-signing
 set +a
 
 if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
@@ -44,15 +53,15 @@ fi
 
 echo "✅ Loaded TAURI_SIGNING_PRIVATE_KEY (length: ${#TAURI_SIGNING_PRIVATE_KEY})"
 
-# ── 2. 加载 prod 环境变量（若有 .env.production）────────────────────────────
-if [ -f .env.production ]; then
+# ── 2. 加载 prod 环境变量（若有 configs/env/.env.production）────────────────
+if [ -f configs/env/.env.production ]; then
   set -a
   # shellcheck disable=SC1091
-  source .env.production
+  source configs/env/.env.production
   set +a
-  echo "✅ Loaded .env.production (VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-<unset>})"
+  echo "✅ Loaded configs/env/.env.production (VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-<unset>})"
 else
-  echo "⚠️  .env.production 不存在，将使用 supabase.ts 里硬编码的 prod fallback。"
+  echo "⚠️  configs/env/.env.production 不存在，将使用 supabase.ts 里硬编码的 prod fallback。"
 fi
 
 # ── 3. 执行打包 ────────────────────────────────────────────────────────────
