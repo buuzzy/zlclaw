@@ -16,8 +16,16 @@ export const API_PORT = 2026;
 
 /**
  * API base URL
+ *
+ * Tauri desktop: connects to local sidecar at localhost:2026
+ * iOS / Web:     connects to cloud backend via VITE_API_URL env var
  */
-export const API_BASE_URL = `http://localhost:${API_PORT}`;
+const isTauri =
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+export const API_BASE_URL = isTauri
+  ? `http://localhost:${API_PORT}`
+  : (import.meta.env.VITE_API_URL || `http://localhost:${API_PORT}`);
 
 // =============================================================================
 // App Configuration

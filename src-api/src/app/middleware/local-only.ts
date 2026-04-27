@@ -1,9 +1,15 @@
 /**
- * Local-Only Middleware
+ * Local-Only / Token Auth Middleware
  *
- * Restricts access to routes that should only be reachable from the local
- * machine (Tauri desktop UI). Rejects any request whose source IP is not
- * a loopback address (127.x.x.x or ::1).
+ * Two modes based on environment:
+ *
+ * 1. **Cloud mode** (SAGE_API_TOKEN is set):
+ *    Validates `Authorization: Bearer <token>` header.
+ *    Used when sage-api is deployed to Railway / cloud.
+ *
+ * 2. **Local mode** (SAGE_API_TOKEN is NOT set):
+ *    Restricts access to loopback addresses (127.x.x.x / ::1).
+ *    Used when sage-api runs as Tauri desktop sidecar.
  *
  * Applied to execution-capable routes:
  *   /agent, /sandbox, /preview, /files, /mcp, /skills
@@ -11,14 +17,12 @@
  * NOT applied to channel/ingress routes (/v1, /channels/*) which
  * intentionally accept external network connections (WeChat, Feishu).
  * Those routes enforce their own HTCLAW_CHANNEL_API_KEY auth.
- *
- * Rationale: The agent can execute shell commands, read/write local files,
- * and invoke arbitrary tools. Exposing these to remote callers without
- * authentication would be a critical security risk.
  */
 
 import type { Context, Next } from 'hono';
 import { getConnInfo } from '@hono/node-server/conninfo';
+
+const API_TOKEN = process.env.SAGE_API_TOKEN;
 
 /**
  * Returns true if the address is a loopback (local) address.
@@ -36,15 +40,28 @@ function isLoopback(addr: string | undefined): boolean {
 }
 
 /**
- * Middleware that only allows requests from loopback addresses.
- * Returns 403 Forbidden for any non-local source.
+ * Middleware that guards sensitive routes.
  *
- * Note: In production the Tauri sidecar binds exclusively to 127.0.0.1 so all
- * external connections are rejected at the TCP level before reaching this
- * middleware. This check provides defence-in-depth for development mode where
- * the server may bind 0.0.0.0.
+ * Cloud mode:  checks Authorization: Bearer <SAGE_API_TOKEN>
+ * Local mode:  checks source IP is loopback
  */
 export async function localOnlyMiddleware(c: Context, next: Next): Promise<Response | void> {
+  // ── Cloud mode: token-based auth ──────────────────────────────────────────
+  if (API_TOKEN) {
+    const authHeader = c.req.header('authorization');
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : undefined;
+
+    if (token !== API_TOKEN) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    await next();
+    return;
+  }
+
+  // ── Local mode: loopback check (desktop sidecar) ──────────────────────────
   let remoteAddr: string | undefined;
 
   try {

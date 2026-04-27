@@ -83,5 +83,13 @@ pnpm tauri:build:mac-arm        # 完整 .app 打包（含前端+后端二进制
 ### P1 — MiniMax 不遵循 SKILL.md artifact 选择规则
 分时查询应走 `intraday-chart`，但 MiniMax 声称"没有分时图组件"。根因是 LLM reasoning 跳过 SKILL.md 检索。候选方案：提到 system prompt 顶层 / 加 few-shot / 后置 guard / 换模型。
 
+### P2 — 意图识别驱动的执行策略分层
+当前 `useAgent.ts` 只有粗粒度的二档路由（快聊 vs plan+execute）。目标是引入三层策略：
+- **直接执行**：意图明确的单步查询（「茅台现在多少钱」），零 plan 开销
+- **静默 plan**：多步但无歧义（「对比茅台和五粮液走势」），内部 plan 不暴露给用户
+- **显式 plan + 确认**：有副作用或高成本模糊意图（创建定时任务、批量分析）
+
+实现思路：混合方案 — 规则层先拦 90% 简单查询（扩展 `isFastChatQuery`），拦不住的再考虑 LLM 分类。工作量较大，需改 `useAgent.ts` 路由 + 后端 plan 判断逻辑 + 可能涉及前端 UI 流程。
+
 ### P3 — 恢复 Windows x64 发布
 WiX 对中文产品名有 encoding bug。NSIS 已成功，给 Windows job 加 `--bundles nsis` 即可恢复。约 15 分钟工作量。
