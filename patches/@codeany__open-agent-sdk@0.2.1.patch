@@ -1,3 +1,39 @@
+diff --git a/dist/engine.js b/dist/engine.js
+index 51cf771ca01412f9f71159a46d436e1c011438b0..ffc023d72da62b430aeebfcb4562e8bd99af669a 100644
+--- a/dist/engine.js
++++ b/dist/engine.js
+@@ -447,12 +447,17 @@ export class QueryEngine {
+         try {
+             const result = await tool.call(block.input, context);
+             // Hook: PostToolUse
+-            await this.executeHooks('PostToolUse', {
++            const postHookResults = await this.executeHooks('PostToolUse', {
+                 toolName: block.name,
+                 toolInput: block.input,
+                 toolOutput: typeof result.content === 'string' ? result.content : JSON.stringify(result.content),
+                 toolUseId: block.id,
+             });
++            // Apply modifiedOutput from hook (if any)
++            const modifiedOutput = postHookResults.find((r) => r.modifiedOutput)?.modifiedOutput;
++            if (modifiedOutput !== undefined) {
++                result.content = modifiedOutput;
++            }
+             return { ...result, tool_use_id: block.id, tool_name: block.name };
+         }
+         catch (err) {
+diff --git a/dist/hooks.d.ts b/dist/hooks.d.ts
+index 6c414d9a71617916410d5ae7a3e019202bda4e3f..e7dfc0a3b2ae299bc74fdf94ca5d035c7db0d935 100644
+--- a/dist/hooks.d.ts
++++ b/dist/hooks.d.ts
+@@ -73,6 +73,8 @@ export interface HookOutput {
+         body: string;
+         level?: 'info' | 'warning' | 'error';
+     };
++    /** Replace the tool output content before it re-enters the LLM conversation */
++    modifiedOutput?: string;
+ }
+ /**
+  * Hook configuration (from settings).
 diff --git a/dist/providers/openai.js b/dist/providers/openai.js
 index a137c3813dd97d09941742c68ac61d58a0593127..8fe2bc520dbc8da1237d4e7f536cb8f243914771 100644
 --- a/dist/providers/openai.js
@@ -97,60 +133,11 @@ index a137c3813dd97d09941742c68ac61d58a0593127..8fe2bc520dbc8da1237d4e7f536cb8f2
          return {
              content,
              stopReason,
-
-diff --git a/dist/engine.js b/dist/engine.js
---- a/dist/engine.js
-+++ b/dist/engine.js
-@@ -447,12 +447,17 @@
-         try {
-             const result = await tool.call(block.input, context);
-             // Hook: PostToolUse
--            await this.executeHooks('PostToolUse', {
-+            const postHookResults = await this.executeHooks('PostToolUse', {
-                 toolName: block.name,
-                 toolInput: block.input,
-                 toolOutput: typeof result.content === 'string' ? result.content : JSON.stringify(result.content),
-                 toolUseId: block.id,
-             });
-+            // Apply modifiedOutput from hook (if any)
-+            const modifiedOutput = postHookResults.find((r) => r.modifiedOutput)?.modifiedOutput;
-+            if (modifiedOutput !== undefined) {
-+                result.content = modifiedOutput;
-+            }
-             return { ...result, tool_use_id: block.id, tool_name: block.name };
-         }
-         catch (err) {
-
-diff --git a/dist/hooks.d.ts b/dist/hooks.d.ts
---- a/dist/hooks.d.ts
-+++ b/dist/hooks.d.ts
-@@ -73,6 +73,8 @@
-         body: string;
-         level?: 'info' | 'warning' | 'error';
-     };
-+    /** Replace the tool output content before it re-enters the LLM conversation */
-+    modifiedOutput?: string;
- }
- /**
-  * Hook configuration (from settings).
-
-diff --git a/src/hooks.ts b/src/hooks.ts
---- a/src/hooks.ts
-+++ b/src/hooks.ts
-@@ -101,6 +101,8 @@
-     body: string
-     level?: 'info' | 'warning' | 'error'
-   }
-+  /** Replace the tool output content before it re-enters the LLM conversation */
-+  modifiedOutput?: string
- }
- 
- /**
-
 diff --git a/src/engine.ts b/src/engine.ts
+index 00f186a98049c69742dd89c4f44ddbd435763d64..2202b25d8586a4d1ce8c9a6921dcdaac0fe6a6cd 100644
 --- a/src/engine.ts
 +++ b/src/engine.ts
-@@ -580,12 +580,18 @@
+@@ -580,13 +580,19 @@ export class QueryEngine {
        const result = await tool.call(block.input, context)
  
        // Hook: PostToolUse
@@ -161,12 +148,26 @@ diff --git a/src/engine.ts b/src/engine.ts
          toolOutput: typeof result.content === 'string' ? result.content : JSON.stringify(result.content),
          toolUseId: block.id,
        })
-+
+ 
 +      // Apply modifiedOutput from hook (if any) — replaces what the LLM sees
 +      const modifiedOutput = postHookResults.find((r) => r.modifiedOutput)?.modifiedOutput
 +      if (modifiedOutput !== undefined) {
 +        result.content = modifiedOutput
 +      }
- 
++
        return { ...result, tool_use_id: block.id, tool_name: block.name }
      } catch (err: any) {
+       // Hook: PostToolUseFailure
+diff --git a/src/hooks.ts b/src/hooks.ts
+index f7b95d0a325a2fce068b83ce54586bb87388d23a..1c0a3b23f6458aab7b80b8d3c924f1f376ebcf44 100644
+--- a/src/hooks.ts
++++ b/src/hooks.ts
+@@ -101,6 +101,8 @@ export interface HookOutput {
+     body: string
+     level?: 'info' | 'warning' | 'error'
+   }
++  /** Replace the tool output content before it re-enters the LLM conversation */
++  modifiedOutput?: string
+ }
+ 
+ /**
