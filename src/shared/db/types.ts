@@ -33,6 +33,17 @@ export type MessageType =
   | 'user'
   | 'plan';
 
+/**
+ * Metadata extracted from tool responses for artifact mapping.
+ * Enables deterministic identification of which skill/action was called,
+ * facilitating automatic artifact component selection.
+ */
+export interface ToolMetadata {
+  skill: string;           // e.g., "westock-quote", "westock-market"
+  action: string;          // e.g., "stock_quote_snapshot", "hot_stock"
+  list_code?: string;      // Optional: for screener list queries like "macro_cpi_ppi"
+}
+
 export interface Message {
   id: number;
   task_id: string;
@@ -42,6 +53,7 @@ export interface Message {
   tool_input: string | null;
   tool_output: string | null;
   tool_use_id: string | null;
+  tool_metadata?: string | null; // JSON string of ToolMetadata
   subtype: string | null;
   error_message: string | null;
   attachments: string | null; // JSON string of MessageAttachment[]
@@ -69,6 +81,7 @@ export interface CreateMessageInput {
   tool_input?: string;
   tool_output?: string;
   tool_use_id?: string;
+  tool_metadata?: string; // JSON string of ToolMetadata
   subtype?: string;
   error_message?: string;
   attachments?: string; // JSON string of MessageAttachment[]

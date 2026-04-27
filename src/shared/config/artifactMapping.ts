@@ -9,7 +9,6 @@
 export type ArtifactType =
   | 'quote-card'
   | 'kline-chart'
-  | 'intraday-chart'
   | 'news-list'
   | 'data-table'
   | 'line-chart'
@@ -31,7 +30,6 @@ const SKILL_ACTION_MAPPING: Record<string, Record<string, ArtifactType>> = {
   'westock-quote': {
     'stock_quote_snapshot': 'quote-card',
     'stock_quote_history': 'kline-chart',
-    'intraday_chart': 'intraday-chart',
   },
   'westock-market': {
     'stock_search': 'text',

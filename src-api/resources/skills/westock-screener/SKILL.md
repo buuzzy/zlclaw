@@ -154,6 +154,24 @@ payload = {
 | `macro_profit` | 工业企业利润 | — |
 | `macro_core_indicatros_cur` | 核心宏观全景 | 综合所有宏观指标 |
 
+### 响应结构
+
+```json
+{
+  "code": 0,
+  "data": {
+    "data": {
+      "index_list": {
+        "list_data": "[{\"IndexCode\": \"sh000001\", \"IndexName\": \"上证指数\"}, ...]"
+      },
+      "macro_cpi_ppi": {
+        "list_data": "[{\"CPI_YOY\": 2.5, \"PPI_YOY\": 1.2}]"
+      }
+    }
+  }
+}
+```
+
 ---
 
 ## 输出建议
