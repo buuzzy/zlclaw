@@ -1,0 +1,11 @@
+# Only include files needed for sage-api Docker build
+node_modules/
+dist/
+src/
+src-tauri/
+ios/
+docs/
+.git/
+.github/
+*.md
+!src-api/
