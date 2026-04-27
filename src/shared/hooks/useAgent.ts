@@ -13,6 +13,8 @@ import {
   type Task,
 } from '@/shared/db';
 import { getSettings } from '@/shared/db/settings';
+import { extractToolMetadata } from '@/shared/lib/toolMetadataExtractor';
+import { serializeToolMetadata } from '@/shared/config/artifactMapping';
 import {
   loadAttachments,
   saveAttachments,
@@ -610,6 +612,7 @@ export interface AgentMessage {
   toolUseId?: string;
   output?: string;
   isError?: boolean;
+  toolMetadata?: string; // JSON string of ToolMetadata for artifact mapping
   // Plan fields
   plan?: TaskPlan;
   // Attachments for user messages (images, files)
@@ -1497,6 +1500,7 @@ export function useAgent(): UseAgentReturn {
             type: 'tool_result' as const,
             toolUseId: msg.tool_use_id || undefined,
             output: msg.tool_output || undefined,
+            toolMetadata: msg.tool_metadata || undefined,
           });
         } else if (msg.type === 'result') {
           agentMessages.push({
@@ -1810,7 +1814,18 @@ export function useAgent(): UseAgentReturn {
               } else {
                 // UI update only for active task
                 if (isActive) {
-                  setMessages((prev) => [...prev, data]);
+                  // For tool_result messages, extract metadata for artifact mapping
+                  let messageToAdd = data;
+                  if (data.type === 'tool_result' && data.output && data.name) {
+                    const metadata = extractToolMetadata(data.output, data.name);
+                    if (metadata) {
+                      messageToAdd = {
+                        ...data,
+                        toolMetadata: serializeToolMetadata(metadata),
+                      };
+                    }
+                  }
+                  setMessages((prev) => [...prev, messageToAdd]);
                 }
 
                 // Extract file paths from text messages
@@ -1928,6 +1943,15 @@ export function useAgent(): UseAgentReturn {
 
                 // Save message to database
                 try {
+                  // Extract tool metadata for artifact mapping
+                  let toolMetadata: string | undefined;
+                  if (data.type === 'tool_result' && data.output && data.name) {
+                    const metadata = extractToolMetadata(data.output, data.name);
+                    if (metadata) {
+                      toolMetadata = serializeToolMetadata(metadata);
+                    }
+                  }
+
                   await createMessage({
                     task_id: currentTaskId,
                     type: data.type as
@@ -1944,6 +1968,7 @@ export function useAgent(): UseAgentReturn {
                       : undefined,
                     tool_output: data.output,
                     tool_use_id: data.toolUseId,
+                    tool_metadata: toolMetadata,
                     subtype: data.subtype,
                     error_message: data.message,
                   });
@@ -2382,10 +2407,18 @@ export function useAgent(): UseAgentReturn {
           return currentTaskId;
         }
 
-        // If images are attached, use direct execution (skip planning)
-        // because images need to be processed during execution, not planning
-        if (hasImages) {
-          console.log('[useAgent] Images attached, using direct execution');
+        // If images are attached, or if using OpenAI-format provider (e.g. MiniMax),
+        // use direct execution (skip planning).
+        // - Images need to be processed during execution, not planning.
+        // - OpenAI-format providers have unreliable plan generation; direct
+        //   execution with tools is more robust.
+        const isOpenAiProvider = modelConfig?.apiType === 'openai-completions';
+        if (hasImages || isOpenAiProvider) {
+          if (hasImages) {
+            console.log('[useAgent] Images attached, using direct execution');
+          } else {
+            console.log('[useAgent] OpenAI-format provider, skipping plan phase');
+          }
           setPhase('executing');
 
           // Add user message with attachments to UI

@@ -49,6 +49,17 @@ print(json.dumps(result, ensure_ascii=False, indent=2))
 
 **参数**：`query` 搜索词，`stockFlag=1` 搜股票，`fundFlag=1` 搜基金，`ptFlag=1` 搜板块
 
+### 响应示例
+
+```json
+{
+  "code": 0,
+  "data": {
+    "results": [...]
+  }
+}
+```
+
 ---
 
 ## 接口二：热搜股票 `GET /HotStock/getHotStockDetail`
@@ -60,9 +71,21 @@ url = (
 )
 with urllib.request.urlopen(url) as resp:
     result = json.loads(resp.read())
+print(json.dumps(result, ensure_ascii=False, indent=2))
 ```
 
 **响应字段**：`code` 股票代码，`name` 名称，`zdf` 涨跌幅，`zxj` 最新价，`stock_type` 类型
+
+### 响应示例
+
+```json
+{
+  "code": 0,
+  "data": {
+    "stocks": [...]
+  }
+}
+```
 
 ---
 
@@ -75,6 +98,7 @@ url = (
 )
 with urllib.request.urlopen(url) as resp:
     result = json.loads(resp.read())
+print(json.dumps(result, ensure_ascii=False, indent=2))
 ```
 
 ### 响应结构
@@ -124,11 +148,23 @@ url = (
 )
 with urllib.request.urlopen(url) as resp:
     result = json.loads(resp.read())
+print(json.dumps(result, ensure_ascii=False, indent=2))
 ```
 
 **参数**：`market` (`hs`=沪深，`hk`=港股)，`period` 天数，`detail=1` 返回详情
 
 **响应字段**：`symbol` 代码，`name` 名称，`price` 发行价，`syl` 市盈率，`ssrq` 上市日期，`sgdm` 申购代码
+
+### 响应示例
+
+```json
+{
+  "code": 0,
+  "data": {
+    "ipoList": [...]
+  }
+}
+```
 
 ---
 
@@ -156,6 +192,7 @@ url = (
 )
 with urllib.request.urlopen(url) as resp:
     result = json.loads(resp.read())
+print(json.dumps(result, ensure_ascii=False, indent=2))
 ```
 
 **参数**：`date` 查询日期，`country`（1=中国，2=美国，3=港股），`type`（1=经济数据，2=央行，3=重大事件，4=休市）
@@ -170,6 +207,17 @@ with urllib.request.urlopen(url) as resp:
 | `Previous` | 前值 |
 | `Predict` | 预测值 |
 | `CurrentValue` | 实际值 |
+
+### 响应示例
+
+```json
+{
+  "code": 0,
+  "data": {
+    "events": [...]
+  }
+}
+```
 
 ---
 
@@ -199,6 +247,17 @@ print(json.dumps(result, ensure_ascii=False, indent=2))
 | `sort_type` | 排序方式（`updateTime` = 按更新时间） |
 
 **说明**：返回平台热门股单（自选股单/组合）排行榜，适合查询当前最受关注的股票组合。
+
+### 响应示例
+
+```json
+{
+  "code": 0,
+  "data": {
+    "watchlists": [...]
+  }
+}
+```
 
 ---
 

@@ -53,6 +53,651 @@ import { stripHashSuffix } from '@/shared/utils/url';
 
 const logger = createLogger('CodeAnyAgent');
 
+// ============================================================================
+// Deterministic Tool Output Interception
+//
+// Detects westock API calls from Bash command URL patterns and JSON response
+// structure. No LLM cooperation required — works purely at the code layer.
+//
+// Detection strategy (two layers):
+//   Layer 1 — URL pattern matching on the Bash command string
+//   Layer 2 — JSON response structure matching on the tool output
+//
+// When a match is found:
+//   • Full data is formatted as an artifact block and queued for the frontend
+//   • A concise summary (~100-200 chars) replaces the tool output for the LLM
+//   • Token savings: ~5K tokens per intercepted query
+// ============================================================================
+
+/** (skill, action) → artifact component type */
+const ARTIFACT_TYPE_MAP: Record<string, Record<string, string>> = {
+  'westock-quote': {
+    'stock_quote_snapshot': 'quote-card',
+    'stock_quote_history': 'kline-chart',
+  },
+  'westock-market': {
+    'stock_search': 'text',
+    'hot_stock': 'data-table',
+    'hot_board': 'data-table',
+    'ipo_calendar': 'data-table',
+    'finance_calendar': 'data-table',
+    'watchlist_rank': 'data-table',
+  },
+  'westock-research': {
+    'stock_report': 'data-table',
+    'research_report_curated': 'data-table',
+    'announcement_list': 'data-table',
+    'announcement_content': 'text',
+    'market_news': 'news-list',
+  },
+  'westock-screener': {
+    'stock_filter_query': 'data-table',
+    'query_list_data_by_date': 'data-table',
+  },
+};
+
+/**
+ * URL path → (skill, action) mapping for GET endpoints.
+ * Order matters: first match wins. Patterns are tested with String.includes().
+ */
+const URL_PATH_PATTERNS: Array<{ pattern: string; skill: string; action: string }> = [
+  // westock-quote GET endpoints
+  // westock-market GET endpoints
+  { pattern: '/smartbox/search',               skill: 'westock-market',   action: 'stock_search' },
+  { pattern: '/HotStock/getHotStockDetail',    skill: 'westock-market',   action: 'hot_stock' },
+  { pattern: '/board/index',                   skill: 'westock-market',   action: 'hot_board' },
+  { pattern: '/ipo/search',                    skill: 'westock-market',   action: 'ipo_calendar' },
+  { pattern: '/FinanceCalendar/query',         skill: 'westock-market',   action: 'finance_calendar' },
+  { pattern: '/watchlist/rank',                skill: 'westock-market',   action: 'watchlist_rank' },
+  // westock-research GET endpoints
+  { pattern: '/investRate/getReport',          skill: 'westock-research', action: 'stock_report' },
+  { pattern: '/noticeList/searchByType',       skill: 'westock-research', action: 'announcement_list' },
+  { pattern: '/news/content/content',          skill: 'westock-research', action: 'announcement_content' },
+  { pattern: '/news/info/search',              skill: 'westock-research', action: 'market_news' },
+];
+
+/**
+ * POST route names used with the proxy endpoint (/openai/openclaw/proxy).
+ * Maps the `"route"` field in the request body to (skill, action).
+ */
+const POST_ROUTE_MAP: Record<string, { skill: string; action: string }> = {
+  'stock_quote_snapshot':      { skill: 'westock-quote',    action: 'stock_quote_snapshot' },
+  'stock_quote_history':       { skill: 'westock-quote',    action: 'stock_quote_history' },
+  'research_report_list_get':  { skill: 'westock-research', action: 'research_report_curated' },
+  'stock_filter_query':        { skill: 'westock-screener', action: 'stock_filter_query' },
+  'query_list_data_by_date':   { skill: 'westock-screener', action: 'query_list_data_by_date' },
+};
+
+interface ToolOutputMetadata {
+  skill: string;
+  action: string;
+  list_code?: string;
+}
+
+interface InterceptResult {
+  metadata: ToolOutputMetadata;
+  artifactBlock: string;
+  summary: string;
+}
+
+// ---- Layer 1: URL / route detection from the Bash command string -----------
+
+/**
+ * Extract (skill, action) from the Bash command string by matching URL paths
+ * and POST route names. Returns null if no westock API call is detected.
+ */
+function detectFromCommand(command: string): ToolOutputMetadata | null {
+  if (!command) return null;
+
+  // Layer 1a: Match GET endpoint URL paths
+  for (const { pattern, skill, action } of URL_PATH_PATTERNS) {
+    if (command.includes(pattern)) {
+      return { skill, action };
+    }
+  }
+
+  // Layer 1b: Match POST proxy route names
+  // The command may contain the route in a JSON body, e.g.:
+  //   curl ... -d '{"route":"stock_quote_snapshot", ...}'
+  //   requests.post(..., json={"route": "stock_quote_snapshot", ...})
+  // We use a broad regex that catches both single/double quoted JSON
+  const routeMatch = command.match(/"route"\s*:\s*"([^"]+)"/);
+  if (routeMatch) {
+    const routeName = routeMatch[1];
+    const mapping = POST_ROUTE_MAP[routeName];
+    if (mapping) {
+      const meta: ToolOutputMetadata = { ...mapping };
+
+      // For screener list queries, also extract list_codes
+      if (routeName === 'query_list_data_by_date') {
+        const listCodeMatch = command.match(/"list_codes"\s*:\s*\[\s*"([^"]+)"/);
+        if (listCodeMatch) {
+          meta.list_code = listCodeMatch[1];
+        }
+      }
+      return meta;
+    }
+  }
+
+  return null;
+}
+
+// ---- Layer 2: JSON response structure detection from tool output ----------
+
+/**
+ * Detect (skill, action) from JSON response structure when Layer 1 fails.
+ * This handles cases where MiniMax uses Python scripts or unconventional
+ * command patterns that don't match our URL regex.
+ */
+function detectFromResponseStructure(parsed: any): ToolOutputMetadata | null {
+  if (!parsed || typeof parsed !== 'object') return null;
+
+  const data = parsed.data;
+  if (!data) return null;
+
+  // stock_quote_snapshot: { data: { stocks: [{ code, name, data: { ClosePrice, ... } }] } }
+  if (data.stocks && Array.isArray(data.stocks) && data.stocks.length > 0) {
+    const first = data.stocks[0];
+    if (first?.data?.ClosePrice !== undefined || first?.data?.LastestTradedPrice !== undefined) {
+      return { skill: 'westock-quote', action: 'stock_quote_snapshot' };
+    }
+    // hot_stock: { data: { stocks: [{ code, name, zdf, zxj }] } }
+    if (first?.zdf !== undefined || first?.zxj !== undefined) {
+      return { skill: 'westock-market', action: 'hot_stock' };
+    }
+  }
+
+  // stock_quote_history: { data: { code, name, series: [{ date, data: {...} }] } }
+  if (data.series && Array.isArray(data.series) && data.code) {
+    return { skill: 'westock-quote', action: 'stock_quote_history' };
+  }
+
+  // hot_board: { data: { rank: { plate: [...] } } }
+  if (data.rank && (data.rank.plate || data.rank.concept)) {
+    return { skill: 'westock-market', action: 'hot_board' };
+  }
+
+  // ipo_calendar: { data: { ipoList: [...] } }
+  if (data.ipoList && Array.isArray(data.ipoList)) {
+    return { skill: 'westock-market', action: 'ipo_calendar' };
+  }
+
+  // finance_calendar: { data: [{ date, list: [{ FinancialEvent, ... }] }] }
+  if (Array.isArray(data) && data.length > 0 && data[0]?.list && Array.isArray(data[0].list)) {
+    const item = data[0].list[0];
+    if (item?.FinancialEvent !== undefined || item?.CountryName !== undefined) {
+      return { skill: 'westock-market', action: 'finance_calendar' };
+    }
+  }
+
+  // stock_filter_query: { data: { component_data: { total_stocks, data: { stocks: [...] } } } }
+  if (data.component_data?.data?.stocks || data.component_data?.total_stocks !== undefined) {
+    return { skill: 'westock-screener', action: 'stock_filter_query' };
+  }
+
+  // query_list_data_by_date: { data: { data: { <list_code>: { list_data, list_info } } } }
+  if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+    const keys = Object.keys(data.data);
+    const firstVal = keys.length > 0 ? data.data[keys[0]] : null;
+    if (firstVal?.list_data !== undefined && firstVal?.list_info?.list_code) {
+      return {
+        skill: 'westock-screener',
+        action: 'query_list_data_by_date',
+        list_code: firstVal.list_info.list_code,
+      };
+    }
+  }
+
+  // market_news: { data: { total_num, data: [{ title, src, time, ... }] } }
+  if (data.total_num !== undefined && Array.isArray(data.data) && data.data.length > 0) {
+    const item = data.data[0];
+    if (item?.title && item?.src && item?.time) {
+      // Could be news or announcement_list — differentiate by field presence
+      if (item?.importance !== undefined || item?.predictTimestamp !== undefined || item?.summary !== undefined) {
+        return { skill: 'westock-research', action: 'market_news' };
+      }
+      if (item?.newstype !== undefined || item?.type !== undefined) {
+        return { skill: 'westock-research', action: 'announcement_list' };
+      }
+      // Default to market_news for list-like responses with title+src+time
+      return { skill: 'westock-research', action: 'market_news' };
+    }
+  }
+
+  // stock_report: { data: { reports: [...] } }
+  if (data.reports && Array.isArray(data.reports)) {
+    return { skill: 'westock-research', action: 'stock_report' };
+  }
+
+  // research_report_curated: { data: { items: [{ id, title, preview, ... }] } }
+  if (data.items && Array.isArray(data.items) && data.items[0]?.preview !== undefined) {
+    return { skill: 'westock-research', action: 'research_report_curated' };
+  }
+
+  return null;
+}
+
+// ---- Data transformation: API response → Component data format ------------
+
+/**
+ * Transform raw API response data into the format expected by frontend components.
+ *
+ * Each artifact type has a specific data interface (QuoteCardData, KLineChartData, etc.)
+ * that differs from the raw westock API response structure.
+ * Returns null if the data cannot be transformed (caller should skip interception).
+ */
+function transformForComponent(artifactType: string, meta: ToolOutputMetadata, parsed: any): any {
+  const data = parsed.data;
+  if (!data) return null;
+
+  try {
+    switch (artifactType) {
+      case 'quote-card': {
+        // API: { data: { stocks: [{ code, name, data: { ClosePrice, Change, ... } }] } }
+        // Component: { code, name, price, chgVal, chgPct, prevClose, open, high, low, vol, turnover, mktCap, currency, mkt }
+        const stocks = data.stocks;
+        if (!Array.isArray(stocks) || stocks.length === 0) return null;
+        const s = stocks[0];
+        const d = s.data || {};
+        return {
+          code: s.code || '',
+          name: s.name || '',
+          price: parseFloat(d.ClosePrice || d.LastestTradedPrice || '0'),
+          chgVal: parseFloat(d.Change || '0'),
+          chgPct: parseFloat(d.ChangeRatio || '0'),
+          prevClose: parseFloat(d.PrevClosePrice || '0'),
+          open: parseFloat(d.OpenPrice || '0'),
+          high: parseFloat(d.HighPrice || '0'),
+          low: parseFloat(d.LowPrice || '0'),
+          vol: parseInt(d.TurnoverVolume || '0', 10),
+          turnover: parseFloat(d.TurnoverAmount || '0'),
+          mktCap: parseFloat(d.TotalMV || '0'),
+          currency: 'CNY',
+          mkt: s.code?.startsWith('hk') ? 'HK' : 'CN',
+        };
+      }
+
+      case 'kline-chart': {
+        // API: { data: { code, name, series: [{ date, data: { OpenPrice, ClosePrice, ... } }] } }
+        // Component: { code, name, ktype, data: [{ time, open, close, high, low, vol }] }
+        if (!data.series || !Array.isArray(data.series)) return null;
+        return {
+          code: data.code || '',
+          name: data.name || '',
+          ktype: 'day',
+          data: data.series.map((point: any) => ({
+            time: point.date || '',
+            open: parseFloat(point.data?.OpenPrice || point.data?.FwdOpenPrice || '0'),
+            close: parseFloat(point.data?.ClosePrice || point.data?.FwdClosePrice || '0'),
+            high: parseFloat(point.data?.HighPrice || point.data?.FwdHighPrice || '0'),
+            low: parseFloat(point.data?.LowPrice || point.data?.FwdLowPrice || '0'),
+            vol: parseInt(point.data?.TurnoverVolume || '0', 10),
+            turnover: parseFloat(point.data?.TurnoverAmount || '0'),
+          })),
+        };
+      }
+
+      case 'data-table': {
+        // Various actions produce different structures. Try common patterns.
+        // Component: { title, columns: [{ key, label }], rows: [{ key: value }] }
+
+        // hot_stock: { data: { stocks: [{ code, name, zdf, zxj }] } }
+        if (meta.action === 'hot_stock' && data.stocks) {
+          return {
+            title: '热搜股票',
+            columns: [
+              { key: 'code', label: '代码' },
+              { key: 'name', label: '名称' },
+              { key: 'zxj', label: '最新价' },
+              { key: 'zdf', label: '涨跌幅' },
+            ],
+            rows: data.stocks.map((s: any) => ({
+              code: s.code || '',
+              name: s.name || '',
+              zxj: s.zxj || '',
+              zdf: s.zdf || '',
+            })),
+          };
+        }
+
+        // hot_board: { data: { rank: { plate: [...] } } }
+        if (meta.action === 'hot_board' && data.rank?.plate) {
+          return {
+            title: '板块排行',
+            columns: [
+              { key: 'name', label: '板块' },
+              { key: 'zdf', label: '涨跌幅' },
+              { key: 'leader', label: '领涨股' },
+              { key: 'leaderZdf', label: '领涨幅' },
+            ],
+            rows: data.rank.plate.map((b: any) => ({
+              name: b.bd_name || '',
+              zdf: b.bd_zdf ? `${b.bd_zdf}%` : '',
+              leader: b.nzg_name || '',
+              leaderZdf: b.nzg_zdf ? `${b.nzg_zdf}%` : '',
+            })),
+          };
+        }
+
+        // stock_filter_query: { data: { component_data: { data: { columns, stocks } } } }
+        if (meta.action === 'stock_filter_query' && data.component_data) {
+          const cd = data.component_data;
+          const cols = cd.data?.columns || [];
+          const stocks = cd.data?.stocks || [];
+          return {
+            title: cd.selection_desc || '筛选结果',
+            columns: [
+              { key: 'code', label: '代码' },
+              { key: 'name', label: '名称' },
+              ...cols.map((c: any, i: number) => ({ key: `col_${i}`, label: c.display_name || '' })),
+            ],
+            rows: stocks.map((s: any) => {
+              const row: Record<string, string> = { code: s.code || '', name: s.name || '' };
+              (s.condition_values || []).forEach((v: any, i: number) => {
+                row[`col_${i}`] = v.disp || '';
+              });
+              return row;
+            }),
+          };
+        }
+
+        // ipo_calendar: { data: { ipoList: [...] } }
+        if (meta.action === 'ipo_calendar' && data.ipoList) {
+          return {
+            title: '新股日历',
+            columns: [
+              { key: 'name', label: '名称' },
+              { key: 'symbol', label: '代码' },
+              { key: 'price', label: '发行价' },
+              { key: 'ssrq', label: '上市日期' },
+            ],
+            rows: data.ipoList.map((item: any) => ({
+              name: item.name || '',
+              symbol: item.symbol || '',
+              price: item.price || '',
+              ssrq: item.ssrq || '',
+            })),
+          };
+        }
+
+        // stock_report: { data: { reports: [...] } }
+        if (meta.action === 'stock_report' && data.reports) {
+          return {
+            title: '个股研报',
+            columns: [
+              { key: 'title', label: '标题' },
+              { key: 'src', label: '机构' },
+              { key: 'tzpj', label: '评级' },
+              { key: 'time', label: '日期' },
+            ],
+            rows: data.reports.map((r: any) => ({
+              title: r.title || '',
+              src: r.src || '',
+              tzpj: r.tzpj || '',
+              time: r.time || '',
+            })),
+          };
+        }
+
+        // research_report_curated: { data: { items: [...] } }
+        if (meta.action === 'research_report_curated' && data.items) {
+          return {
+            title: '精选研报',
+            columns: [
+              { key: 'title', label: '标题' },
+              { key: 'preview', label: '摘要' },
+            ],
+            rows: data.items.map((item: any) => ({
+              title: item.title || '',
+              preview: (item.preview || '').slice(0, 100),
+            })),
+          };
+        }
+
+        // announcement_list: { data: { data: [...] } } or { data: { notices: [...] } }
+        if (meta.action === 'announcement_list') {
+          const list = data.data || data.notices || [];
+          return {
+            title: '公告列表',
+            columns: [
+              { key: 'title', label: '标题' },
+              { key: 'time', label: '日期' },
+            ],
+            rows: (Array.isArray(list) ? list : []).map((item: any) => ({
+              title: item.title || '',
+              time: item.time || '',
+            })),
+          };
+        }
+
+        // finance_calendar: { data: [{ list: [...] }] }
+        if (meta.action === 'finance_calendar' && Array.isArray(data)) {
+          const items = data.flatMap((d: any) => d.list || []);
+          return {
+            title: '投资日历',
+            columns: [
+              { key: 'time', label: '时间' },
+              { key: 'event', label: '事件' },
+              { key: 'country', label: '国家' },
+              { key: 'prev', label: '前值' },
+              { key: 'predict', label: '预期' },
+              { key: 'actual', label: '实际' },
+            ],
+            rows: items.map((item: any) => ({
+              time: item.time || '',
+              event: item.FinancialEvent || '',
+              country: item.CountryName || '',
+              prev: item.Previous || '',
+              predict: item.Predict || '',
+              actual: item.CurrentValue || '',
+            })),
+          };
+        }
+
+        // query_list_data_by_date: { data: { data: { <code>: { list_data: "json string" } } } }
+        if (meta.action === 'query_list_data_by_date' && data.data) {
+          const keys = Object.keys(data.data);
+          if (keys.length === 0) return null;
+          const firstKey = keys[0];
+          const listDataStr = data.data[firstKey]?.list_data;
+          if (!listDataStr) return null;
+          try {
+            const rows = JSON.parse(listDataStr);
+            if (!Array.isArray(rows) || rows.length === 0) return null;
+            const columns = Object.keys(rows[0]).map(k => ({ key: k, label: k }));
+            return { title: firstKey, columns, rows };
+          } catch { return null; }
+        }
+
+        // Generic fallback: pass through (may not render correctly)
+        return data;
+      }
+
+      case 'news-list': {
+        // market_news: { data: { total_num, data: [{ title, src, time, summary }] } }
+        // Component: { items: [{ newId, title, summary, tags, publishTime }], total, hasMore }
+        const newsList = data.data || [];
+        if (!Array.isArray(newsList)) return null;
+        return {
+          items: newsList.map((item: any, i: number) => ({
+            newId: item.id || `news_${i}`,
+            title: item.title || '',
+            summary: item.summary || '',
+            tags: item.title_mention ? item.title_mention.split(',') : [],
+            publishTime: item.time || '',
+          })),
+          total: data.total_num || newsList.length,
+          hasMore: (data.total_num || 0) > newsList.length,
+        };
+      }
+
+      default:
+        // Unknown artifact type — pass data through as-is
+        return data;
+    }
+  } catch (err) {
+    logger.warn(`[transformForComponent] Failed to transform ${artifactType}/${meta.action}:`, err);
+    return null;
+  }
+}
+
+// ---- Main interception function -------------------------------------------
+
+/**
+ * Deterministic interception of Bash tool output.
+ *
+ * @param command  - The Bash command string (from toolInput.command)
+ * @param output   - The tool output string (stdout from Bash execution)
+ * @returns InterceptResult if intercepted, null otherwise (fall-through to LLM)
+ */
+function interceptToolOutput(command: string, output: string): InterceptResult | null {
+  if (!output || output.length < 10) return null;
+
+  // Try to parse output as JSON
+  let parsed: any;
+  try {
+    // Handle case where output has leading/trailing whitespace or debug lines
+    const jsonStart = output.indexOf('{');
+    const jsonEnd = output.lastIndexOf('}');
+    if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) return null;
+    const jsonStr = output.slice(jsonStart, jsonEnd + 1);
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    return null;
+  }
+
+  // Quick check: must look like a westock API response (has code or data field)
+  if (parsed.code === undefined && !parsed.data) return null;
+
+  // Skip error responses — only intercept successful API calls
+  if (parsed.code !== undefined && parsed.code !== 0 && !parsed.data) return null;
+
+  // Layer 1: Detect from Bash command URL/route patterns
+  let meta = detectFromCommand(command);
+
+  // Layer 2: Fallback to response structure detection
+  if (!meta) {
+    meta = detectFromResponseStructure(parsed);
+  }
+
+  // If _metadata is present (rare, but honor it as Layer 0)
+  if (!meta && parsed._metadata?.skill && parsed._metadata?.action) {
+    meta = {
+      skill: parsed._metadata.skill,
+      action: parsed._metadata.action,
+      list_code: parsed._metadata.list_code,
+    };
+  }
+
+  if (!meta) return null;
+
+  // Look up artifact type
+  const skillMap = ARTIFACT_TYPE_MAP[meta.skill];
+  if (!skillMap) return null;
+  const artifactType = skillMap[meta.action];
+  if (!artifactType || artifactType === 'text') return null;
+
+  // Transform API response into the format expected by frontend components.
+  // Each component type has its own data interface (QuoteCardData, KLineChartData, etc.)
+  // that differs from the raw API response structure.
+  const componentData = transformForComponent(artifactType, meta, parsed);
+  if (!componentData) return null;
+
+  // Build the artifact block in the same format the LLM would output
+  const artifactBlock = '```artifact:' + artifactType + '\n' + JSON.stringify(componentData, null, 2) + '\n```';
+
+  // Generate a concise summary for the LLM
+  const summary = generateSummary(meta, parsed);
+
+  logger.info(`[interceptToolOutput] Intercepted ${meta.skill}/${meta.action} → ${artifactType} (summary: ${summary.length} chars, original: ${output.length} chars, detection: ${detectFromCommand(command) ? 'url' : 'structure'})`);
+
+  return { metadata: meta, artifactBlock, summary };
+}
+
+// ---- Summary generation ---------------------------------------------------
+
+/**
+ * Generate a concise text summary from API response data.
+ * This is what the LLM sees instead of the full data payload.
+ */
+function generateSummary(meta: ToolOutputMetadata, parsed: any): string {
+  const data = parsed.data;
+  try {
+    if (meta.skill === 'westock-quote') {
+      if (meta.action === 'stock_quote_snapshot' && data?.stocks?.length > 0) {
+        const s = data.stocks[0];
+        const d = s.data || {};
+        return `[数据已获取] ${s.name || ''}(${s.code || ''}) 最新价${d.ClosePrice || d.LastestTradedPrice || '—'} 涨跌${d.Change || '—'}(${d.ChangeRatio || '—'}%) 昨收${d.PrevClosePrice || '—'} 开${d.OpenPrice || '—'} 高${d.HighPrice || '—'} 低${d.LowPrice || '—'}。报价卡片已自动渲染，请基于上述数据撰写分析，不要输出artifact块。`;
+      }
+      if (meta.action === 'stock_quote_history' && data?.series?.length > 0) {
+        const series = data.series;
+        const first = series[0];
+        const last = series[series.length - 1];
+        return `[数据已获取] ${data.name || ''}(${data.code || ''}) K线${series.length}天 ${first.date}~${last.date} 首日收${first.data?.ClosePrice || '—'} 末日收${last.data?.ClosePrice || '—'}。K线图已自动渲染，请基于上述数据撰写分析，不要输出artifact块。`;
+      }
+    }
+
+    if (meta.skill === 'westock-market') {
+      if (meta.action === 'hot_stock') {
+        const stocks = data?.stocks || [];
+        const top3 = Array.isArray(stocks) ? stocks.slice(0, 3).map((s: any) => `${s.name}(${s.zdf})`).join('、') : '';
+        return `[数据已获取] 热搜股票${Array.isArray(stocks) ? stocks.length : 0}只${top3 ? '，前3：' + top3 : ''}。数据表已自动渲染，请基于数据撰写分析，不要输出artifact块。`;
+      }
+      if (meta.action === 'hot_board') {
+        return `[数据已获取] 板块排行数据已获取。数据表已自动渲染，请基于数据撰写分析，不要输出artifact块。`;
+      }
+      if (meta.action === 'ipo_calendar') {
+        const list = data?.ipoList || [];
+        return `[数据已获取] 新股日历${Array.isArray(list) ? list.length : 0}条。数据表已自动渲染，请撰写分析，不要输出artifact块。`;
+      }
+      if (meta.action === 'finance_calendar') {
+        return `[数据已获取] 投资日历数据已获取。数据表已自动渲染，请撰写分析，不要输出artifact块。`;
+      }
+      return `[数据已获取] 市场数据已获取。数据表已自动渲染，请撰写分析，不要输出artifact块。`;
+    }
+
+    if (meta.skill === 'westock-research') {
+      if (meta.action === 'market_news') {
+        const news = data?.data || [];
+        const count = Array.isArray(news) ? news.length : 0;
+        const top = Array.isArray(news) && news.length > 0 ? `，最新：${news[0].title?.slice(0, 30)}` : '';
+        return `[数据已获取] ${count}条新闻${top}。新闻列表已自动渲染，请撰写分析，不要输出artifact块。`;
+      }
+      if (meta.action === 'stock_report') {
+        const reports = data?.reports || [];
+        return `[数据已获取] ${Array.isArray(reports) ? reports.length : 0}条研报。数据表已自动渲染，请撰写分析，不要输出artifact块。`;
+      }
+      if (meta.action === 'research_report_curated') {
+        const items = data?.items || [];
+        return `[数据已获取] ${Array.isArray(items) ? items.length : 0}条精选研报。数据表已自动渲染，请撰写分析，不要输出artifact块。`;
+      }
+      if (meta.action === 'announcement_list') {
+        const list = data?.data || [];
+        return `[数据已获取] ${Array.isArray(list) ? list.length : 0}条公告。数据表已自动渲染，请撰写分析，不要输出artifact块。`;
+      }
+      return `[数据已获取] 研报/公告数据已获取。组件已自动渲染，请撰写分析，不要输出artifact块。`;
+    }
+
+    if (meta.skill === 'westock-screener') {
+      if (meta.action === 'stock_filter_query') {
+        const total = data?.component_data?.total_stocks || 0;
+        const desc = data?.component_data?.selection_desc || '';
+        return `[数据已获取] 筛选结果${total}只股票${desc ? '。' + desc : ''}。数据表已自动渲染，请撰写分析，不要输出artifact块。`;
+      }
+      if (meta.action === 'query_list_data_by_date') {
+        const keys = data?.data ? Object.keys(data.data) : [];
+        return `[数据已获取] 列表数据(${keys.join(', ')})已获取。组件已自动渲染，请撰写分析，不要输出artifact块。`;
+      }
+      return `[数据已获取] 列表数据已获取。组件已自动渲染，请撰写分析，不要输出artifact块。`;
+    }
+  } catch {
+    // Fall through to generic summary
+  }
+
+  // Generic fallback
+  return `[数据已获取] ${meta.skill}/${meta.action} 数据已获取。组件已自动渲染，请撰写分析，不要输出artifact块。`;
+}
+
 // Sandbox API URL
 const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
 const API_PORT =
@@ -189,6 +834,12 @@ const ALLOWED_TOOLS = [
 export class CodeAnyAgent extends BaseAgent {
   readonly provider: AgentProvider = 'codeany';
 
+  /**
+   * Queue of artifact blocks intercepted from tool outputs.
+   * Drained in processMessage() and yielded as text messages to the frontend.
+   */
+  private pendingArtifacts: string[] = [];
+
   constructor(config: AgentConfig) {
     super(config);
     logger.info('[CodeAnyAgent] Created with config:', {
@@ -258,6 +909,35 @@ export class CodeAnyAgent extends BaseAgent {
     if (options?.abortController) {
       sdkOpts.abortController = options.abortController;
     }
+
+    // Register PostToolUse hook for deterministic data interception.
+    // Detects westock API calls from command URL patterns + response structure,
+    // queues artifact blocks for direct frontend rendering, and replaces the
+    // LLM's tool_output with a concise summary (~200 chars vs ~10K chars).
+    const agent = this;
+    sdkOpts.hooks = {
+      ...((sdkOpts as any).hooks || {}),
+      PostToolUse: [{
+        matcher: 'Bash',
+        hooks: [async (input: any) => {
+          const toolOutput = typeof input.toolOutput === 'string' ? input.toolOutput : '';
+          // Extract the Bash command string from toolInput
+          const command = typeof input.toolInput === 'object' && input.toolInput
+            ? (input.toolInput.command || '')
+            : (typeof input.toolInput === 'string' ? input.toolInput : '');
+          const result = interceptToolOutput(command, toolOutput);
+          if (!result) return undefined;
+
+          // Queue artifact block for frontend rendering
+          agent.pendingArtifacts.push(result.artifactBlock);
+
+          logger.info(`[PostToolUse] Intercepted → ${result.metadata.skill}/${result.metadata.action}, artifact queued, summary ${result.summary.length} chars`);
+
+          // Return summary to replace the tool output the LLM sees
+          return { modifiedOutput: result.summary };
+        }],
+      }],
+    };
 
     return sdkOpts;
   }
@@ -373,9 +1053,18 @@ export class CodeAnyAgent extends BaseAgent {
       yield {
         type: 'tool_result',
         toolUseId: msg.result.tool_use_id ?? '',
+        name: msg.result.tool_name ?? undefined,
         output,
         isError,
       };
+
+      // Flush any artifact blocks queued by the PostToolUse hook.
+      // These are yielded as text messages so the frontend's artifactParser
+      // extracts and renders them — identical to LLM-generated artifact blocks.
+      while (this.pendingArtifacts.length > 0) {
+        const artifactBlock = this.pendingArtifacts.shift()!;
+        yield { type: 'text', content: artifactBlock };
+      }
     }
 
     if (msg.type === 'result') {
@@ -466,14 +1155,45 @@ export class CodeAnyAgent extends BaseAgent {
     await refreshSkillsForPrompt(prompt);
 
     try {
-      for await (const message of query({ prompt: finalPrompt, options: sdkOpts })) {
-        if (session.abortController.signal.aborted) break;
-        for (const msg of this.processMessage(message, session.id, sentTextHashes, sentToolIds)) {
-          if (msg.type === 'text' && (msg as any).content) {
-            assistantTextParts.push((msg as any).content);
+      // ------------------------------------------------------------------
+      // Run the SDK query, with silent auto-retry for "announce-only" turns.
+      //
+      // MiniMax sometimes outputs only an intent statement ("我来帮你查询...")
+      // without making any tool calls, then stops. When this happens we
+      // transparently re-enter the agentic loop with a continuation prompt.
+      // Max 1 retry to prevent infinite loops.
+      // ------------------------------------------------------------------
+      let currentPrompt = finalPrompt;
+      const MAX_EMPTY_RETRIES = 1;
+      let emptyRetries = 0;
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        let hadToolUse = false;
+
+        for await (const message of query({ prompt: currentPrompt, options: sdkOpts })) {
+          if (session.abortController.signal.aborted) break;
+          for (const msg of this.processMessage(message, session.id, sentTextHashes, sentToolIds)) {
+            if (msg.type === 'text' && (msg as any).content) {
+              assistantTextParts.push((msg as any).content);
+            }
+            if (msg.type === 'tool_use' || msg.type === 'tool_result') {
+              hadToolUse = true;
+            }
+            yield msg;
           }
-          yield msg;
         }
+
+        // If the LLM used tools or the session was aborted, we're done.
+        if (hadToolUse || session.abortController.signal.aborted) break;
+
+        // No tools were called — check if this looks like an "announce-only"
+        // turn that we should silently retry.
+        if (emptyRetries >= MAX_EMPTY_RETRIES) break;
+
+        emptyRetries++;
+        logger.info(`[CodeAny ${session.id}] Empty turn detected (no tool calls). Silent retry ${emptyRetries}/${MAX_EMPTY_RETRIES}.`);
+        currentPrompt = '继续执行，请直接调用工具获取数据，不要重复描述你要做什么。';
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

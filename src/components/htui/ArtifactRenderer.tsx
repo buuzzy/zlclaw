@@ -6,7 +6,6 @@ import type {
   DataTableData,
   FinanceBreakfastData,
   FinancialHealthData,
-  IntradayChartData,
   KLineChartData,
   LineChartData,
   NewsFeedData,
@@ -17,9 +16,13 @@ import type {
   StockSnapshotData,
 } from '@/shared/types/artifact';
 
-const QuoteCard = lazy(() => import('./QuoteCard/QuoteCard'));
-const KLineChart = lazy(() => import('./KLineChart/KLineChart'));
-const IntradayChart = lazy(() => import('./IntradayChart/IntradayChart'));
+// High-frequency components: static import to avoid Suspense flash on first render.
+// These chunks are tiny (2-8KB each) so the bundle size cost is negligible.
+import QuoteCard from './QuoteCard/QuoteCard';
+import KLineChart from './KLineChart/KLineChart';
+import DataTable from './DataTable/DataTable';
+
+// Low-frequency components: keep lazy to reduce initial bundle size.
 const NewsCard = lazy(() => import('./NewsCard/NewsCard'));
 const FinanceBreakfast = lazy(
   () => import('./FinanceBreakfast/FinanceBreakfast')
@@ -27,7 +30,6 @@ const FinanceBreakfast = lazy(
 const AIHotNews = lazy(() => import('./AIHotNews/AIHotNews'));
 const BarChart = lazy(() => import('./BarChart/BarChart'));
 const LineChart = lazy(() => import('./LineChart/LineChart'));
-const DataTable = lazy(() => import('./DataTable/DataTable'));
 const StockSnapshot = lazy(() => import('./StockSnapshot/StockSnapshot'));
 const SectorHeatmap = lazy(() => import('./SectorHeatmap/SectorHeatmap'));
 const ResearchConsensus = lazy(
@@ -48,10 +50,6 @@ function renderSingleArtifact(artifact: Artifact, index: number) {
       return <QuoteCard key={key} data={artifact.data as QuoteCardData} />;
     case 'kline-chart':
       return <KLineChart key={key} data={artifact.data as KLineChartData} />;
-    case 'intraday-chart':
-      return (
-        <IntradayChart key={key} data={artifact.data as IntradayChartData} />
-      );
     case 'news-list':
       return <NewsCard key={key} data={artifact.data as NewsListData} />;
     case 'finance-breakfast':

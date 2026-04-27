@@ -63,6 +63,17 @@ print(json.dumps(result, ensure_ascii=False, indent=2))
 | `tzpj` | 投资评级（买入/增持/持有/减持/卖出） |
 | `summary` | 摘要 |
 
+### 响应示例
+
+```json
+{
+  "code": 0,
+  "data": {
+    "reports": [...]
+  }
+}
+```
+
 ---
 
 ## 接口二：精选研报列表 `POST research_report_list_get`
@@ -88,9 +99,21 @@ req = urllib.request.Request(
 )
 with urllib.request.urlopen(req) as resp:
     result = json.loads(resp.read())
+print(json.dumps(result, ensure_ascii=False, indent=2))
 ```
 
 **响应字段**：`id`, `title`, `preview`(摘要), `publish_time`(毫秒时间戳), `img`(封面图), `has_more`
+
+### 响应示例
+
+```json
+{
+  "code": 0,
+  "data": {
+    "items": [...]
+  }
+}
+```
 
 ---
 
@@ -105,11 +128,23 @@ url = f"{base}?app=openclaw&token={API_KEY}&skill_channel=stockclaw&symbol=sh600
 opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler())
 with opener.open(url) as resp:
     result = json.loads(resp.read())
+print(json.dumps(result, ensure_ascii=False, indent=2))
 ```
 
 **公告类型 `noticeType`**：0=全部，1=财务，2=配股，3=增发，4=股权变动，5=重大事项，6=风险，7=其他
 
 **响应字段**：`id`(公告ID), `title`, `time`, `type`, `newstype`(更细分类代码)
+
+### 响应示例
+
+```json
+{
+  "code": 0,
+  "data": {
+    "notices": [...]
+  }
+}
+```
 
 ---
 
@@ -119,6 +154,7 @@ with opener.open(url) as resp:
 url = f"https://proxy.finance.qq.com/ifzqgtimg/appstock/news/content/content?app=openclaw&token={API_KEY}&skill_channel=stockclaw&id=nos1225062336"
 with urllib.request.urlopen(url) as resp:
     result = json.loads(resp.read())
+print(json.dumps(result, ensure_ascii=False, indent=2))
 ```
 
 **ID 格式**：A股 `nos...`，港股 `nok...`，美股 `nou...`
@@ -130,6 +166,18 @@ with urllib.request.urlopen(url) as resp:
 | A股大型公告（年报） | `pdf` | PDF URL |
 | 港股公告 | `pdf` | PDF URL |
 | 美股中文翻译 | `content_tr` | 翻译PDF |
+
+### 响应示例
+
+```json
+{
+  "code": 0,
+  "data": {
+    "detail": "公告正文...",
+    "pdf": "..."
+  }
+}
+```
 
 ---
 
@@ -144,6 +192,7 @@ url = f"{base}?app=openclaw&token={API_KEY}&skill_channel=stockclaw&symbol=sh000
 opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler())
 with opener.open(url) as resp:
     result = json.loads(resp.read())
+print(json.dumps(result, ensure_ascii=False, indent=2))
 ```
 
 **symbol 常用值**：
@@ -156,6 +205,17 @@ with opener.open(url) as resp:
 | 恒生科技 | `hkHSTECH` |
 
 **响应字段**：`time`, `title`, `src`(来源), `importance`(0=普通/1=重要), `summary`, `url`, `title_mention`(提及股票代码)
+
+### 响应示例
+
+```json
+{
+  "code": 0,
+  "data": {
+    "news": [...]
+  }
+}
+```
 
 ---
 

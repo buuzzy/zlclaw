@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { AgentMessage } from '@/shared/hooks/useAgent';
 import { cn } from '@/shared/lib/utils';
 import { X } from 'lucide-react';
+import { generateArtifactFromMetadata } from '@/shared/lib/artifactFromMetadata';
+import { ArtifactRenderer } from '@/components/htui/ArtifactRenderer';
 
 interface ToolExecutionItemProps {
   message: AgentMessage;
@@ -375,6 +377,18 @@ export function ToolExecutionItem({
   const isActualError = hasError && !isWarning;
   const isCompleted = !isRunning && !isActualError && result;
 
+  // Generate artifacts from Skill tool result metadata
+  const artifacts = result && result.name === 'Skill' && result.toolMetadata
+    ? (() => {
+        const artifact = generateArtifactFromMetadata(
+          result.name,
+          result.output,
+          result.toolMetadata
+        );
+        return artifact ? [artifact] : [];
+      })()
+    : [];
+
   const handleClick = () => {
     if (!isRunning) {
       setShowModal(true);
@@ -443,6 +457,13 @@ export function ToolExecutionItem({
           </span>
         </div>
       </div>
+
+      {/* Artifact Rendering for Skill tool results */}
+      {artifacts.length > 0 && (
+        <div className="mt-3 ml-4">
+          <ArtifactRenderer artifacts={artifacts} />
+        </div>
+      )}
 
       {/* Modal */}
       {showModal && (

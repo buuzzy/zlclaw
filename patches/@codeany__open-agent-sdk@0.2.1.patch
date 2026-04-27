@@ -97,3 +97,76 @@ index a137c3813dd97d09941742c68ac61d58a0593127..8fe2bc520dbc8da1237d4e7f536cb8f2
          return {
              content,
              stopReason,
+
+diff --git a/dist/engine.js b/dist/engine.js
+--- a/dist/engine.js
++++ b/dist/engine.js
+@@ -447,12 +447,17 @@
+         try {
+             const result = await tool.call(block.input, context);
+             // Hook: PostToolUse
+-            await this.executeHooks('PostToolUse', {
++            const postHookResults = await this.executeHooks('PostToolUse', {
+                 toolName: block.name,
+                 toolInput: block.input,
+                 toolOutput: typeof result.content === 'string' ? result.content : JSON.stringify(result.content),
+                 toolUseId: block.id,
+             });
++            // Apply modifiedOutput from hook (if any)
++            const modifiedOutput = postHookResults.find((r) => r.modifiedOutput)?.modifiedOutput;
++            if (modifiedOutput !== undefined) {
++                result.content = modifiedOutput;
++            }
+             return { ...result, tool_use_id: block.id, tool_name: block.name };
+         }
+         catch (err) {
+
+diff --git a/dist/hooks.d.ts b/dist/hooks.d.ts
+--- a/dist/hooks.d.ts
++++ b/dist/hooks.d.ts
+@@ -73,6 +73,8 @@
+         body: string;
+         level?: 'info' | 'warning' | 'error';
+     };
++    /** Replace the tool output content before it re-enters the LLM conversation */
++    modifiedOutput?: string;
+ }
+ /**
+  * Hook configuration (from settings).
+
+diff --git a/src/hooks.ts b/src/hooks.ts
+--- a/src/hooks.ts
++++ b/src/hooks.ts
+@@ -101,6 +101,8 @@
+     body: string
+     level?: 'info' | 'warning' | 'error'
+   }
++  /** Replace the tool output content before it re-enters the LLM conversation */
++  modifiedOutput?: string
+ }
+ 
+ /**
+
+diff --git a/src/engine.ts b/src/engine.ts
+--- a/src/engine.ts
++++ b/src/engine.ts
+@@ -580,12 +580,18 @@
+       const result = await tool.call(block.input, context)
+ 
+       // Hook: PostToolUse
+-      await this.executeHooks('PostToolUse', {
++      const postHookResults = await this.executeHooks('PostToolUse', {
+         toolName: block.name,
+         toolInput: block.input,
+         toolOutput: typeof result.content === 'string' ? result.content : JSON.stringify(result.content),
+         toolUseId: block.id,
+       })
++
++      // Apply modifiedOutput from hook (if any) — replaces what the LLM sees
++      const modifiedOutput = postHookResults.find((r) => r.modifiedOutput)?.modifiedOutput
++      if (modifiedOutput !== undefined) {
++        result.content = modifiedOutput
++      }
+ 
+       return { ...result, tool_use_id: block.id, tool_name: block.name }
+     } catch (err: any) {

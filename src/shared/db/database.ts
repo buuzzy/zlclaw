@@ -269,6 +269,7 @@ async function ensureSchema(db: SqliteHandle): Promise<void> {
     'ALTER TABLE messages ADD COLUMN tool_output TEXT',
     'ALTER TABLE messages ADD COLUMN tool_use_id TEXT',
     'ALTER TABLE messages ADD COLUMN attachments TEXT',
+    'ALTER TABLE messages ADD COLUMN tool_metadata TEXT',
   ];
   for (const sql of alters) {
     try {
@@ -804,11 +805,11 @@ export async function createMessage(
   let created: Message;
 
   if (database) {
-    // Try with attachments column first, fallback to without
+    // Try with tool_metadata column first, fallback to without
     try {
       const result = await database.execute(
-        `INSERT INTO messages (task_id, type, content, tool_name, tool_input, tool_output, tool_use_id, subtype, error_message, attachments)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        `INSERT INTO messages (task_id, type, content, tool_name, tool_input, tool_output, tool_use_id, tool_metadata, subtype, error_message, attachments)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
         [
           input.task_id,
           input.type,
@@ -817,6 +818,7 @@ export async function createMessage(
           input.tool_input || null,
           input.tool_output || null,
           input.tool_use_id || null,
+          input.tool_metadata || null,
           input.subtype || null,
           input.error_message || null,
           input.attachments || null,
@@ -832,15 +834,15 @@ export async function createMessage(
       // Fallback: add attachments column if it doesn't exist
       try {
         await database.execute(
-          'ALTER TABLE messages ADD COLUMN attachments TEXT'
+          'ALTER TABLE messages ADD COLUMN tool_metadata TEXT'
         );
       } catch {
         // Column may already exist
       }
 
       const result = await database.execute(
-        `INSERT INTO messages (task_id, type, content, tool_name, tool_input, tool_output, tool_use_id, subtype, error_message, attachments)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        `INSERT INTO messages (task_id, type, content, tool_name, tool_input, tool_output, tool_use_id, tool_metadata, subtype, error_message, attachments)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
         [
           input.task_id,
           input.type,
@@ -849,6 +851,7 @@ export async function createMessage(
           input.tool_input || null,
           input.tool_output || null,
           input.tool_use_id || null,
+          input.tool_metadata || null,
           input.subtype || null,
           input.error_message || null,
           input.attachments || null,
@@ -871,6 +874,7 @@ export async function createMessage(
       tool_input: input.tool_input || null,
       tool_output: input.tool_output || null,
       tool_use_id: input.tool_use_id || null,
+      tool_metadata: input.tool_metadata || null,
       subtype: input.subtype || null,
       error_message: input.error_message || null,
       attachments: input.attachments || null,
