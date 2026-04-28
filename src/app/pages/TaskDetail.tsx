@@ -1730,11 +1730,26 @@ function AgentActionBar({
 
     // Hide action bar from screenshot via CSS class instead of inline style
     node.classList.add('exporting-screenshot');
+
+    // Temporarily disable overflow clipping on ancestors so html-to-image
+    // can capture content that would otherwise be hidden by scroll containers.
+    const overflowOverrides: { el: HTMLElement; prev: string }[] = [];
+    let ancestor: HTMLElement | null = node.parentElement;
+    while (ancestor) {
+      const computed = getComputedStyle(ancestor).overflow;
+      if (computed !== 'visible') {
+        overflowOverrides.push({ el: ancestor, prev: ancestor.style.overflow });
+        ancestor.style.overflow = 'visible';
+      }
+      ancestor = ancestor.parentElement;
+    }
+
     try {
       const { toPng } = await import('html-to-image');
 
       const dataUrl = await toPng(node, {
         pixelRatio: 2,
+        backgroundColor: '#ffffff',
         skipFonts: false,
         filter: (el) => {
           // Exclude the action bar element from the screenshot
@@ -1767,6 +1782,10 @@ function AgentActionBar({
     } catch (err) {
       console.error('[ExportImage] failed:', err);
     } finally {
+      // Restore original overflow styles
+      for (const { el, prev } of overflowOverrides) {
+        el.style.overflow = prev;
+      }
       node.classList.remove('exporting-screenshot');
       setExportingImage(false);
     }
