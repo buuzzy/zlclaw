@@ -2,18 +2,19 @@
 
 ## 项目概览
 
-Sage 是一个 AI 金融助手桌面应用。Tauri 2 + React 19 前端，Hono HTTP Sidecar（Node.js）后端，使用 `@codeany/open-agent-sdk`。
+Sage 是一个 AI 金融助手，支持桌面端（macOS）和移动端（iOS）。桌面端用 Tauri 2，iOS 端用 Capacitor，共享同一套 React 19 前端代码。
 
 ## 技术栈
 
-| 层 | 技术 |
-|---|---|
-| 桌面壳 | Tauri 2 (Rust) |
-| 前端 | React 19 + Vite + TailwindCSS |
-| 后端 Sidecar | Hono + Node.js，编译为独立二进制 |
-| Agent SDK | `@codeany/open-agent-sdk`（位于 `src-api/node_modules/@codeany/open-agent-sdk`） |
-| 数据库 | 本地 SQLite + Supabase（云同步） |
-| 图表 | ECharts (K 线/分时/柱/线/热力) + lightweight-charts (备选) |
+| 层 | 桌面端 | iOS 端 |
+|---|---|---|
+| 壳 | Tauri 2 (Rust) | Capacitor 8 |
+| 前端 | React 19 + Vite + TailwindCSS | 同左（共享 `src/`） |
+| 后端 | Hono sidecar (localhost:2026) | Railway 云端 (`zlclaw-production.up.railway.app`) |
+| Agent SDK | `@codeany/open-agent-sdk` | 同左（后端共享） |
+| 数据库 | 本地 SQLite + Supabase | 纯 Supabase |
+| 图表 | ECharts (K线/柱/线/热力) + lightweight-charts | 同左 |
+| 认证 | OAuth (GitHub/Google) via deep-link | 邮箱/密码（OAuth 待适配） |
 
 ## 关键文件路径
 
@@ -27,6 +28,25 @@ Sage 是一个 AI 金融助手桌面应用。Tauri 2 + React 19 前端，Hono HT
 | `src-api/resources/skills/` | 17 个内置金融技能的 SKILL.md 和配置 |
 | `src-api/resources/defaults/AGENTS.md` | Agent 工作流规范 |
 | `src-api/resources/defaults/SOUL.md` | 角色设定 |
+| `capacitor.config.ts` | Capacitor iOS 配置 |
+| `ios/` | Capacitor 生成的 Xcode 项目 |
+| `Dockerfile` | Railway 部署用多阶段构建 |
+| `.env.ios` | iOS 构建环境变量（VITE_API_URL） |
+
+## 项目目录结构
+
+```
+sage/
+├── src/                ← React 前端（桌面 + iOS 共享）
+├── src-api/            ← Hono 后端（桌面本地 sidecar / iOS 走 Railway）
+├── src-tauri/          ← Tauri 桌面壳（Rust）
+├── ios/                ← Capacitor iOS 壳（Xcode 项目）
+├── capacitor.config.ts ← Capacitor 配置
+├── Dockerfile          ← Railway 部署
+└── docs/
+    ├── TODO.md
+    └── ios/IOS_PLAN.md ← iOS 完整方案文档
+```
 
 ## 构建与部署
 
@@ -34,9 +54,49 @@ Sage 是一个 AI 金融助手桌面应用。Tauri 2 + React 19 前端，Hono HT
 pnpm build:api           # TS→JS 编译（不生成二进制）
 pnpm build:api:binary:mac-arm   # 生成 sage-api 独立二进制
 pnpm tauri:build:mac-arm        # 完整 .app 打包（含前端+后端二进制）
+pnpm build:ios                  # iOS: 前端构建 + cap sync
+pnpm open:ios                   # 打开 Xcode iOS 项目
 ```
 
-**注意**: 桌面 App 运行的是 `.app/Contents/MacOS/sage-api` 二进制，不是 tsx 源码。改了后端代码必须重新生成二进制并打包，或至少复制新二进制到 `.app` 目录。
+**桌面端注意**: App 运行的是 `.app/Contents/MacOS/sage-api` 二进制，不是 tsx 源码。改了后端代码必须重新生成二进制并打包。
+
+**iOS 端注意**: 每次改前端代码后需要 `pnpm build:ios` 重新构建同步到 Xcode，然后在 Xcode 里 ▶️ 运行。`.env.ios` 包含 `VITE_API_URL` 指向 Railway。
+
+## 平台差异处理
+
+### API 地址（`src/config/index.ts`）
+```typescript
+const isTauri = '__TAURI_INTERNALS__' in window;
+export const API_BASE_URL = isTauri
+  ? 'http://localhost:2026'          // 桌面端本地 sidecar
+  : import.meta.env.VITE_API_URL;     // iOS/Web → Railway
+```
+
+### 认证（`src/shared/providers/auth-provider.tsx`）
+- **桌面端**: OAuth → 系统浏览器 → deep-link (`sage://auth/callback`) 回调
+- **iOS 端**: 邮箱/密码登录（`signInWithPassword`）。OAuth 在 Capacitor WebView 内未完成适配（deep-link 回调不通）
+- **Supabase client** (`src/shared/lib/supabase.ts`): `detectSessionInUrl` 和 `flowType` 按 `isTauri` 分叉
+
+### 鉴权（`src-api/src/app/middleware/local-only.ts`）
+- `SAGE_API_TOKEN` 环境变量设置时 → Bearer token 鉴权（Railway 云端）
+- 未设置时 → loopback IP 检测（桌面端 sidecar）
+
+### Railway 部署
+- URL: `https://zlclaw-production.up.railway.app`
+- 环境变量: `SAGE_API_TOKEN`（Bearer auth）
+- Dockerfile 在项目根目录，多阶段构建（pnpm bundle → node:20-alpine）
+- Railway Hobby Plan $5/月，含 $5 credit，可设 Hard Limit 防超支
+
+## iOS 当前状态（Phase 0 完成）
+
+- ✅ Capacitor 项目初始化，模拟器可运行
+- ✅ 邮箱/密码登录可用
+- ✅ 能进入主界面
+- ⚠️ UI 未适配移动端（桌面版 UI 挤在手机屏幕上）
+- ⚠️ OAuth (GitHub/Google) 在 iOS WebView 内回调不通，暂用邮箱登录
+- ⚠️ 本地 SQLite 等桌面功能在 iOS 上静默失败（不影响对话）
+- **下一步: iOS UI 适配**（侧边栏→底部 Tab Bar、移动端布局、Safe Area、虚拟键盘）
+- 详细方案: `docs/ios/IOS_PLAN.md`
 
 ## 前端请求路由（useAgent.ts 决策树）
 
@@ -79,6 +139,9 @@ pnpm tauri:build:mac-arm        # 完整 .app 打包（含前端+后端二进制
 - API 错误响应（如 `{"code": -1, "msg": "鉴权失败"}`）也会被结构匹配误拦截，需检查 `parsed.code !== 0 && !parsed.data` 提前退出。
 
 ## 待办事项
+
+### P1 — 数据源迁移：腾讯金融 API → TinyShare
+等用户提供 TinyShare 接口文档 + MCP 后启动。涉及 4 个 westock-* 技能、拦截逻辑、前端映射。
 
 ### P1 — MiniMax 不遵循 SKILL.md artifact 选择规则
 分时查询应走 `intraday-chart`，但 MiniMax 声称"没有分时图组件"。根因是 LLM reasoning 跳过 SKILL.md 检索。候选方案：提到 system prompt 顶层 / 加 few-shot / 后置 guard / 换模型。
