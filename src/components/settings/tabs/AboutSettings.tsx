@@ -30,6 +30,7 @@ export function AboutSettings() {
   const {
     status,
     latestVersion,
+    progress,
     errorMessage,
     checkForUpdates,
     downloadAndInstall,
@@ -61,11 +62,41 @@ export function AboutSettings() {
       };
     }
     if (status === 'downloading' || status === 'ready' || status === 'installing') {
+      const pct = progress !== null ? Math.round(progress * 100) : null;
       return {
-        icon: <Loader2 className="size-4 animate-spin" />,
+        icon:
+          status === 'downloading' && pct !== null ? (
+            <svg className="size-4" viewBox="0 0 20 20">
+              <circle
+                cx="10"
+                cy="10"
+                r="8"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                opacity="0.2"
+              />
+              <circle
+                cx="10"
+                cy="10"
+                r="8"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeDasharray={`${pct * 0.5027} 50.27`}
+                transform="rotate(-90 10 10)"
+                className="transition-all duration-300"
+              />
+            </svg>
+          ) : (
+            <Loader2 className="size-4 animate-spin" />
+          ),
         label:
           status === 'downloading'
-            ? t.update.downloading
+            ? pct !== null
+              ? `${t.update.downloading} ${pct}%`
+              : t.update.downloading
             : status === 'ready'
               ? t.update.readyToInstall
               : t.update.installing,
@@ -154,6 +185,18 @@ export function AboutSettings() {
       {status === 'error' && errorMessage && (
         <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-lg border p-3 text-xs">
           {t.update.checkFailed}: {errorMessage}
+        </div>
+      )}
+
+      {/* 下载进度条 */}
+      {status === 'downloading' && progress !== null && (
+        <div className="space-y-1.5">
+          <div className="bg-muted h-1.5 overflow-hidden rounded-full">
+            <div
+              className="bg-primary h-full rounded-full transition-all duration-300"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
+          </div>
         </div>
       )}
 
