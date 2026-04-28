@@ -1864,8 +1864,8 @@ function AgentActionBar({
           content: m.content ?? null,
           subtype: m.subtype ?? null,
           tool_name: m.name ?? null,
-          // tool_use 的 input 保留结构；tool_result 的 output 保留但截断
-          tool_input: m.input ?? null,
+          // tool_use 的 input 截断防膨胀；tool_result 的 output 保留但截断
+          tool_input: typeof m.input === 'string' ? trunc(m.input, 2000) : m.input ? trunc(JSON.stringify(m.input), 2000) : null,
           tool_output: trunc(m.output, 2000),
           is_error: m.isError ?? null,
           message: m.message ?? null,

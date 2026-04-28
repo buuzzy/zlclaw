@@ -52,12 +52,3 @@
 | iOS 移动端（Phase 1-3） | P3 | Phase 0 已完成，详见 `docs/ios/IOS_PLAN.md` |
 | 数据源迁移 westock → TinyShare | P3 | westock 运行稳定，TinyShare 作为 fallback 容灾备选 |
 | 隐私政策与 TOS 页面 | P3 | 正式版上架前做 |
-
----
-
-## 遗留技术债务
-
-- [ ] `message_count` 数字偏大：useAgent.ts 流式输出写入多条中间态消息，待重构收敛
-- [ ] `full_transcript` 中 text 有 content=null 条目：同上根因
-- [ ] `tool_input` 没截断上限：超长 payload 可能撑大 JSONB
-- [ ] dev 与 release 的 `sage://` deep link 冲突：dev 模式 OAuth 回调被 release .app 拦截
