@@ -72,6 +72,47 @@ app.route('/skills', skillsRoutes);
 app.route('/cron', cronRoutes);
 app.route('/v1', completionsRoutes);
 
+// OAuth callback landing page — browser redirects here after Google/GitHub auth,
+// then triggers the sage:// deep link to hand off to the desktop app.
+// Not behind localOnlyMiddleware since it's accessed from the user's browser.
+app.get('/auth/callback', (c) => {
+  const url = new URL(c.req.url);
+  const params = url.searchParams.toString();
+  const deepLink = `sage://auth/callback${params ? '?' + params : ''}`;
+
+  return c.html(`<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sage - Login Successful</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           display: flex; align-items: center; justify-content: center;
+           min-height: 100vh; background: #fafafa; color: #333; }
+    .card { text-align: center; padding: 3rem; }
+    .icon { font-size: 3rem; margin-bottom: 1rem; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+    p { color: #888; font-size: 0.875rem; }
+    .hint { margin-top: 1.5rem; color: #aaa; font-size: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">✅</div>
+    <h1>Login Successful</h1>
+    <p>Returning to Sage...</p>
+    <p class="hint">You can close this tab.</p>
+  </div>
+  <script>
+    window.location.href = ${JSON.stringify(deepLink)};
+    setTimeout(function() { try { window.close(); } catch(e) {} }, 1000);
+  </script>
+</body>
+</html>`);
+});
+
 // Root endpoint
 app.get('/', (c) => {
   return c.json({
