@@ -31,14 +31,19 @@ export interface ExtractResult {
  * Pattern: ```artifact:TYPE\n{...json...}\n```
  *
  * Returns cleaned text (markers removed) and parsed artifacts.
- * Incomplete blocks (opened but not closed) are left in text for
- * the next call once more content streams in.
+ * Incomplete blocks (opened but not closed) are stripped from the
+ * visible text to prevent raw markup from flashing in the UI during
+ * streaming — the block will be parsed once it completes.
  */
 export function extractArtifacts(text: string): ExtractResult {
   const artifacts: Artifact[] = [];
 
   if (hasIncompleteBlock(text)) {
-    return { cleanText: text, artifacts };
+    // Strip the incomplete artifact block from visible text so users
+    // don't see raw ```artifact:... markup while data is streaming in.
+    const lastOpen = text.lastIndexOf('```artifact:');
+    const cleanText = lastOpen > 0 ? text.slice(0, lastOpen).trim() : '';
+    return { cleanText, artifacts };
   }
 
   const cleanText = text.replace(ARTIFACT_BLOCK_RE, (_match, type, body) => {

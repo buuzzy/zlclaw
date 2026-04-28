@@ -16,14 +16,6 @@
 
 ## 待修复 🐛
 
-### P2 — Artifact 组件空壳先行渲染
-
-用户查询行情时，quote-card 先以空壳状态出现（无数据卡片框架），随后数据填充。预期应同时出现。
-
-**关键文件**：`artifactParser.ts`、`ArtifactRenderer.tsx`、`useAgent.ts` processStream
-
----
-
 ### P2 — 导出图片截断（底部黑边）
 
 `html-to-image` 截取的是可视视口而非完整内容，滚动区下方消息未渲染进截图。
@@ -52,7 +44,6 @@
 
 | 条目 | 优先级 | 说明 |
 |------|--------|------|
-| 打包体积优化（按需下载 skills） | P2 | DMG 瘦身到 50~80MB |
 | Supabase L2→L3（本地 Docker） | P2 | schema as code + 独立 dev 环境 |
 | OAuth 回调页优化 | P3 | 浏览器 tab 残留问题 |
 | 数据导入功能补齐 | P3 | 当前只导出可用，导入已禁用 |

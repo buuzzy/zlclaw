@@ -100,11 +100,7 @@ export function ArtifactRenderer({ artifacts }: ArtifactRendererProps) {
   if (!artifacts || artifacts.length === 0) return null;
 
   return (
-    <Suspense
-      fallback={
-        <div className="h-20 animate-pulse rounded-lg bg-zinc-800/50" />
-      }
-    >
+    <Suspense fallback={null}>
       <div className="my-3 flex flex-col gap-4">
         {artifacts.map((artifact, i) => renderSingleArtifact(artifact, i))}
       </div>
