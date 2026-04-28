@@ -253,11 +253,11 @@ export const defaultProviders: AIProvider[] = [
     id: 'minimax',
     name: 'MiniMax',
     apiKey: '',
-    baseUrl: 'https://api.minimaxi.com/v1',
+    baseUrl: 'https://api.minimaxi.com/anthropic',
     enabled: true,
     models: ['MiniMax-M2', 'MiniMax-M2.5', 'MiniMax-M2.5-highspeed', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed'],
     defaultModel: 'MiniMax-M2',
-    apiType: 'openai-completions',
+    apiType: 'anthropic-messages',
     icon: 'M',
     apiKeyUrl:
       'https://platform.minimax.io/subscribe/coding-plan?code=9hgHKlPO3G&source=link',
@@ -516,11 +516,13 @@ export async function getSettingsAsync(): Promise<Settings> {
             settings.providers.push(defaultProvider);
           }
         }
-        // Migration: Update MiniMax provider to new OpenAI-compatible endpoint
+        // Migration: Update MiniMax provider to Anthropic-compatible endpoint
+        // MiniMax officially supports Anthropic API (streaming, tool_use, thinking).
+        // This eliminates all dual-protocol bugs (plan failures, <think> leaks, fast chat bypass).
         const minimaxProvider = settings.providers.find((p) => p.id === 'minimax');
-        if (minimaxProvider && minimaxProvider.baseUrl !== 'https://api.minimaxi.com/v1') {
-          minimaxProvider.baseUrl = 'https://api.minimaxi.com/v1';
-          minimaxProvider.apiType = 'openai-completions';
+        if (minimaxProvider && minimaxProvider.baseUrl !== 'https://api.minimaxi.com/anthropic') {
+          minimaxProvider.baseUrl = 'https://api.minimaxi.com/anthropic';
+          minimaxProvider.apiType = 'anthropic-messages';
           minimaxProvider.models = ['MiniMax-M2', 'MiniMax-M2.5', 'MiniMax-M2.5-highspeed', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed'];
           minimaxProvider.defaultModel = 'MiniMax-M2';
         }
