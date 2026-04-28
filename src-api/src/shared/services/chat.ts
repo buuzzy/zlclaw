@@ -26,6 +26,15 @@ function isAnthropicModel(model: string): boolean {
   return model.startsWith('claude-') || model.includes('claude');
 }
 
+/**
+ * Determine if the Anthropic SDK should be used for this request.
+ * True when: explicit apiType is 'anthropic-messages', OR model name contains 'claude'.
+ */
+function shouldUseAnthropicSDK(model: string, apiType?: string): boolean {
+  if (apiType === 'anthropic-messages') return true;
+  return isAnthropicModel(model);
+}
+
 function resolveConfig(modelConfig?: { apiKey?: string; baseUrl?: string; model?: string }) {
   // Use explicit modelConfig from user settings only — no environment variable fallback
   const apiKey = modelConfig?.apiKey || '';
@@ -211,12 +220,13 @@ async function openAICompatibleCreate(
  */
 export async function* runChat(
   prompt: string,
-  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
+  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string; apiType?: string },
   language?: string,
   conversation?: ConversationMessage[],
   abortController?: AbortController
 ): AsyncGenerator<AgentMessage> {
   const { apiKey, baseURL, model } = resolveConfig(modelConfig);
+  const apiType = modelConfig?.apiType;
 
   if (!apiKey) {
     yield { type: 'error', message: 'No API key configured. Please set up your API key in Settings.' };
@@ -227,7 +237,7 @@ export async function* runChat(
   logger.info('[ChatService] Starting chat:', {
     model,
     hasBaseURL: !!baseURL,
-    isAnthropic: isAnthropicModel(model),
+    isAnthropic: shouldUseAnthropicSDK(model, apiType),
     hasConversation: !!(conversation && conversation.length > 0),
     promptLength: prompt.length,
   });
@@ -257,8 +267,8 @@ export async function* runChat(
   }
   messages.push({ role: 'user', content: prompt });
 
-  // Non-Anthropic models: use OpenAI-compatible API
-  if (!isAnthropicModel(model)) {
+  // Non-Anthropic protocol: use OpenAI-compatible API
+  if (!shouldUseAnthropicSDK(model, apiType)) {
     try {
       yield* runOpenAICompatibleChat(messages, systemPrompt, apiKey, baseURL, model, abortController);
     } catch (error) {
@@ -338,7 +348,7 @@ export async function* runChat(
  */
 export async function generateTitle(
   prompt: string,
-  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
+  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string; apiType?: string },
   language?: string
 ): Promise<string> {
   const { apiKey, baseURL, model } = resolveConfig(modelConfig);
@@ -353,8 +363,8 @@ export async function generateTitle(
   try {
     let title: string;
 
-    if (!isAnthropicModel(model)) {
-      // Non-Anthropic: OpenAI-compatible
+    if (!shouldUseAnthropicSDK(model, modelConfig?.apiType)) {
+      // Non-Anthropic protocol: OpenAI-compatible
       title = await openAICompatibleCreate(
         [{ role: 'user', content: prompt }],
         systemPrompt,
