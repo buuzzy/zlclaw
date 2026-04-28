@@ -339,7 +339,7 @@ export function ConnectorSettings() {
                 {bindLoading ? (
                   <Loader2 className="size-3 animate-spin" />
                 ) : (
-                  '切换到涨乐金融龙虾'
+                  '切换到Sage'
                 )}
               </button>
             ) : (
@@ -375,8 +375,8 @@ export function ConnectorSettings() {
                   </span>
                 </p>
                 <p className="text-muted-foreground text-xs">
-                  微信消息正在发送到其他 Agent。点击「切换到涨乐金融龙虾」将修改
-                  WeClaw 配置并重启服务，使微信消息转发到涨乐金融龙虾。
+                  微信消息正在发送到其他 Agent。点击「切换到Sage」将修改
+                  WeClaw 配置并重启服务，使微信消息转发到Sage。
                 </p>
               </div>
             </div>

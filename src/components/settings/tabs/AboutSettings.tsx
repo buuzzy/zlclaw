@@ -130,9 +130,9 @@ export function AboutSettings() {
       {/* Product Info */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <img src={ImageLogo} alt="涨乐金融龙虾" className="size-16 rounded-xl" />
+          <img src={ImageLogo} alt="Sage" className="size-16 rounded-xl" />
           <div>
-            <h2 className="text-foreground text-xl font-bold">涨乐金融龙虾</h2>
+            <h2 className="text-foreground text-xl font-bold">Sage</h2>
             <p className="text-muted-foreground text-sm">
               {t.settings.aiPlatform}
             </p>
@@ -193,7 +193,7 @@ export function AboutSettings() {
             {t.settings.copyright}
           </span>
           <span className="text-foreground flex items-center gap-1 text-sm font-medium">
-            © 2026 涨乐金融龙虾
+            © 2026 Sage
           </span>
         </div>
         <div className="border-border flex items-center justify-between rounded-lg border p-3">
@@ -201,7 +201,7 @@ export function AboutSettings() {
             {t.settings.license}
           </span>
           <span className="text-foreground flex items-center gap-1 text-sm font-medium">
-            涨乐金融龙虾 Community License
+            Sage Community License
           </span>
         </div>
       </div>

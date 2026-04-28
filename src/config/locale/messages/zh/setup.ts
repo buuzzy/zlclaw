@@ -1,9 +1,9 @@
 export default {
-  title: '欢迎使用涨乐金融龙虾',
+  title: '欢迎使用 Sage',
   subtitle: '让我们先确保您已安装所有必需的工具',
   checking: '正在检查依赖...',
   checkingEnvironment: '正在检查环境...',
-  redirecting: '正在进入涨乐金融龙虾...',
+  redirecting: '正在进入 Sage...',
   recheck: '重新检测',
   skip: '跳过',
   retry: '重试',

@@ -24,7 +24,7 @@
 - CLI 改为后续以插件下载形式按需启用（v1.1+ 规划）
 
 #### 决策留痕（详见 docs/RELEASE.md）
-- Windows x64 暂缓发版：CI 实测 WiX `light.exe` 对中文产品名"涨乐金融龙虾"有 encoding bug，NSIS 已成功但 `bundle.targets:"all"` 强带 MSI 导致整个 job 失败。`docs/RELEASE.md` 附录 E 记录恢复模板（`bundles_flag: "--bundles nsis"`）
+- Windows x64 暂缓发版：CI 实测 WiX `light.exe` 对中文产品名有 encoding bug，NSIS 已成功但 `bundle.targets:"all"` 强带 MSI 导致整个 job 失败。`docs/RELEASE.md` 附录 E 记录恢复模板（`bundles_flag: "--bundles nsis"`）
 - Windows 首发不做代码签名，未来恢复时 release notes 走 SmartScreen 解除（附录 B 模板已备好）
 
 ---
@@ -266,11 +266,11 @@ Agent 具备 Bash 工具，可直接读写用户配置文件：
 
 **现象**：CI Windows job 在 `Tauri build` 步骤失败：
 ```
-Running light to produce ...bundle\msi\涨乐金融龙虾_1.0.3_x64_en-US.msi
+Running light to produce ...bundle\msi\Sage_1.0.3_x64_en-US.msi
 failed to bundle project `failed to run ...WixTools314\light.exe`
 ```
 
-**根因**：`tauri.conf.json:bundle.targets="all"` 在 Windows 上等于 `nsis + msi` 都打。WiX 3.14 的 `light.exe`（2014 年的 .NET 3.5 老工具）对产品名含中文字符（"涨乐金融龙虾"）的 MSI 文件名有 encoding bug。**NSIS 本身已成功**（`.exe` 安装包 + `.nsis.zip` updater + `.sig` 都生成了），是 MSI 拖累整个 job 失败。
+**根因**：`tauri.conf.json:bundle.targets="all"` 在 Windows 上等于 `nsis + msi` 都打。WiX 3.14 的 `light.exe`（2014 年的 .NET 3.5 老工具）对产品名含非 ASCII 字符的 MSI 文件名有 encoding bug。**NSIS 本身已成功**（`.exe` 安装包 + `.nsis.zip` updater + `.sig` 都生成了），是 MSI 拖累整个 job 失败。
 
 **恢复步骤**（约 15 分钟工作量）：
 

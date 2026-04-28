@@ -33,11 +33,8 @@ export const API_BASE_URL = isTauri
 
 /**
  * App name（用户可见品牌名）
- *
- * 注：底层 identifier / 目录名 / scheme 保持 `sage` 不变（见 `APP_IDENTIFIER`、
- * `~/.sage/` 目录、`sage://` deep link），只有面向用户的显示名用中文品牌。
  */
-export const APP_NAME = '涨乐金融龙虾';
+export const APP_NAME = 'Sage';
 
 /**
  * App identifier (must match tauri.conf.json)
