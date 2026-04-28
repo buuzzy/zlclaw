@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-同花顺财务数据查询 - 财务数据查询CLI
+财务数据查询 - 财务数据查询CLI
 使用Python3标准库实现，无第三方依赖
 """
 
@@ -31,11 +31,11 @@ class FinanceDataAPIError(Exception):
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
-        description="同花顺财务数据查询工具",
+        description="财务数据查询工具",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用示例:
-  python3 scripts/cli.py --query "同花顺营业收入"
+  python3 scripts/cli.py --query "贵州茅台营业收入"
   python3 scripts/cli.py --query "ROE最高的股票" --page "1" --limit "20"
   python3 scripts/cli.py --query "负债率最低的行业" --api-key "your-key"
 

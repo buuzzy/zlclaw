@@ -36,7 +36,7 @@ Authorization: Bearer {IWENCAI_API_KEY}
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| query | STRING | 是 | 用户问句，例如："同花顺上市日期？" |
+| query | STRING | 是 | 用户问句，例如："贵州茅台上市日期？" |
 | source | STRING | 否 | 来源，默认值：test |
 | page | STRING | 否 | 分页参数，默认值：1 |
 | limit | STRING | 否 | 分页参数，默认值：10 |
@@ -46,7 +46,7 @@ Authorization: Bearer {IWENCAI_API_KEY}
 
 ```json
 {
-  "query": "同花顺上市日期？",
+  "query": "贵州茅台上市日期？",
   "source": "test",
   "page": "1",
   "limit": "10",
@@ -62,7 +62,7 @@ Authorization: Bearer {IWENCAI_API_KEY}
 
 ### 响应示例
 
-**查询：同花顺上市日期？**
+**查询：贵州茅台上市日期？**
 
 ```json
 {
@@ -89,7 +89,7 @@ headers = {
     "Content-Type": "application/json"
 }
 payload = {
-    "query": "同花顺上市日期？",
+    "query": "贵州茅台上市日期？",
     "source": "test",
     "page": "1",
     "limit": "10",

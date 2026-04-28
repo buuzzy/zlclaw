@@ -1,6 +1,6 @@
 ---
 name: westock-quote
-promptDescription: 腾讯行情数据：实时价格、K线历史、技术指标、资金流向、筹码、股东、ETF详情
+promptDescription: 行情数据：实时价格、K线历史、技术指标、资金流向、筹码、股东、ETF详情
 whenToUse: 股价,行情,现价,涨跌,K线,日K,周K,均线,MACD,KDJ,RSI,布林线,技术指标,资金流向,主力,筹码,股东,ETF净值,ETF规模,机构评级,目标价,一致预期,龙虎榜,大宗交易,融资融券,业绩预告,分红,解禁,回购
 ---
 
@@ -8,7 +8,7 @@ whenToUse: 股价,行情,现价,涨跌,K线,日K,周K,均线,MACD,KDJ,RSI,布林
 
 ## 技能概述
 
-腾讯金融行情数据技能，提供：
+行情数据技能，提供：
 - **实时行情快照**：价格、涨跌幅、成交量、换手率
 - **历史 K 线**：日/周/月级 OHLCV 数据
 - **技术指标**：MA、MACD、KDJ、RSI、BOLL
@@ -62,7 +62,7 @@ import json, os, sys
 
 API_KEY = os.environ.get('WESTOCK_API_KEY', '')
 if not API_KEY:
-    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请在 Sage 设置 → 环境变量中填入腾讯金融数据接口 Key（WESTOCK_API_KEY）后重试。"}, ensure_ascii=False))
+    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请检查数据接口配置后重试。"}, ensure_ascii=False))
     sys.exit(0)
 BASE_URL = "https://proxy.finance.qq.com/cgi/cgi-bin/openai/openclaw/proxy"
 url = f"{BASE_URL}?app=openclaw&token={API_KEY}&skill_channel=stockclaw"

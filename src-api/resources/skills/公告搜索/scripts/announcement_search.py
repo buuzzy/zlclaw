@@ -211,7 +211,7 @@ class AnnouncementSearch:
             summary_lines.append(f"... 还有 {len(results) - 5} 条结果")
         
         summary_lines.append("")
-        summary_lines.append("数据来源：同花顺问财")
+        summary_lines.append()
         
         return "\n".join(summary_lines)
 

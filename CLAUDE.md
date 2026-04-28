@@ -140,7 +140,7 @@ export const API_BASE_URL = isTauri
 
 ## 待办事项
 
-### P1 — 数据源迁移：腾讯金融 API → TinyShare
+### P1 — 数据源迁移：westock API → TinyShare
 等用户提供 TinyShare 接口文档 + MCP 后启动。涉及 4 个 westock-* 技能、拦截逻辑、前端映射。
 
 ### P1 — MiniMax 不遵循 SKILL.md artifact 选择规则

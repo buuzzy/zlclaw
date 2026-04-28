@@ -267,27 +267,53 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            // Handle app exit to cleanup sidecar
-            if let tauri::RunEvent::Exit = event {
-                #[cfg(not(debug_assertions))]
-                {
-                    println!("[App] Cleaning up API sidecar...");
-                    if let Some(state) = app_handle.try_state::<ApiSidecar>() {
-                        if let Ok(mut guard) = state.0.lock() {
-                            if let Some(child) = guard.take() {
-                                let child: CommandChild = child;
-                                println!("[App] Killing API sidecar process...");
-                                let _ = child.kill();
+            match event {
+                // macOS: Cmd+W hides the window instead of quitting the app.
+                // Clicking the dock icon re-shows it.
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::WindowEvent {
+                    event: tauri::WindowEvent::CloseRequested { api, .. },
+                    label,
+                    ..
+                } => {
+                    // Prevent the window from being destroyed
+                    api.prevent_close();
+                    // Hide the window instead
+                    if let Some(window) = app_handle.get_webview_window(&label) {
+                        let _ = window.hide();
+                    }
+                }
+                // macOS: Re-show window when dock icon is clicked
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::Reopen { .. } => {
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+                // Handle app exit to cleanup sidecar
+                tauri::RunEvent::Exit => {
+                    #[cfg(not(debug_assertions))]
+                    {
+                        println!("[App] Cleaning up API sidecar...");
+                        if let Some(state) = app_handle.try_state::<ApiSidecar>() {
+                            if let Ok(mut guard) = state.0.lock() {
+                                if let Some(child) = guard.take() {
+                                    let child: CommandChild = child;
+                                    println!("[App] Killing API sidecar process...");
+                                    let _ = child.kill();
+                                }
                             }
                         }
+                        // Also try to kill by port as a fallback
+                        kill_existing_api_process(2026);
                     }
-                    // Also try to kill by port as a fallback
-                    kill_existing_api_process(2026);
+                    #[cfg(debug_assertions)]
+                    {
+                        let _ = app_handle;
+                    }
                 }
-                #[cfg(debug_assertions)]
-                {
-                    let _ = app_handle;
-                }
+                _ => {}
             }
         });
 }

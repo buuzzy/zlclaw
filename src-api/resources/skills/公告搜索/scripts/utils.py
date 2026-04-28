@@ -164,7 +164,7 @@ class Utils:
             output_lines.append(f"   链接: {result.get('url', '')}")
             output_lines.append("-" * 40)
         
-        output_lines.append("数据来源：同花顺问财")
+        output_lines.append()
         return "\n".join(output_lines)
     
     @staticmethod

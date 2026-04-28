@@ -49,9 +49,9 @@ let cacheReady = false;
  * has useful tools on turn 1 even with an ambiguous prompt.
  */
 const COLD_START_SKILL_NAMES = [
-  '行情数据查询',  // iwencai stock quote — most common query type
+  '行情数据查询',  // stock quote — most common query type
   '新闻搜索',      // news search — second most common
-  'westock-quote', // tencent quote — covers price/chart intent
+  'westock-quote', // quote snapshot — covers price/chart intent
 ];
 
 // ============================================================================

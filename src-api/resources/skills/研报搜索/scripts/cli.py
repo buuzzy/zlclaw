@@ -401,7 +401,7 @@ class ResearchReportCLI:
         """保存到文本文件"""
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(f"研究报告搜索结果\n")
-            f.write(f"数据来源: 同花顺问财财经资讯搜索接口\n")
+            f.write(f"
             f.write(f"搜索时间: {self._get_current_time()}\n")
             f.write(f"报告数量: {len(articles)} 篇\n")
             f.write("=" * 80 + "\n\n")
@@ -438,7 +438,7 @@ class ResearchReportCLI:
         """输出到控制台"""
         if output_format == "text":
             print(f"\n研究报告搜索结果")
-            print(f"数据来源: 同花顺问财财经资讯搜索接口")
+            print(f"
             print(f"搜索时间: {self._get_current_time()}")
             print(f"报告数量: {len(articles)} 篇")
             print("=" * 80)
@@ -483,7 +483,7 @@ class ResearchReportCLI:
     def _print_batch_summary(self, result: Dict[str, Any]) -> None:
         """输出批量处理摘要"""
         print(f"\n批量处理结果摘要")
-        print(f"数据来源: 同花顺问财财经资讯搜索接口")
+        print(f"
         print(f"处理时间: {self._get_current_time()}")
         print(f"查询数量: {len(result.get('queries', {}))}")
         print(f"总报告数量: {result.get('total_articles', 0)}")

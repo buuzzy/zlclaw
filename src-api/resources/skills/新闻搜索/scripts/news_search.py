@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 新闻搜索技能主文件
-财经领域资讯搜索引擎，调用同花顺问财的财经资讯搜索接口
+财经领域资讯搜索引擎，调用内置财经资讯搜索接口
 """
 
 import os
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class NewsSearchAPI:
-    """同花顺问财经资讯搜索API封装类"""
+    """财经资讯搜索API封装类"""
     
     def __init__(self, api_key: Optional[str] = None):
         """
@@ -248,7 +248,7 @@ class NewsProcessor:
             "summary": article.get("summary", ""),
             "url": article.get("url", ""),
             "publish_date": article.get("publish_date", ""),
-            "source": "同花顺问财"
+            "source": "Sage"
         }
     
     @staticmethod
@@ -382,7 +382,7 @@ class QueryProcessor:
 def main():
     """主函数，处理命令行参数"""
     parser = argparse.ArgumentParser(
-        description="财经新闻搜索工具 - 调用同花顺问财的财经资讯搜索接口",
+        description="财经新闻搜索工具 - 调用内置财经资讯搜索接口",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
@@ -391,7 +391,7 @@ def main():
   %(prog)s -i queries.txt -o output/ -f json
   echo "人工智能" | %(prog)s -f text
   
-数据来源: 同花顺问财财经资讯搜索
+
         """
     )
     
@@ -543,7 +543,7 @@ def main():
                         print(f"   摘要: {article.get('summary', '无摘要')}")
                         print(f"   发布时间: {article.get('publish_date', '未知时间')}")
                         print(f"   链接: {article.get('url', '无链接')}")
-                        print(f"   数据来源: 同花顺问财")
+                        print(f"   
         
         else:
             # 单查询模式
@@ -594,7 +594,7 @@ def main():
                 print(f"查询: {query}")
                 print(f"找到 {len(all_articles)} 篇文章 (最近 {args.days} 天)")
                 print(f"{'='*60}")
-                print(f"数据来源: 同花顺问财财经资讯搜索")
+                print(f"
                 print(f"{'='*60}")
                 
                 if not all_articles:

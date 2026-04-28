@@ -315,11 +315,11 @@ failed to bundle project `failed to run ...WixTools314\light.exe`
 
 ---
 
-### P1 — 数据源迁移：腾讯金融 API → TinyShare
+### P1 — 数据源迁移：westock API → TinyShare
 
 **状态：** 📋 待启动（2026-04-27，等接口文档 + MCP 到位后开始）
 
-**背景**：当前 4 个 westock-* 技能（quote / market / research / screener）全部依赖腾讯金融代理接口。后续将整体迁移到 TinyShare 数据源。
+**背景**：当前 4 个 westock-* 技能（quote / market / research / screener）全部依赖 westock 代理接口。后续将整体迁移到 TinyShare 数据源。
 
 **涉及范围**：
 | 改动项 | 文件/目录 |
@@ -986,7 +986,7 @@ if (validPoints.length === 0) {
 
 **状态：** 📋 待实现（2026-04-23 记录）
 
-**现状：** `src-api/src/config/constants.ts:79` 硬编码 `DEFAULT_IWENCAI_API_KEY` —— 上游 WorkAny 留下的"开箱即用"便利默认值。用户告知此 key 是**同花顺官方公网放出的公共 key**，不属于私密泄漏，但最佳实践应改为环境变量读取：
+**现状：** `src-api/src/config/constants.ts:79` 硬编码 `DEFAULT_IWENCAI_API_KEY` —— 上游 WorkAny 留下的"开箱即用"便利默认值。用户告知此 key 是**官方公网放出的公共 key**，不属于私密泄漏，但最佳实践应改为环境变量读取：
 
 ```ts
 export const DEFAULT_IWENCAI_API_KEY = process.env.IWENCAI_API_KEY || '';

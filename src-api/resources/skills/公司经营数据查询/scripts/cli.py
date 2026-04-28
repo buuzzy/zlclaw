@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-同花顺主营经营数据查询 - 主营经营数据查询CLI
+主营经营数据查询 - 主营经营数据查询CLI
 使用Python3标准库实现，无第三方依赖
 """
 
@@ -31,11 +31,11 @@ class BusinessDataAPIError(Exception):
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
-        description="同花顺主营经营数据查询工具",
+        description="主营经营数据查询工具",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用示例:
-  python3 scripts/cli.py --query "同花顺主营业务构成"
+  python3 scripts/cli.py --query "贵州茅台主营业务构成"
   python3 scripts/cli.py --query "主要客户" --page "1" --limit "20"
   python3 scripts/cli.py --query "参控股公司" --api-key "your-key"
 

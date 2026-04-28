@@ -14,7 +14,7 @@ setup(
     version="1.0.0",
     author="News Search Skill",
     author_email="",
-    description="财经领域资讯搜索引擎，调用同花顺问财的财经资讯搜索接口",
+    description="财经领域资讯搜索引擎，调用内置财经资讯搜索接口",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="",

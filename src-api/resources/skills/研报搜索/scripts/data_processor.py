@@ -386,7 +386,7 @@ class DataProcessor:
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write("# 研究报告汇总\n\n")
-                f.write(f"**数据来源**: 同花顺问财财经资讯搜索接口\n\n")
+                f.write(f"**数据来源**: 财经资讯搜索接口\n\n")
                 f.write(f"**生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
                 f.write(f"**报告数量**: {len(articles)} 篇\n\n")
                 

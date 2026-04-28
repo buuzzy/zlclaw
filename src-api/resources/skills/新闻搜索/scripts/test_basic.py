@@ -102,7 +102,7 @@ def test_news_processor():
     print(f"关键信息提取: {key_info}")
     assert "title" in key_info
     assert "source" in key_info
-    assert key_info["source"] == "同花顺问财"
+    assert key_info["source"] == "内置数据接口"
     
     # 测试文件保存
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -122,7 +122,7 @@ def test_news_processor():
         with open(json_path, 'r', encoding='utf-8') as f:
             loaded_data = json.load(f)
             assert len(loaded_data) == len(test_articles)
-            assert loaded_data[0]["source"] == "同花顺问财"
+            assert loaded_data[0]["source"] == "内置数据接口"
     
     print("新闻处理器测试通过！\n")
 

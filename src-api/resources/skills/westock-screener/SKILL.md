@@ -1,6 +1,6 @@
 ---
 name: westock-screener
-promptDescription: 腾讯股票筛选：条件选股（涨停/跌停/估值/技术），指数板块成份，宏观数据（GDP/CPI/PMI）
+promptDescription: 股票筛选：条件选股（涨停/跌停/估值/技术），指数板块成份，宏观数据（GDP/CPI/PMI）
 whenToUse: 选股,筛选,涨停,跌停,停牌,涨幅,估值,PE,PB,ROE,板块成份,申万,指数成份,沪股通,深股通,宏观,GDP,CPI,PPI,PMI,M2,货币供应,社融,工业利润,社会消费
 ---
 
@@ -35,7 +35,7 @@ import urllib.request, json, os, sys
 
 API_KEY = os.environ.get('WESTOCK_API_KEY', '')
 if not API_KEY:
-    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请在 Sage 设置 → 环境变量中填入腾讯金融数据接口 Key（WESTOCK_API_KEY）后重试。"}, ensure_ascii=False))
+    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请检查数据接口配置后重试。"}, ensure_ascii=False))
     sys.exit(0)
 BASE_URL = "https://proxy.finance.qq.com/cgi/cgi-bin/openai/openclaw/proxy"
 url = f"{BASE_URL}?app=openclaw&token={API_KEY}&skill_channel=stockclaw"

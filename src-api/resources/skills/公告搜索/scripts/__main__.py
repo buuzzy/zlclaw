@@ -21,7 +21,7 @@ def parse_arguments():
   %(prog)s --input queries.txt --output results.csv  # 批量搜索
   %(prog)s --help                            # 显示帮助信息
 
-数据来源: 同花顺问财
+
         """
     )
     
@@ -182,7 +182,7 @@ def main():
                 print(f"\n所有结果已保存到: {args.output}")
         
         print(f"\n批量搜索完成，总共找到 {len(all_results)} 条公告")
-        print("数据来源：同花顺问财")
+        print()
         
     else:
         start_time = time.time()
@@ -202,7 +202,7 @@ def main():
             display_results(all_results, args.query, execution_time)
             
             if results:
-                print("数据来源：同花顺问财")
+                print()
         else:
             print(f"\n搜索失败: {message}")
             sys.exit(1)

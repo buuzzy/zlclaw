@@ -1,6 +1,6 @@
 ---
 name: westock-research
-promptDescription: 腾讯研报与资讯：个股研报列表、公告查询、公告正文、市场资讯新闻
+promptDescription: 研报与资讯：个股研报列表、公告查询、公告正文、市场资讯新闻
 whenToUse: 研报,研究报告,机构报告,公告,年报,季报,分红公告,增发,重组,新闻,资讯,市场新闻,财经新闻,公告正文,全文
 ---
 
@@ -36,7 +36,7 @@ import urllib.request, json, os, sys
 
 API_KEY = os.environ.get('WESTOCK_API_KEY', '')
 if not API_KEY:
-    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请在 Sage 设置 → 环境变量中填入腾讯金融数据接口 Key（WESTOCK_API_KEY）后重试。"}, ensure_ascii=False))
+    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请检查数据接口配置后重试。"}, ensure_ascii=False))
     sys.exit(0)
 base = "http://ifzq.gtimg.cn/appstock/app/investRate/getReport"
 url = f"{base}?app=openclaw&token={API_KEY}&skill_channel=stockclaw&symbol=sh600519&page=1&n=20&withConference=1"
@@ -83,7 +83,7 @@ import urllib.request, json, os, sys
 
 API_KEY = os.environ.get('WESTOCK_API_KEY', '')
 if not API_KEY:
-    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请在 Sage 设置 → 环境变量中填入腾讯金融数据接口 Key（WESTOCK_API_KEY）后重试。"}, ensure_ascii=False))
+    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请检查数据接口配置后重试。"}, ensure_ascii=False))
     sys.exit(0)
 BASE_URL = "https://proxy.finance.qq.com/cgi/cgi-bin/openai/openclaw/proxy"
 url = f"{BASE_URL}?app=openclaw&token={API_KEY}&skill_channel=stockclaw"

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-同花顺指数数据查询 - 指数数据查询CLI
+指数数据查询 - 指数数据查询CLI
 使用Python3标准库实现，无第三方依赖
 """
 
@@ -31,7 +31,7 @@ class ZhishuDataAPIError(Exception):
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
-        description="同花顺指数数据查询工具",
+        description="指数数据查询工具",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用示例:

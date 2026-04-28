@@ -55,7 +55,7 @@ def example_basic_search():
             print(f"   摘要: {article['summary']}")
             print(f"   发布时间: {article['publish_date']}")
             print(f"   链接: {article['url']}")
-            print(f"   数据来源: 同花顺问财")
+            print(f"   
             print()
         
         return
@@ -83,7 +83,7 @@ def example_basic_search():
             print(f"   摘要: {article.get('summary', '无摘要')[:100]}...")
             print(f"   发布时间: {article.get('publish_date', '未知时间')}")
             print(f"   链接: {article.get('url', '无链接')}")
-            print(f"   数据来源: 同花顺问财")
+            print(f"   
             print()
             
     except Exception as e:

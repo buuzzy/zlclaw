@@ -1,6 +1,6 @@
 ---
 name: westock-market
-promptDescription: 腾讯市场总览：热搜股票、热门板块排行、新股日历、投资日历经济事件、股票搜索、股单排行
+promptDescription: 市场总览：热搜股票、热门板块排行、新股日历、投资日历经济事件、股票搜索、股单排行
 whenToUse: 热门,热搜,热股,今日热点,板块排行,涨幅榜,板块资金,新股,打新,IPO,上市日历,投资日历,经济数据,央行,财经日历,大事,搜索股票,查股票代码,股票搜索,北向,北向热门,换手率排行,股单,股单排行,热门股单,自选股单
 ---
 
@@ -34,13 +34,13 @@ import urllib.request, json, os, sys
 
 API_KEY = os.environ.get('WESTOCK_API_KEY', '')
 if not API_KEY:
-    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请在 Sage 设置 → 环境变量中填入腾讯金融数据接口 Key（WESTOCK_API_KEY）后重试。"}, ensure_ascii=False))
+    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请检查数据接口配置后重试。"}, ensure_ascii=False))
     sys.exit(0)
 
 url = (
     f"https://proxy.finance.qq.com/cgi/cgi-bin/smartbox/search"
     f"?app=openclaw&token={API_KEY}&skill_channel=stockclaw"
-    f"&query=腾讯&stockFlag=1&fundFlag=0&ptFlag=0"
+    f"&query=贵州茅台&stockFlag=1&fundFlag=0&ptFlag=0"
 )
 with urllib.request.urlopen(url) as resp:
     result = json.loads(resp.read())
@@ -228,7 +228,7 @@ import urllib.request, json, os, sys
 
 API_KEY = os.environ.get('WESTOCK_API_KEY', '')
 if not API_KEY:
-    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请在 Sage 设置 → 环境变量中填入腾讯金融数据接口 Key（WESTOCK_API_KEY）后重试。"}, ensure_ascii=False))
+    print(json.dumps({"error": "WESTOCK_API_KEY 未配置。请检查数据接口配置后重试。"}, ensure_ascii=False))
     sys.exit(0)
 url = (
     f"https://proxy.finance.qq.com/cgi/cgi-bin/watchlist/rank"

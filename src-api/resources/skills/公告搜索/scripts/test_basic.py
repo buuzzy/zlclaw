@@ -167,7 +167,7 @@ class TestUtils(unittest.TestCase):
         self.assertIn("找到 2 条相关公告", formatted)
         self.assertIn("测试标题1", formatted)
         self.assertIn("测试标题2", formatted)
-        self.assertIn("数据来源：同花顺问财", formatted)
+        self.assertIn(, formatted)
         
         # 测试空结果
         empty_formatted = Utils.format_results_for_display([])
@@ -236,7 +236,7 @@ class TestAnnouncementSearch(unittest.TestCase):
         self.assertIn("标题1", summary)
         self.assertIn("标题5", summary)
         self.assertIn("还有 1 条结果", summary)  # 只显示前5条
-        self.assertIn("数据来源：同花顺问财", summary)
+        self.assertIn(, summary)
         
         # 测试空结果
         empty_summary = self.search.generate_search_summary("空查询", [])

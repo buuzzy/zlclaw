@@ -71,7 +71,7 @@ export const CONFIG_SEARCH_PATHS = [
 // ============================================================================
 
 /**
- * Public iwencai API key shipped with the app.
+ * Public financial data API key shipped with the app.
  * This key is intentionally bundled as a convenience default for all users.
  * Override by setting the IWENCAI_API_KEY environment variable.
  */

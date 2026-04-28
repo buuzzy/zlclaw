@@ -172,7 +172,7 @@ async function start() {
   // Load configuration
   await loadConfig();
 
-  // Inject default iwencai API key (public key for all users)
+  // Inject default financial data API key (public key for all users)
   if (!process.env.IWENCAI_API_KEY) {
     process.env.IWENCAI_API_KEY = DEFAULT_IWENCAI_API_KEY;
   }

@@ -1,6 +1,6 @@
 # 新闻搜索技能
 
-财经领域资讯搜索引擎，调用同花顺问财的财经资讯搜索接口。
+财经领域资讯搜索引擎，调用内置财经资讯搜索接口。
 
 ## 功能特点
 
@@ -14,8 +14,7 @@
 
 ## 数据来源
 
-**所有搜索结果均来源于同花顺问财财经资讯搜索接口**，使用时请注明数据来源。
-
+**
 ## 安装要求
 
 - Python 3.7+
@@ -79,7 +78,7 @@ cat queries.txt | xargs -I {} python news_search.py -q "{}"
 ```
 usage: news_search.py [-h] (-q QUERY | -i INPUT) [-o OUTPUT] [-f {csv,json,text}] [-l LIMIT] [-d DAYS] [--api-key API_KEY] [--debug]
 
-财经新闻搜索工具 - 调用同花顺问财的财经资讯搜索接口
+财经新闻搜索工具 - 调用内置财经资讯搜索接口
 
 optional arguments:
   -h, --help            显示帮助信息
@@ -173,7 +172,7 @@ sub_queries = QueryProcessor.split_complex_query(query)
 ### CSV格式
 ```
 title,summary,url,publish_date,source
-文章标题,文章摘要,文章网址,发布时间,同花顺问财
+文章标题,文章摘要,文章网址,发布时间,内置数据接口
 ```
 
 ### JSON格式
@@ -184,7 +183,7 @@ title,summary,url,publish_date,source
     "summary": "文章摘要",
     "url": "文章网址",
     "publish_date": "发布时间",
-    "source": "同花顺问财"
+    "source": "Sage"
   }
 ]
 ```
@@ -195,14 +194,14 @@ title,summary,url,publish_date,source
 查询: 人工智能
 找到 8 篇文章 (最近 30 天)
 ============================================================
-数据来源: 同花顺问财财经资讯搜索
+
 ============================================================
 
 1. 人工智能助力金融行业数字化转型
    摘要: 近日，多家金融机构宣布采用人工智能技术优化风控系统...
    发布时间: 2024-01-15 10:30:00
    链接: https://example.com/article/123
-   数据来源: 同花顺问财
+   
 ```
 
 ## 使用场景
@@ -219,7 +218,7 @@ python news_search.py -q "人工智能行业发展趋势" -d 90 -l 20
 
 ### 企业信息查询
 ```bash
-python news_search.py -q "腾讯公司最新动态" -o tencent_news.csv -f csv
+python news_search.py -q "贵州茅台最新动态" -o moutai_news.csv -f csv
 ```
 
 ### 批量数据收集
@@ -235,7 +234,7 @@ python news_search.py -i industries.txt -o industry_news/ -f json
 
 1. **API密钥安全**: API密钥应从环境变量获取，不要硬编码在代码中
 2. **请求频率限制**: 注意API提供商的请求频率限制
-3. **数据使用规范**: 引用数据时必须注明来源：同花顺问财
+3. **数据使用规范**: 引用数据时确保准确性
 4. **商业用途**: 不得将数据用于商业用途或违反相关法律法规
 
 ## 故障排除
@@ -287,4 +286,4 @@ MIT License
 
 ---
 
-**数据来源声明**: 本技能所有搜索结果均来源于同花顺问财财经资讯搜索接口，使用时请务必注明数据来源。
+**数据来源声明**: 本技能

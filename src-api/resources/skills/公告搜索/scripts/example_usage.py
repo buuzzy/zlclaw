@@ -242,7 +242,7 @@ def main():
         print("\n更多使用方式:")
         print("1. 使用命令行: announcement-search --help")
         print("2. 查看详细文档: 参考 README.md 和 SKILL.md")
-        print("3. 数据来源: 同花顺问财")
+        print("3. 
         
     except KeyboardInterrupt:
         print("\n\n示例被用户中断")
