@@ -6,11 +6,12 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { openUrl } from '@tauri-apps/plugin-opener';
-import { onOpenUrl, getCurrent as getCurrentDeepLink } from '@tauri-apps/plugin-deep-link';
 import { supabase, type Session, type User } from '@/shared/lib/supabase';
 import { bindUserId, unbindUser } from '@/shared/db/database';
 import { reloadSettingsForCurrentUser } from '@/shared/db/settings';
+
+const isTauri =
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,7 @@ interface AuthContextType {
   dbReady: boolean;
   signInWithGitHub: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -40,27 +42,43 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * In Tauri desktop the webview cannot receive the OAuth redirect directly.
- * Strategy:
- *   1. Get the OAuth URL from Supabase with skipBrowserRedirect=true
- *   2. Open it in the system browser via tauri-plugin-opener
- *   3. Supabase redirects to sage://auth/callback?code=...
- *   4. OS routes the deep link back to Tauri → Rust emits "sage://auth-callback"
- *   5. We call exchangeCodeForSession(code) to complete the sign-in
+ * Two OAuth strategies:
+ *
+ * Tauri desktop:
+ *   1. skipBrowserRedirect=true → get OAuth URL
+ *   2. Open in system browser via tauri-plugin-opener
+ *   3. Deep link sage://auth/callback?code=... routes back to app
+ *   4. exchangeCodeForSession(code) completes sign-in
+ *
+ * iOS / Web (Capacitor, browser):
+ *   1. skipBrowserRedirect=false (default) → Supabase handles redirect
+ *   2. OAuth completes in-page, Supabase JS auto-detects session from URL hash
+ *   3. onAuthStateChange fires with the new session
  */
 async function signInWithProvider(provider: 'github' | 'google') {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: {
-      redirectTo: 'sage://auth/callback',
-      skipBrowserRedirect: true,
-    },
-  });
-
-  if (error) throw error;
-  if (data.url) {
-    // Open in system browser — Tauri's opener respects macOS/Windows default browser
-    await openUrl(data.url);
+  if (isTauri) {
+    // Desktop: open system browser + deep link callback
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: 'sage://auth/callback',
+        skipBrowserRedirect: true,
+      },
+    });
+    if (error) throw error;
+    if (data.url) {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(data.url);
+    }
+  } else {
+    // iOS / Web: in-page redirect, Supabase handles everything
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+    if (error) throw error;
   }
 }
 
@@ -221,59 +239,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void switchDbTo(session?.user?.id ?? null);
     });
 
-    // Deep link 回调处理：从 sage://auth/callback?code=... 中提取 code 并交换 session
-    const handleDeepLinkUrls = async (urls: string[]) => {
-      for (const callbackUrl of urls) {
-        console.log('[Auth] Deep link received:', callbackUrl);
-        try {
-          const url = new URL(callbackUrl);
-          const code = url.searchParams.get('code');
-          console.log(
-            '[Auth] Extracted code:',
-            code ? code.slice(0, 8) + '...' : 'null'
-          );
-
-          if (code) {
-            const { data, error } =
-              await supabase.auth.exchangeCodeForSession(code);
-            if (error) {
-              console.error(
-                '[Auth] exchangeCodeForSession failed:',
-                error.message
-              );
-            } else {
-              console.log('[Auth] Session established for:', data.user?.email);
-            }
-            // onAuthStateChange 会自动更新 user/session/status
-          } else {
-            console.warn('[Auth] No code param in deep link URL:', callbackUrl);
-          }
-        } catch (err) {
-          console.error('[Auth] Error processing deep link callback:', err);
-        }
-      }
-    };
-
-    // Cold-start: app 被 deep link 唤醒时的初始 URL
-    getCurrentDeepLink()
-      .then((urls) => {
-        if (urls && urls.length > 0) {
-          console.log('[Auth] Cold-start deep link:', urls);
-          void handleDeepLinkUrls(urls);
-        }
-      })
-      .catch((err) => console.error('[Auth] getCurrent failed:', err));
-
-    // Warm-start: app 已在运行时接收到新的 deep link
+    // Deep link 回调处理（仅 Tauri 桌面端）
     let unlisten: (() => void) | undefined;
-    onOpenUrl((urls) => {
-      console.log('[Auth] Warm-start deep link:', urls);
-      void handleDeepLinkUrls(urls);
-    })
-      .then((fn) => {
-        unlisten = fn;
-      })
-      .catch((err) => console.error('[Auth] onOpenUrl register failed:', err));
+
+    if (isTauri) {
+      const handleDeepLinkUrls = async (urls: string[]) => {
+        for (const callbackUrl of urls) {
+          console.log('[Auth] Deep link received:', callbackUrl);
+          try {
+            const url = new URL(callbackUrl);
+            const code = url.searchParams.get('code');
+            console.log(
+              '[Auth] Extracted code:',
+              code ? code.slice(0, 8) + '...' : 'null'
+            );
+
+            if (code) {
+              const { data, error } =
+                await supabase.auth.exchangeCodeForSession(code);
+              if (error) {
+                console.error(
+                  '[Auth] exchangeCodeForSession failed:',
+                  error.message
+                );
+              } else {
+                console.log('[Auth] Session established for:', data.user?.email);
+              }
+              // onAuthStateChange 会自动更新 user/session/status
+            } else {
+              console.warn('[Auth] No code param in deep link URL:', callbackUrl);
+            }
+          } catch (err) {
+            console.error('[Auth] Error processing deep link callback:', err);
+          }
+        }
+      };
+
+      // Cold-start: app 被 deep link 唤醒时的初始 URL
+      import('@tauri-apps/plugin-deep-link').then(({ getCurrent: getCurrentDeepLink }) => {
+        getCurrentDeepLink()
+          .then((urls) => {
+            if (urls && urls.length > 0) {
+              console.log('[Auth] Cold-start deep link:', urls);
+              void handleDeepLinkUrls(urls);
+            }
+          })
+          .catch((err: unknown) => console.error('[Auth] getCurrent failed:', err));
+      }).catch(() => {});
+
+      // Warm-start: app 已在运行时接收到新的 deep link
+      import('@tauri-apps/plugin-deep-link').then(({ onOpenUrl }) => {
+        onOpenUrl((urls) => {
+          console.log('[Auth] Warm-start deep link:', urls);
+          void handleDeepLinkUrls(urls);
+        })
+          .then((fn) => {
+            unlisten = fn;
+          })
+          .catch((err: unknown) => console.error('[Auth] onOpenUrl register failed:', err));
+      }).catch(() => {});
+    }
 
     return () => {
       cancelled = true;
@@ -291,6 +316,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithProvider('google');
   }, []);
 
+  const signInWithEmail = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  }, []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     // onAuthStateChange('SIGNED_OUT') 会触发 switchDbTo(null)
@@ -305,6 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         dbReady,
         signInWithGitHub,
         signInWithGoogle,
+        signInWithEmail,
         signOut,
       }}
     >

@@ -44,11 +44,16 @@
     "build:app:linux": "./scripts/build.sh linux",
     "build:app:linux:with-claude": "./scripts/build.sh linux --with-claude",
     "build:app:windows": "./scripts/build.sh windows",
-    "build:app:windows:with-claude": "./scripts/build.sh windows --with-claude"
+    "build:app:windows:with-claude": "./scripts/build.sh windows --with-claude",
+    "build:ios": "vite build --mode ios && npx cap sync ios",
+    "open:ios": "npx cap open ios"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.1",
     "@ant-design/v5-patch-for-react-19": "^1.0.3",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
+    "@capacitor/ios": "^8.3.1",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-separator": "^1.1.8",

@@ -39,14 +39,18 @@ export const supabaseMeta = {
       : ('other' as const),
 };
 
+const isTauri =
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    // 桌面端通过 deep link 手动处理 callback，无需 URL 检测
-    detectSessionInUrl: false,
-    // PKCE flow：exchangeCodeForSession 需要 flowType = 'pkce'
-    flowType: 'pkce',
+    // 桌面端通过 deep link 手动处理 callback，关闭 URL 检测
+    // iOS / Web 端需要 Supabase 自动从 URL 中提取 session
+    detectSessionInUrl: !isTauri,
+    // PKCE flow：桌面端用 exchangeCodeForSession，iOS/Web 用隐式检测
+    flowType: isTauri ? 'pkce' : 'implicit',
   },
 });
 
