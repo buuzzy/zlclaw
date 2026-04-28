@@ -7,7 +7,7 @@
  */
 
 import type { Artifact } from '@/shared/types/artifact';
-import { determineArtifactType, type ToolMetadata } from '@/shared/config/artifactMapping';
+import { determineArtifactType } from '@/shared/config/artifactMapping';
 import { parseToolMetadata } from '@/shared/config/artifactMapping';
 
 /**

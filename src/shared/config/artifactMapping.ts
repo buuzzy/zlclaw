@@ -6,13 +6,11 @@
  * relying on explicit artifact blocks or implicit response structure detection.
  */
 
-export type ArtifactType =
-  | 'quote-card'
-  | 'kline-chart'
-  | 'news-list'
-  | 'data-table'
-  | 'line-chart'
-  | 'text';
+import type { ArtifactType } from '@/shared/types/artifact';
+
+// 'text' means "no artifact rendering needed" — used as a sentinel in mapping
+// but filtered out before returning to callers (determineArtifactType returns null)
+type MappingType = ArtifactType | 'text';
 
 /**
  * Tool metadata structure parsed from skill responses
@@ -26,7 +24,7 @@ export interface ToolMetadata {
 /**
  * Primary artifact mapping: (skill, action) → artifact type
  */
-const SKILL_ACTION_MAPPING: Record<string, Record<string, ArtifactType>> = {
+const SKILL_ACTION_MAPPING: Record<string, Record<string, MappingType>> = {
   'westock-quote': {
     'stock_quote_snapshot': 'quote-card',
     'stock_quote_history': 'kline-chart',
@@ -57,7 +55,7 @@ const SKILL_ACTION_MAPPING: Record<string, Record<string, ArtifactType>> = {
  * Secondary mapping for westock-screener list codes
  * Used when action is "query_list_data_by_date" and list_code is present
  */
-const SCREENER_LIST_CODE_MAPPING: Record<string, ArtifactType> = {
+const SCREENER_LIST_CODE_MAPPING: Record<string, MappingType> = {
   // Index and board lists
   'index_list': 'data-table',
   'industry_list': 'data-table',
@@ -96,7 +94,7 @@ export function determineArtifactType(metadata: ToolMetadata): ArtifactType | nu
   // Handle westock-screener with list_code
   if (skill === 'westock-screener' && action === 'query_list_data_by_date' && list_code) {
     const mapped = SCREENER_LIST_CODE_MAPPING[list_code];
-    if (mapped) {
+    if (mapped && mapped !== 'text') {
       return mapped;
     }
     // Fallback to default for unknown list codes
@@ -115,7 +113,7 @@ export function determineArtifactType(metadata: ToolMetadata): ArtifactType | nu
   }
 
   const artifactType = skillMapping[action];
-  if (!artifactType) {
+  if (!artifactType || artifactType === 'text') {
     console.warn(
       `determineArtifactType: unknown action "${action}" for skill "${skill}"`,
       metadata
@@ -153,17 +151,19 @@ export function serializeToolMetadata(metadata: ToolMetadata): string {
  * Get all registered artifact types
  */
 export function getRegisteredArtifactTypes(): ArtifactType[] {
-  const types = new Set<ArtifactType>();
-  
+  const types = new Set<MappingType>();
+
   // Collect from skill-action mapping
   Object.values(SKILL_ACTION_MAPPING).forEach(actionMap => {
     Object.values(actionMap).forEach(type => types.add(type));
   });
-  
+
   // Collect from list code mapping
   Object.values(SCREENER_LIST_CODE_MAPPING).forEach(type => types.add(type));
-  
-  return Array.from(types);
+
+  // Filter out 'text' sentinel
+  types.delete('text');
+  return Array.from(types) as ArtifactType[];
 }
 
 /**
