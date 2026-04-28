@@ -45,7 +45,8 @@ function resolveConfig(modelConfig?: { apiKey?: string; baseUrl?: string; model?
 }
 
 function buildSystemPrompt(base: string, language?: string): string {
-  let systemPrompt = base;
+  // Inject current date — consistent with @codeany/open-agent-sdk getUserContext()
+  let systemPrompt = base + `\n\n# currentDate\nToday's date is ${new Date().toISOString().split('T')[0]}.`;
   if (language) {
     const langMap: Record<string, string> = {
       'zh-CN': 'Chinese (Simplified)',
