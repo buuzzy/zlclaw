@@ -46,10 +46,13 @@ function GoogleIcon({ className }: { className?: string }) {
 }
 
 export function LoginPage() {
-  const { status, signInWithGitHub, signInWithGoogle } = useAuth();
+  const { status, signInWithGitHub, signInWithGoogle, signInWithEmail } = useAuth();
   const [loadingProvider, setLoadingProvider] = useState<
-    'github' | 'google' | null
+    'github' | 'google' | 'email' | null
   >(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   // 如果已经登录（例如 OAuth 回调完成后），自动跳转到主页
   if (status === 'authenticated') {
@@ -69,6 +72,19 @@ export function LoginPage() {
     setLoadingProvider('google');
     try {
       await signInWithGoogle();
+    } finally {
+      setLoadingProvider(null);
+    }
+  };
+
+  const handleEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailError(null);
+    setLoadingProvider('email');
+    try {
+      await signInWithEmail(email, password);
+    } catch (err: unknown) {
+      setEmailError(err instanceof Error ? err.message : '登录失败');
     } finally {
       setLoadingProvider(null);
     }
@@ -141,9 +157,56 @@ export function LoginPage() {
         {/* Divider */}
         <div className="my-6 flex items-center gap-3">
           <div className="bg-border h-px flex-1" />
-          <span className="text-muted-foreground text-xs">安全登录</span>
+          <span className="text-muted-foreground text-xs">或使用邮箱登录</span>
           <div className="bg-border h-px flex-1" />
         </div>
+
+        {/* Email/Password Form */}
+        <form onSubmit={handleEmail} className="flex flex-col gap-3">
+          <input
+            type="email"
+            placeholder="邮箱"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className={cn(
+              'border-border bg-background text-foreground placeholder:text-muted-foreground',
+              'h-10 w-full rounded-lg border px-3 text-sm outline-none',
+              'focus:ring-ring focus:ring-2'
+            )}
+          />
+          <input
+            type="password"
+            placeholder="密码"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className={cn(
+              'border-border bg-background text-foreground placeholder:text-muted-foreground',
+              'h-10 w-full rounded-lg border px-3 text-sm outline-none',
+              'focus:ring-ring focus:ring-2'
+            )}
+          />
+          {emailError && (
+            <p className="text-xs text-red-500">{emailError}</p>
+          )}
+          <button
+            type="submit"
+            disabled={loadingProvider !== null}
+            className={cn(
+              'bg-foreground text-background hover:bg-foreground/90',
+              'inline-flex h-10 w-full items-center justify-center gap-2',
+              'rounded-lg px-4 text-sm font-medium transition-colors',
+              'disabled:cursor-not-allowed disabled:opacity-50'
+            )}
+          >
+            {loadingProvider === 'email' ? (
+              <div className="border-background/30 border-t-background size-4 animate-spin rounded-full border-2" />
+            ) : (
+              '登录'
+            )}
+          </button>
+        </form>
 
         {/* Footer note */}
         <p className="text-muted-foreground text-center text-xs leading-relaxed">
