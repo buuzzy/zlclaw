@@ -57,14 +57,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  */
 async function signInWithProvider(provider: 'github' | 'google') {
   if (isTauri) {
-    // Desktop: open system browser → Railway callback page → deep link back to app.
-    // The /auth/callback endpoint renders a "Login Successful" page that triggers
-    // sage://auth/callback deep link and auto-closes the browser tab.
-    const callbackUrl = 'https://zlclaw-production.up.railway.app/auth/callback';
+    // Desktop: open system browser → OAuth → deep link back to app.
+    // Primary redirect: sage:// deep link fires directly.
+    // Fallback: if browser can't handle sage://, Supabase falls back to
+    // Site URL (configured as Railway /auth/callback) which renders a
+    // success page and triggers the deep link via JS.
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: callbackUrl,
+        redirectTo: 'sage://auth/callback',
         skipBrowserRedirect: true,
       },
     });
