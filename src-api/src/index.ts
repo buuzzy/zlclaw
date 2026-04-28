@@ -72,14 +72,11 @@ app.route('/skills', skillsRoutes);
 app.route('/cron', cronRoutes);
 app.route('/v1', completionsRoutes);
 
-// OAuth callback landing page — browser redirects here after Google/GitHub auth,
-// then triggers the sage:// deep link to hand off to the desktop app.
+// OAuth callback landing page — browser redirects here after Google/GitHub auth.
+// Supabase PKCE flow puts tokens in the hash fragment (#access_token=...),
+// so we use client-side JS to extract them and trigger the sage:// deep link.
 // Not behind localOnlyMiddleware since it's accessed from the user's browser.
 app.get('/auth/callback', (c) => {
-  const url = new URL(c.req.url);
-  const params = url.searchParams.toString();
-  const deepLink = `sage://auth/callback${params ? '?' + params : ''}`;
-
   return c.html(`<!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -106,8 +103,13 @@ app.get('/auth/callback', (c) => {
     <p class="hint">You can close this tab.</p>
   </div>
   <script>
-    window.location.href = ${JSON.stringify(deepLink)};
-    setTimeout(function() { try { window.close(); } catch(e) {} }, 1000);
+    // Collect both query params (?code=...) and hash fragment (#access_token=...)
+    var params = window.location.search.slice(1);
+    var hash = window.location.hash.slice(1);
+    var all = [params, hash].filter(Boolean).join('&');
+    var deepLink = 'sage://auth/callback' + (all ? '?' + all : '');
+    window.location.href = deepLink;
+    setTimeout(function() { try { window.close(); } catch(e) {} }, 1500);
   </script>
 </body>
 </html>`);

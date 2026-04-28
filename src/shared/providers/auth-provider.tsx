@@ -57,15 +57,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  */
 async function signInWithProvider(provider: 'github' | 'google') {
   if (isTauri) {
-    // Desktop: open system browser → OAuth → deep link back to app.
-    // Primary redirect: sage:// deep link fires directly.
-    // Fallback: if browser can't handle sage://, Supabase falls back to
-    // Site URL (configured as Railway /auth/callback) which renders a
-    // success page and triggers the deep link via JS.
+    // Desktop: open system browser → OAuth → Railway callback page → deep link.
+    // We redirect to Railway /auth/callback (not sage:// directly) because:
+    // 1. Supabase puts tokens in hash fragments after PKCE exchange
+    // 2. Browsers can't render a sage:// URL, so the tab hangs with a loading bar
+    // 3. The Railway page extracts hash params, triggers deep link via JS, and auto-closes
+    const callbackUrl = 'https://zlclaw-production.up.railway.app/auth/callback';
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: 'sage://auth/callback',
+        redirectTo: callbackUrl,
         skipBrowserRedirect: true,
       },
     });
@@ -252,13 +253,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[Auth] Deep link received:', callbackUrl);
           try {
             const url = new URL(callbackUrl);
+
+            // PKCE flow: Supabase sends ?code= for exchange
             const code = url.searchParams.get('code');
-            console.log(
-              '[Auth] Extracted code:',
-              code ? code.slice(0, 8) + '...' : 'null'
-            );
+            // Implicit/hybrid flow: tokens may arrive as query params
+            // (our Railway callback page converts hash fragments to query params)
+            const accessToken = url.searchParams.get('access_token');
+            const refreshToken = url.searchParams.get('refresh_token');
 
             if (code) {
+              console.log('[Auth] PKCE code:', code.slice(0, 8) + '...');
               const { data, error } =
                 await supabase.auth.exchangeCodeForSession(code);
               if (error) {
@@ -269,9 +273,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               } else {
                 console.log('[Auth] Session established for:', data.user?.email);
               }
-              // onAuthStateChange 会自动更新 user/session/status
+            } else if (accessToken && refreshToken) {
+              console.log('[Auth] Token pair received, setting session...');
+              const { data, error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              if (error) {
+                console.error('[Auth] setSession failed:', error.message);
+              } else {
+                console.log('[Auth] Session established for:', data.user?.email);
+              }
             } else {
-              console.warn('[Auth] No code param in deep link URL:', callbackUrl);
+              console.warn('[Auth] No code or token in deep link URL:', callbackUrl);
             }
           } catch (err) {
             console.error('[Auth] Error processing deep link callback:', err);
