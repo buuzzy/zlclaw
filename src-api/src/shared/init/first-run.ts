@@ -141,7 +141,11 @@ async function installDefaultFiles(appDir: string): Promise<void> {
     await copyAlways(join(defaultsDir, 'AGENTS.md'), join(appDir, 'AGENTS.md'));
     await copyAlways(join(defaultsDir, 'SOUL.md'), join(appDir, 'SOUL.md'));
     await copyIfMissing(join(defaultsDir, 'skills-config.json'), join(appDir, 'skills-config.json'));
-    await copyIfMissing(join(defaultsDir, '.env'), join(appDir, '.env'));
+    // NOTE: .env is intentionally NOT copied here. Environment variable injection
+    // must happen BEFORE the sidecar process starts, otherwise this process's
+    // process.env is already frozen and the copied .env has no effect this run.
+    // The Tauri Rust shell (src-tauri/src/lib.rs) handles loading + mirroring
+    // the bundled defaults/.env to ~/.sage/.env at spawn time.
   } else {
     console.warn(`[Init] Defaults source directory not found: ${defaultsDir}`);
   }

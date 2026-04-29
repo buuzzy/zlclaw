@@ -323,28 +323,42 @@ pub fn run() {
                     sidecar_command = sidecar_command.env("SAGE_APP_DIR", &app_data_dir);
                 }
 
-                // Try loading .env from: config dir, then app dir, then home dir
-                // IMPORTANT: In sandbox, prioritize app config dir over home dir
+                // Resolve the bundled fallback (.app/Contents/Resources/resources/defaults/.env).
+                // Computed once so we can both add it to the search list and detect when we
+                // load from it (so we can mirror it to the user-editable location).
+                let bundled_env_path: Option<std::path::PathBuf> = app
+                    .path()
+                    .resource_dir()
+                    .ok()
+                    .map(|p| p.join("resources").join("defaults").join(".env"));
+
+                // Try loading .env in priority order. User-editable locations come first
+                // so a user override always wins over the bundled defaults.
                 let env_paths: Vec<std::path::PathBuf> = vec![
-                    // Priority 1: App config directory (sandbox-aware, recommended)
+                    // 1. App config directory (sandbox-aware, OS-recommended)
                     app.path().app_config_dir().ok().map(|p| p.join(".env")),
-                    
-                    // Priority 2: App data directory (for sandbox or custom deployments)
+
+                    // 2. App data directory (for sandbox or custom deployments)
                     if !app_data_dir.is_empty() && app_data_dir != "./.sage" {
                         Some(std::path::PathBuf::from(format!("{}/.env", app_data_dir)))
                     } else {
                         None
                     },
-                    
-                    // Priority 3: Home .sage directory
+
+                    // 3. Home .sage directory (default user-editable location)
                     dirs::home_dir().map(|p| p.join(".sage").join(".env")),
-                    
-                    // Priority 4: System-wide .env (not recommended for MAS, skip in sandbox)
+
+                    // 4. System-wide .env (skip in sandbox — inaccessible)
                     if !in_sandbox {
                         dirs::home_dir().map(|p| p.join(".env"))
                     } else {
                         None
                     },
+
+                    // 5. Bundled fallback shipped inside the .app. Guarantees fresh installs
+                    //    work without manual setup. Mirrored to (3) on first hit so subsequent
+                    //    launches use the standard path and the user can edit it.
+                    bundled_env_path.clone(),
                 ]
                 .into_iter()
                 .flatten()
@@ -359,9 +373,48 @@ pub fn run() {
                     if env_path.exists() {
                         println!("[API] Loading .env from: {}", env_path.display());
                         let pairs = load_dotenv(env_path);
-                        for (key, value) in pairs {
-                            sidecar_command = sidecar_command.env(&key, &value);
+                        for (key, value) in &pairs {
+                            sidecar_command = sidecar_command.env(key, value);
                             println!("[API] Injected env: {}", key);
+                        }
+
+                        // If we fell through to the bundled fallback, mirror it to the
+                        // user-editable location so the user has a local copy they can
+                        // edit and so future launches don't depend on the bundle.
+                        let loaded_from_bundle = bundled_env_path
+                            .as_ref()
+                            .map(|p| p == env_path)
+                            .unwrap_or(false);
+                        if loaded_from_bundle {
+                            let target = if in_sandbox && !app_data_dir.is_empty() {
+                                Some(std::path::PathBuf::from(&app_data_dir).join(".env"))
+                            } else {
+                                dirs::home_dir().map(|p| p.join(".sage").join(".env"))
+                            };
+                            if let Some(target_path) = target {
+                                if !target_path.exists() {
+                                    if let Some(parent) = target_path.parent() {
+                                        if let Err(e) = std::fs::create_dir_all(parent) {
+                                            eprintln!(
+                                                "[API] Failed to create {}: {}",
+                                                parent.display(),
+                                                e
+                                            );
+                                        }
+                                    }
+                                    match std::fs::copy(env_path, &target_path) {
+                                        Ok(_) => println!(
+                                            "[API] Mirrored bundled .env → {}",
+                                            target_path.display()
+                                        ),
+                                        Err(e) => eprintln!(
+                                            "[API] Failed to mirror bundled .env to {}: {}",
+                                            target_path.display(),
+                                            e
+                                        ),
+                                    }
+                                }
+                            }
                         }
                         break; // Use first .env found
                     }
