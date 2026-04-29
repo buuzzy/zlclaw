@@ -1,7 +1,44 @@
 # Sage — TODO & Feature Roadmap
 
 > 只保留进行中和待实现的条目。已完成的功能通过 git commit 历史追溯。
-> 最后更新：2026-04-29（v1.0.5）
+> 最后更新：2026-04-29（v1.0.6）
+
+---
+
+## 已知问题 🐛
+
+### K 线图组件偶现消失
+
+**现象**：用户问"贵州茅台最近一个月日K线"，K 线图组件先正确渲染，但随后 Agent 继续 thinking 并输出纯文字分析，K 线图消失，最终只剩文字。
+
+**复现率**：偶现（2026-04-29 测试中出现 1 次，后续多次测试未复现）
+
+**根因分析**：
+1. PostToolUse hook 拦截 API 响应，生成 `artifact:kline-chart` 并替换 tool_output 为 summary（`[数据已获取]...K线图已自动渲染，请基于上述数据撰写分析，不要输出artifact块`）
+2. MiniMax 无视 summary 中的"不要输出 artifact 块"指令，自己又输出了一个 `artifact:kline-chart` + 纯文字分析
+3. 前端收到两条消息：① 含 artifact 的消息 ② 纯文字分析消息。两条都正确渲染，但视觉上文字消息在后、K 线图滚出视口或被认为"消失"
+
+**相关日志**：error_logs 表，message = "4月29日测试用例3"，完整 transcript 含 hook summary → 模型重复输出 artifact 的证据链
+
+**候选修复方向**：
+- A. 强化 summary 措辞（当前方案，已在 AGENTS.md 添加"任务完成规则"）
+- B. PostToolUse hook 中检测模型是否重复输出 artifact 块，若检测到则 strip 掉
+- C. 前端侧：确保 artifact 组件始终 sticky/置顶，不被后续文字消息推走
+- D. 换用 instruction following 更强的模型
+
+**当前状态**：观察中，已通过 AGENTS.md + maxTurns 限制降低发生概率
+
+---
+
+### MiniMax 输出残留 artifact 标题
+
+**现象**：对比查询（如"对比茅台和五粮液走势"）中，PostToolUse hook 拦截数据并渲染了 K 线图，但 MiniMax 随后在文字分析之后又输出 `artifact:kline-chart` 块。前端提取 artifact 后，剩余的标题文字（如"贵州茅台（600519.SH）K线图"）孤立显示在页面底部。
+
+**根因**：与上一条相同 — MiniMax 无视 summary 中"不要输出 artifact 块"的指令。
+
+**相关日志**：error_logs 表，message = "4月29日测试用例7"
+
+**当前状态**：观察中，归入上方 K 线图偶现问题统一处理
 
 ---
 
@@ -24,6 +61,28 @@
 ### P1 — MiniMax artifact 选择规则
 
 分时查询应走 `intraday-chart`，但 MiniMax 声称"没有分时图组件"。根因是 LLM reasoning 跳过 SKILL.md 检索。候选方案：提到 system prompt 顶层 / 加 few-shot / 后置 guard / 换模型。
+
+---
+
+### P1 — 复杂多标的查询体验差
+
+**现象**：如"分析沪深300、纳斯达克、恒生指数、日经225今年表现，给出对比"，Agent 需要大量工具调用（17-35步），经常触发 maxTurns/MAX_TOOL_CALLS 限制后截断，无法输出完整结论。
+
+**已做的优化**：
+- `isDirectExecuteQuery` 加了多标的检测（含"对比/分析" + 顿号枚举时不跳过 plan）
+- `maxTurns: 12`，`MAX_TOOL_CALLS: 20`（仅日志，不 abort）
+- AGENTS.md 添加了「任务完成规则」和「复杂查询上限 3-4 次工具调用」
+
+**仍存在的问题**：
+- iwencai 技能 401 导致 Agent 降级到 WebSearch，搜索效率低、调用次数多
+- MiniMax 对"不要输出 artifact 块"指令遵从度低，输出冗余内容
+- plan 阶段对 MiniMax 效果有限，生成的 plan 质量一般
+
+**根本解决方向**：
+- A. 修复 iwencai 401（已修复 X-Claw headers + 强制覆盖技能文件，待验证）
+- B. 后端预处理：识别多标的查询，拆分为并行子任务（参考 AGENTS.md 子 Agent 规范）
+- C. 换用 instruction following 更强的模型（Claude 等）
+- D. 对 WebSearch 降级场景做专门优化（一次搜索多关键词）
 
 ---
 
