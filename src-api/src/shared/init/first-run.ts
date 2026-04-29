@@ -1,10 +1,13 @@
 /**
  * First-Run Initialization
  *
- * Ensures ~/.sage/ is fully set up before the server starts.
+ * Ensures ~/.sage/ (or sandbox container equivalent) is fully set up before the server starts.
  * This runs on every startup but is idempotent — it only creates
  * files and directories that don't already exist, never overwriting
  * user data.
+ *
+ * Sandbox-aware: Automatically adapts to macOS App Store container paths via
+ * SAGE_APP_DIR environment variable or automatic detection in constants.ts
  *
  * Execution order in index.ts:
  *   ensureAppDirInitialized()  ← this file
@@ -17,7 +20,12 @@ import { existsSync, mkdirSync } from 'fs';
 import fs from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { getAppDir } from '@/config/constants';
+import { getAppDir, isRunningInSandbox } from '@/config/constants';
+import {
+  shouldPerformSandboxMigration,
+  migrateToSandboxContainer,
+  validateMigration,
+} from './sandbox-migration';
 import { migrateFromHTclaw } from './migration';
 
 // ============================================================================
@@ -63,7 +71,7 @@ function getDefaultsSourceDir(): string {
 // ============================================================================
 
 const REQUIRED_DIRS = [
-  '',          // ~/.sage/ itself
+  '',          // ~/.sage/ or sandbox container itself
   'skills',
   'sessions',
   'memory',
@@ -161,12 +169,36 @@ async function installDefaultFiles(appDir: string): Promise<void> {
  * Call this at the very start of start() in index.ts, before loadConfig().
  *
  * Execution order:
- *   1. Ensure all required directories exist
- *   2. Migrate user data from ~/.htclaw/ (if upgrading from HTclaw)
- *   3. Install bundled default files and create skeleton files
+ *   1. Detect app directory (sandbox-aware via getAppDir())
+ *   2. Ensure all required directories exist
+ *   3. Migrate user data from ~/.htclaw/ (if upgrading from HTclaw)
+ *   4. Install bundled default files and create skeleton files
  */
 export async function ensureAppDirInitialized(): Promise<void> {
   const appDir = getAppDir();
+
+  // Log sandbox status for diagnostics
+  if (isRunningInSandbox()) {
+    console.log('[Init] Running in sandbox environment');
+    console.log(`[Init] App directory: ${appDir}`);
+    
+    // Check if data migration from standard location is needed
+    if (await shouldPerformSandboxMigration()) {
+      console.log('[Init] Performing sandbox data migration...');
+      const migrationResult = await migrateToSandboxContainer();
+      if (migrationResult.success) {
+        console.log(`[Init] ✓ Migration successful: ${migrationResult.itemCount} items migrated`);
+      } else {
+        console.warn('[Init] ⚠ Migration had issues:', migrationResult.errors);
+      }
+      
+      // Validate migration
+      const validation = await validateMigration();
+      if (!validation.valid) {
+        console.warn('[Init] ⚠ Migration validation issues:', validation.issues);
+      }
+    }
+  }
 
   try {
     // 1. Ensure all required directories exist

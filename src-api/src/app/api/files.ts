@@ -11,7 +11,7 @@ import * as path from 'path';
 import { promisify } from 'util';
 import { Hono } from 'hono';
 
-import { getAllSkillsDirs, getHomeDir } from '@/config/constants';
+import { getAllSkillsDirs, getHomeDir, isRunningInSandbox } from '@/config/constants';
 
 const execAsync = promisify(exec);
 
@@ -290,7 +290,8 @@ files.post('/read', async (c) => {
     const normalizedTemp = process.platform === 'win32' ? tempDir.toLowerCase() : tempDir;
 
     if (!normalizedPath.startsWith(normalizedHome) && !normalizedPath.startsWith(normalizedTemp)) {
-      return c.json({ error: 'Access denied' }, 403);
+      // Note: In sandbox, homedir is already restricted to ~/Library/Containers/{app-id}/Data/
+      return c.json({ error: 'Access denied - path outside app sandbox' }, 403);
     }
 
     const content = await fs.readFile(filePath, 'utf-8');
@@ -315,8 +316,15 @@ files.post('/read', async (c) => {
  * Returns paths for both ~/.sage/skills and ~/.claude/skills
  */
 files.get('/skills-dir', async (c) => {
-  const skillsDirs = getAllSkillsDirs();
-  const results: { name: string; path: string; exists: boolean }[] = [];
+  const inSandbox = isRunningInSandbox();
+  const allSkillsDirs = getAllSkillsDirs();
+  
+  // Filter out Claude Code skills if in sandbox
+  const skillsDirs = inSandbox
+    ? allSkillsDirs.filter((dir) => dir.name !== 'claude')
+    : allSkillsDirs;
+
+  const results: { name: string; path: string; exists: boolean; sandboxRestricted?: boolean }[] = [];
 
   for (const dir of skillsDirs) {
     try {
@@ -343,12 +351,23 @@ files.get('/skills-dir', async (c) => {
     }
   }
 
+  // Add a note if Claude skills were skipped due to sandbox
+  if (inSandbox) {
+    results.push({
+      name: 'claude',
+      path: 'N/A',
+      exists: false,
+      sandboxRestricted: true,
+    });
+  }
+
   // Return first existing directory for backward compatibility
   const firstExisting = results.find((r) => r.exists);
   return c.json({
     path: firstExisting?.path || '',
     exists: !!firstExisting,
     directories: results,
+    inSandbox,
   });
 });
 
@@ -376,7 +395,8 @@ files.post('/read-binary', async (c) => {
     const normalizedTemp = process.platform === 'win32' ? tempDir.toLowerCase() : tempDir;
 
     if (!normalizedPath.startsWith(normalizedHome) && !normalizedPath.startsWith(normalizedTemp)) {
-      return c.json({ error: 'Access denied' }, 403);
+      // Note: In sandbox, homedir is already restricted to ~/Library/Containers/{app-id}/Data/
+      return c.json({ error: 'Access denied - path outside app sandbox' }, 403);
     }
 
     // Check if file exists
@@ -495,7 +515,8 @@ files.post('/open-in-editor', async (c) => {
     const normalizedTemp = process.platform === 'win32' ? tempDir.toLowerCase() : tempDir;
 
     if (!normalizedPath.startsWith(normalizedHome) && !normalizedPath.startsWith(normalizedTemp)) {
-      return c.json({ error: 'Access denied' }, 403);
+      // Note: In sandbox, homedir is already restricted to ~/Library/Containers/{app-id}/Data/
+      return c.json({ error: 'Access denied - path outside app sandbox' }, 403);
     }
 
     // Check if file exists

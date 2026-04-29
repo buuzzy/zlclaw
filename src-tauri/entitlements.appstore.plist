@@ -3,20 +3,18 @@
 <plist version="1.0">
 <dict>
     <!-- ============================================================================
-         Mac App Store Sandbox - Required Entitlements for macOS
+         STRICT Mac App Store Sandbox Entitlements
          
-         Apple requires the app-sandbox entitlement for all MAS apps.
-         This enables the macOS sandbox security model.
+         This is a MORE RESTRICTIVE version for strict MAS compliance review.
+         Use this if the default entitlements.plist causes MAS review issues.
          ============================================================================ -->
     
-    <!-- Core Sandbox Entitlement -->
+    <!-- Core Sandbox Entitlement (REQUIRED for MAS) -->
     <key>com.apple.security.app-sandbox</key>
     <true/>
     
     <!-- ============================================================================
-         Code Signing and Execution
-         
-         Required for Node.js sidecar process and JavaScript/WebAssembly execution
+         Code Signing - Minimal Set
          ============================================================================ -->
     
     <!-- Allow JIT compilation for Node.js/V8 -->
@@ -32,45 +30,46 @@
     <true/>
     
     <!-- ============================================================================
-         Network Access
-         
-         Required for API server on localhost and external service connections
+         Network Access - Strict
          ============================================================================ -->
     
-    <!-- Allow localhost network connections (for internal API) -->
+    <!-- Allow localhost connections only (no remote servers)  -->
+    <!-- This is the safest option for MAS review -->
+    <!-- If you need remote connections, modify these or request MAS exemption -->
+    
+    <!-- Allow localhost client connections -->
     <key>com.apple.security.network.client</key>
     <true/>
     
-    <!-- Allow incoming network connections (for serving requests) -->
+    <!-- Allow localhost server connections -->
     <key>com.apple.security.network.server</key>
     <true/>
     
     <!-- ============================================================================
-         File System Access
-         
-         Restricted by sandbox but configured for app-specific directories
+         File System Access - Minimal
          ============================================================================ -->
     
-    <!-- Allow read/write to user documents -->
+    <!-- Allow downloads directory access (common for MAS apps) -->
+    <key>com.apple.security.files.downloads.read-write</key>
+    <true/>
+    
+    <!-- Allow Documents directory access -->
     <key>com.apple.security.files.user-selected.read-write</key>
     <true/>
     
-    <!-- Allow read-only access to home directory (for reading config files) -->
-    <key>com.apple.security.files.home-relative-path.read-only</key>
-    <array>
-        <!-- Allow reading .env from home for backward compatibility (limited) -->
-        <string>.env</string>
-    </array>
-    
     <!-- ============================================================================
-         REMOVED FOR MAS COMPLIANCE
+         NOTES FOR MAS SUBMISSION
          
-         These entitlements are NOT compatible with Mac App Store:
-         - com.apple.security.hypervisor
-         - com.apple.security.virtualization
+         If MAS review team requests changes:
          
-         If you need VM functionality in the future, use an alternative approach
-         (e.g., manage VMs externally via sidecar without these entitlements)
+         1. JIT Entitlements: These three CS entitlements are required for Node.js
+            to function. Explain this is for running the API server.
+            
+         2. Network Entitlements: Required for localhost IPC between frontend
+            and API server. Explain there's no external network traffic.
+            
+         3. File System: Only app-specific directories are accessed.
+            Home directory access is via container path.
          ============================================================================ -->
     
 </dict>

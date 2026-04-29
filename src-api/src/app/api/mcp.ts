@@ -3,18 +3,26 @@ import os from 'os';
 import path from 'path';
 import { Hono } from 'hono';
 
-import { getAllMcpConfigPaths } from '../../config/constants';
+import { getAllMcpConfigPaths, isRunningInSandbox } from '../../config/constants';
 
 const mcp = new Hono();
 
-// MCP config file path: ~/.sage/mcp.json
+// MCP config file path: ~/.sage/mcp.json or container equivalent
 const getMcpConfigPath = (): string => {
   const homeDir = os.homedir();
   return path.join(homeDir, '.sage', 'mcp.json');
 };
 
-// Claude settings file path: ~/.claude/settings.json
-const getClaudeSettingsPath = (): string => {
+/**
+ * Claude settings file path: ~/.claude/settings.json
+ * Returns null if running in sandbox (cannot access Claude Code)
+ */
+const getClaudeSettingsPath = (): string | null => {
+  if (isRunningInSandbox()) {
+    console.log('[MCP] Skipping Claude Code access in sandbox environment');
+    return null;
+  }
+  
   const homeDir = os.homedir();
   return path.join(homeDir, '.claude', 'settings.json');
 };
@@ -138,14 +146,25 @@ mcp.get('/path', (c) => {
   });
 });
 
-// GET /mcp/all-configs - Read MCP configs from all sources (sage and claude)
+/**
+ * GET /mcp/all-configs - Read MCP configs from all sources
+ * Sandbox-aware: Skips Claude Code config in sandbox environment
+ */
 mcp.get('/all-configs', async (c) => {
-  const configPaths = getAllMcpConfigPaths();
+  const allConfigPaths = getAllMcpConfigPaths();
+  
+  // Filter out Claude Code config if running in sandbox
+  const inSandbox = isRunningInSandbox();
+  const configPaths = inSandbox
+    ? allConfigPaths.filter(cfg => cfg.name !== 'claude')
+    : allConfigPaths;
+
   const results: {
     name: string;
     path: string;
     exists: boolean;
     servers: Record<string, MCPServerConfig>;
+    sandboxRestricted?: boolean;
   }[] = [];
 
   for (const configInfo of configPaths) {
@@ -184,9 +203,21 @@ mcp.get('/all-configs', async (c) => {
     }
   }
 
+  // Add a note if Claude Code was skipped due to sandbox
+  if (inSandbox) {
+    results.push({
+      name: 'claude',
+      path: 'N/A',
+      exists: false,
+      servers: {},
+      sandboxRestricted: true,
+    });
+  }
+
   return c.json({
     success: true,
     configs: results,
+    inSandbox,
   });
 });
 

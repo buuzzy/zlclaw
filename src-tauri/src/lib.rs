@@ -46,10 +46,62 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+// ============================================================================
+// Sandbox Detection and App Directory Resolution
+// ============================================================================
+
+/// Detect if running in macOS App Store sandbox
+/// Uses multiple strategies to identify sandbox environment
+#[cfg(not(debug_assertions))]
+fn is_running_in_sandbox() -> bool {
+    // Strategy 1: Check HOME environment for container path
+    if let Ok(home) = std::env::var("HOME") {
+        if home.contains("/Library/Containers/") || home.contains("/AppTranslocation/") {
+            return true;
+        }
+    }
+    
+    // Strategy 2: Check for Tauri-specific markers
+    if std::env::var("TAURI_PLATFORM").is_ok() {
+        return true;
+    }
+    
+    false
+}
+
+/// Get the app data directory considering sandbox environment
+/// In MAS: returns home directory (which is already ~/Library/Containers/{app-id}/Data/)
+/// Otherwise: returns the standard ~/.sage/ path
+#[cfg(not(debug_assertions))]
+fn get_app_data_dir() -> String {
+    use std::env;
+    
+    // 1. Check for explicit override (for testing or special deployments)
+    if let Ok(override_dir) = env::var("SAGE_APP_DIR") {
+        return override_dir;
+    }
+    
+    // 2. Detect sandbox and use home directory directly
+    if is_running_in_sandbox() {
+        if let Ok(home) = env::var("HOME") {
+            return home;
+        }
+    }
+    
+    // 3. Default to ~/.sage
+    if let Ok(home) = env::var("HOME") {
+        return format!("{}/.sage", home);
+    }
+    
+    "./.sage".to_string()
+}
+
 /// Kill any existing process on the API port before starting sidecar
 #[cfg(not(debug_assertions))]
 fn kill_existing_api_process(port: u16) {
     use std::process::Command;
+
+    println!("[API] Checking for existing process on port {}...", port);
 
     // On macOS/Linux, use lsof to find and kill process on port
     #[cfg(unix)]
@@ -244,6 +296,15 @@ pub fn run() {
                 // Kill any existing process on the API port
                 kill_existing_api_process(API_PORT);
 
+                // Detect and log sandbox environment
+                let in_sandbox = is_running_in_sandbox();
+                let app_data_dir = get_app_data_dir();
+
+                if in_sandbox {
+                    println!("[API] Running in sandbox environment");
+                    println!("[API] App data directory: {}", app_data_dir);
+                }
+
                 // Load API keys from .env file in the app's config directory
                 // macOS: ~/Library/Application Support/ai.sage.desktop/.env
                 let mut sidecar_command = app.shell().sidecar("sage-api")
@@ -251,15 +312,42 @@ pub fn run() {
                     .env("PORT", API_PORT.to_string())
                     .env("NODE_ENV", "production");
 
-                // Try loading .env from: config dir, then home dir
+                // Pass app data directory to sidecar so it can adapt paths
+                if in_sandbox {
+                    sidecar_command = sidecar_command.env("SAGE_APP_DIR", &app_data_dir);
+                }
+
+                // Try loading .env from: config dir, then app dir, then home dir
+                // IMPORTANT: In sandbox, prioritize app config dir over home dir
                 let env_paths: Vec<std::path::PathBuf> = vec![
+                    // Priority 1: App config directory (sandbox-aware, recommended)
                     app.path().app_config_dir().ok().map(|p| p.join(".env")),
+                    
+                    // Priority 2: App data directory (for sandbox or custom deployments)
+                    if !app_data_dir.is_empty() && app_data_dir != "./.sage" {
+                        Some(std::path::PathBuf::from(format!("{}/.env", app_data_dir)))
+                    } else {
+                        None
+                    },
+                    
+                    // Priority 3: Home .sage directory
                     dirs::home_dir().map(|p| p.join(".sage").join(".env")),
-                    dirs::home_dir().map(|p| p.join(".env")),
+                    
+                    // Priority 4: System-wide .env (not recommended for MAS, skip in sandbox)
+                    if !in_sandbox {
+                        dirs::home_dir().map(|p| p.join(".env"))
+                    } else {
+                        None
+                    },
                 ]
                 .into_iter()
                 .flatten()
                 .collect();
+
+                println!("[API] Searching for .env files (in order):");
+                for (idx, env_path) in env_paths.iter().enumerate() {
+                    println!("[API]   {}. {}", idx + 1, env_path.display());
+                }
 
                 for env_path in &env_paths {
                     if env_path.exists() {
@@ -349,7 +437,11 @@ pub fn run() {
                 tauri::RunEvent::Exit => {
                     #[cfg(not(debug_assertions))]
                     {
-                        println!("[App] Cleaning up API sidecar...");
+                        if is_running_in_sandbox() {
+                            println!("[App] Cleaning up in sandbox environment...");
+                        } else {
+                            println!("[App] Cleaning up API sidecar...");
+                        }
                         if let Some(state) = app_handle.try_state::<ApiSidecar>() {
                             if let Ok(mut guard) = state.0.lock() {
                                 if let Some(child) = guard.take() {

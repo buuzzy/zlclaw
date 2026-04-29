@@ -3,6 +3,9 @@
  *
  * Centralized configuration constants for the Sage API.
  * All hardcoded values should be defined here for easy management.
+ * 
+ * Sandbox-aware: Supports environment variable overrides for sandbox
+ * environments (e.g., macOS App Store container paths).
  */
 
 import { homedir } from 'os';
@@ -111,7 +114,7 @@ export function getSandboxApiUrl(): string {
 }
 
 // ============================================================================
-// Path Helpers (cross-platform compatible)
+// Path Helpers (cross-platform compatible, sandbox-aware)
 // ============================================================================
 
 /** Get user home directory */
@@ -119,8 +122,22 @@ export function getHomeDir(): string {
   return homedir();
 }
 
-/** Get Sage app data directory */
+/**
+ * Get Sage app data directory
+ * 
+ * Sandbox-aware: Checks SAGE_APP_DIR environment variable first.
+ * This allows macOS App Store sandbox to override with ~/Library/Containers/{app-id}/Data/
+ * 
+ * Priority order:
+ * 1. SAGE_APP_DIR environment variable (explicit override)
+ * 2. ~/.sage/ (default Unix convention)
+ */
 export function getAppDir(): string {
+  // Allow sandbox or deployment-specific override via environment variable
+  if (process.env.SAGE_APP_DIR) {
+    return process.env.SAGE_APP_DIR;
+  }
+  
   return join(homedir(), APP_DIR_NAME);
 }
 
@@ -163,4 +180,57 @@ export function getAllMcpConfigPaths(): { name: string; path: string }[] {
     { name: 'sage', path: getWorkanyMcpConfigPath() },
     { name: 'claude', path: getClaudeSettingsPath() },
   ];
+}
+
+// ============================================================================
+// Sandbox Environment
+// ============================================================================
+
+/**
+ * Check if running in a sandboxed environment (lazy initialization)
+ * Caches the result for performance
+ */
+let _sandboxDetectCache: boolean | null = null;
+
+export function isRunningInSandbox(): boolean {
+  if (_sandboxDetectCache !== null) {
+    return _sandboxDetectCache;
+  }
+  
+  try {
+    const home = homedir();
+    
+    // macOS App Store sandbox detection
+    // Container path: ~/Library/Containers/{app-id}/Data/
+    if (home.includes('/Library/Containers/')) {
+      _sandboxDetectCache = true;
+      return true;
+    }
+    
+    // Gatekeeper translocated app detection
+    if (home.includes('/AppTranslocation/')) {
+      _sandboxDetectCache = true;
+      return true;
+    }
+    
+    _sandboxDetectCache = false;
+    return false;
+  } catch {
+    _sandboxDetectCache = false;
+    return false;
+  }
+}
+
+/**
+ * Get sandbox container identifier (e.g., "ai.sage.desktop" for MAS)
+ * Returns null if not running in a sandbox container
+ */
+export function getSandboxContainerId(): string | null {
+  try {
+    const home = homedir();
+    const match = home.match(/\/Library\/Containers\/([^/]+)\/Data/);
+    return match?.[1] || null;
+  } catch {
+    return null;
+  }
 }
