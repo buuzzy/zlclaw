@@ -100,6 +100,19 @@ async function copyIfMissing(src: string, dest: string): Promise<void> {
 }
 
 /**
+ * Always overwrite dest with src (for system-managed files like SOUL.md, AGENTS.md).
+ * These are not user-editable — they ship with each app version.
+ */
+async function copyAlways(src: string, dest: string): Promise<void> {
+  try {
+    await fs.copyFile(src, dest);
+    console.log(`[Init] Updated system file: ${dest}`);
+  } catch (err) {
+    console.warn(`[Init] Failed to copy ${src} → ${dest}:`, err);
+  }
+}
+
+/**
  * Write content to a file only if it doesn't exist.
  */
 async function writeIfMissing(dest: string, content: string): Promise<void> {
@@ -117,8 +130,8 @@ async function installDefaultFiles(appDir: string): Promise<void> {
 
   // Copy bundled config files (only if bundled source exists)
   if (existsSync(defaultsDir)) {
-    await copyIfMissing(join(defaultsDir, 'AGENTS.md'), join(appDir, 'AGENTS.md'));
-    await copyIfMissing(join(defaultsDir, 'SOUL.md'), join(appDir, 'SOUL.md'));
+    await copyAlways(join(defaultsDir, 'AGENTS.md'), join(appDir, 'AGENTS.md'));
+    await copyAlways(join(defaultsDir, 'SOUL.md'), join(appDir, 'SOUL.md'));
     await copyIfMissing(join(defaultsDir, 'skills-config.json'), join(appDir, 'skills-config.json'));
   } else {
     console.warn(`[Init] Defaults source directory not found: ${defaultsDir}`);
