@@ -169,5 +169,30 @@ index f7b95d0a325a2fce068b83ce54586bb87388d23a..1c0a3b23f6458aab7b80b8d3c924f1f3
 +  /** Replace the tool output content before it re-enters the LLM conversation */
 +  modifiedOutput?: string
  }
- 
+
  /**
+diff --git a/dist/tools/web-search.js b/dist/tools/web-search.js
+index 1234567..abcdefg 100644
+--- a/dist/tools/web-search.js
++++ b/dist/tools/web-search.js
+@@ -44,8 +44,19 @@ export const WebSearchTool = defineTool({
+             let match;
+             const links = [];
+             while ((match = resultRegex.exec(html)) !== null) {
+-                const href = match[1];
++                let href = match[1];
+                 const title = match[2].replace(/<[^>]+>/g, '').trim();
++                // DuckDuckGo wraps links via //duckduckgo.com/l/?uddg=<real_url>
++                // Extract the real URL from the uddg parameter
++                if (href.includes('uddg=')) {
++                    try {
++                        const uddgMatch = href.match(/uddg=([^&]*)/);
++                        if (uddgMatch) {
++                            href = decodeURIComponent(uddgMatch[1]);
++                        }
++                    }
++                    catch (e) { /* keep original href */ }
++                }
+                 if (href && title && !href.includes('duckduckgo.com')) {
+                     links.push({ title, url: href });
+                 }
