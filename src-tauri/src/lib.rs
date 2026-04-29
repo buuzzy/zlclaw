@@ -11,6 +11,35 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 #[cfg(not(debug_assertions))]
 struct ApiSidecar(Mutex<Option<CommandChild>>);
 
+/// Load .env file and return key-value pairs.
+/// Supports lines like: KEY=value or KEY="value"
+/// Ignores comments (#) and blank lines.
+fn load_dotenv(path: &std::path::Path) -> Vec<(String, String)> {
+    let mut pairs = Vec::new();
+    if let Ok(content) = std::fs::read_to_string(path) {
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            if let Some(eq_pos) = trimmed.find('=') {
+                let key = trimmed[..eq_pos].trim().to_string();
+                let mut value = trimmed[eq_pos + 1..].trim().to_string();
+                // Strip surrounding quotes
+                if (value.starts_with('"') && value.ends_with('"'))
+                    || (value.starts_with('\'') && value.ends_with('\''))
+                {
+                    value = value[1..value.len() - 1].to_string();
+                }
+                if !key.is_empty() && !value.is_empty() {
+                    pairs.push((key, value));
+                }
+            }
+        }
+    }
+    pairs
+}
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -215,10 +244,35 @@ pub fn run() {
                 // Kill any existing process on the API port
                 kill_existing_api_process(API_PORT);
 
-                let sidecar_command = app.shell().sidecar("sage-api")
+                // Load API keys from .env file in the app's config directory
+                // macOS: ~/Library/Application Support/ai.sage.desktop/.env
+                let mut sidecar_command = app.shell().sidecar("sage-api")
                     .unwrap()
                     .env("PORT", API_PORT.to_string())
                     .env("NODE_ENV", "production");
+
+                // Try loading .env from: config dir, then home dir
+                let env_paths: Vec<std::path::PathBuf> = vec![
+                    app.path().app_config_dir().ok().map(|p| p.join(".env")),
+                    dirs::home_dir().map(|p| p.join(".sage").join(".env")),
+                    dirs::home_dir().map(|p| p.join(".env")),
+                ]
+                .into_iter()
+                .flatten()
+                .collect();
+
+                for env_path in &env_paths {
+                    if env_path.exists() {
+                        println!("[API] Loading .env from: {}", env_path.display());
+                        let pairs = load_dotenv(env_path);
+                        for (key, value) in pairs {
+                            sidecar_command = sidecar_command.env(&key, &value);
+                            println!("[API] Injected env: {}", key);
+                        }
+                        break; // Use first .env found
+                    }
+                }
+
                 let (mut rx, child) = sidecar_command.spawn().expect("Failed to spawn API sidecar");
 
                 // Store the child process for cleanup on exit

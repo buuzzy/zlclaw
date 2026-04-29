@@ -67,26 +67,6 @@ export const CONFIG_SEARCH_PATHS = [
 ];
 
 // ============================================================================
-// Third-party API Keys (bundled public / shared keys)
-// ============================================================================
-
-/**
- * Public financial data API key shipped with the app.
- * This key is intentionally bundled as a convenience default for all users.
- * Override by setting the IWENCAI_API_KEY environment variable.
- */
-export const DEFAULT_IWENCAI_API_KEY =
-  '***IWENCAI_KEY_REDACTED***';
-
-/**
- * Public financial data API key shipped with the app.
- * This key is intentionally bundled as a convenience default for all users.
- * Override by setting the WESTOCK_API_KEY environment variable.
- */
-export const DEFAULT_WESTOCK_API_KEY =
-  '***WESTOCK_KEY_REDACTED***';
-
-// ============================================================================
 // Default Provider Settings
 // ============================================================================
 

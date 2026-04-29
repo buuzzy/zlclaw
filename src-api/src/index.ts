@@ -21,7 +21,6 @@ import {
 } from '@/app/api';
 import { corsMiddleware, localOnlyMiddleware } from '@/app/middleware/index.js';
 import { loadConfig } from '@/config/loader.js';
-import { DEFAULT_IWENCAI_API_KEY, DEFAULT_WESTOCK_API_KEY } from '@/config/constants';
 import {
   initProviderManager,
   shutdownProviderManager,
@@ -215,12 +214,15 @@ async function start() {
   // Load configuration
   await loadConfig();
 
-  // Inject default financial data API keys (public keys for all users)
+  // Financial data API keys are read from environment variables:
+  //   IWENCAI_API_KEY  — required for iwencai skills
+  //   WESTOCK_API_KEY  — required for westock skills
+  // Set them in .env (local) or Railway environment variables (production).
   if (!process.env.IWENCAI_API_KEY) {
-    process.env.IWENCAI_API_KEY = DEFAULT_IWENCAI_API_KEY;
+    console.warn('[Startup] IWENCAI_API_KEY not set — iwencai skills will fail');
   }
   if (!process.env.WESTOCK_API_KEY) {
-    process.env.WESTOCK_API_KEY = DEFAULT_WESTOCK_API_KEY;
+    console.warn('[Startup] WESTOCK_API_KEY not set — westock skills will fail');
   }
 
   // Install built-in skills to ~/.sage/skills/
