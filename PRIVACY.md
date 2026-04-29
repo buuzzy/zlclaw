@@ -40,7 +40,7 @@ All locally stored data can be cleared by removing the App from your Mac. If you
 
 If you have any questions about this privacy policy, please contact:
 
-- GitHub: [https://github.com/buuzzy/zlclaw](https://github.com/buuzzy/zlclaw)
+- GitHub: [https://github.com/buuzzy/sage](https://github.com/buuzzy/sage)
 - Email: Open an issue on the GitHub repository
 
 ---
@@ -83,5 +83,5 @@ Sage（以下简称"本应用"）由 YIYANG CAI 开发。本隐私政策说明�
 
 如果您对本隐私政策有任何疑问，请通过以下方式联系：
 
-- GitHub: [https://github.com/buuzzy/zlclaw](https://github.com/buuzzy/zlclaw)
+- GitHub: [https://github.com/buuzzy/sage](https://github.com/buuzzy/sage)
 - 邮箱：在 GitHub 仓库提交 Issue

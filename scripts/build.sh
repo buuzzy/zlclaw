@@ -185,7 +185,7 @@ bundle_cli_tools() {
     fi
 
     # Cache directory for Node.js downloads
-    local cache_dir="$HOME/.htclaw/cache"
+    local cache_dir="$HOME/.sage/cache"
     local cached_node="$cache_dir/${node_filename}/node${node_ext}"
     mkdir -p "$cache_dir"
 

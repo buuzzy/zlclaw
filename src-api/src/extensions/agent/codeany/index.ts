@@ -876,7 +876,7 @@ export class CodeAnyAgent extends BaseAgent {
       cwd: sessionCwd,
       model: this.config.model,
       permissionMode: 'bypassPermissions',
-      maxTurns: 200,
+      maxTurns: 15,
       thinking: { type: 'adaptive' },
       ...extraOpts,
     };
@@ -1165,7 +1165,9 @@ export class CodeAnyAgent extends BaseAgent {
       // ------------------------------------------------------------------
       let currentPrompt = finalPrompt;
       const MAX_EMPTY_RETRIES = 1;
+      const MAX_TOOL_CALLS = 10;
       let emptyRetries = 0;
+      let totalToolCalls = 0;
 
       // eslint-disable-next-line no-constant-condition
       while (true) {
@@ -1179,6 +1181,7 @@ export class CodeAnyAgent extends BaseAgent {
             }
             if (msg.type === 'tool_use' || msg.type === 'tool_result') {
               hadToolUse = true;
+              if (msg.type === 'tool_use') totalToolCalls++;
             }
             yield msg;
           }
@@ -1186,6 +1189,12 @@ export class CodeAnyAgent extends BaseAgent {
 
         // If the LLM used tools or the session was aborted, we're done.
         if (hadToolUse || session.abortController.signal.aborted) break;
+
+        // Safety: stop if too many tool calls accumulated
+        if (totalToolCalls >= MAX_TOOL_CALLS) {
+          logger.warn(`[CodeAny ${session.id}] Tool call limit (${MAX_TOOL_CALLS}) reached, stopping.`);
+          break;
+        }
 
         // No tools were called — check if this looks like an "announce-only"
         // turn that we should silently retry.

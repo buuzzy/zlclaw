@@ -91,3 +91,5 @@ supabase/.temp/
 # …但发布流程文档进仓库（团队协作 / 换机器 / CI 参考点）
 !/docs/RELEASE.md
 
+*.pkg
+*.provisionprofile

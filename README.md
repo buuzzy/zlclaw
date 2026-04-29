@@ -19,7 +19,7 @@
 ### 开发模式（浏览器）
 
 ```bash
-cd htclaw-app
+cd sage
 
 # 安装依赖
 pnpm install
@@ -36,7 +36,7 @@ pnpm dev
 ### 桌面应用模式（Tauri）
 
 ```bash
-cd htclaw-app
+cd sage
 pnpm tauri:dev    # 同时启动 Sidecar + Tauri 桌面壳
 ```
 
@@ -95,7 +95,7 @@ pnpm tauri:dev    # 同时启动 Sidecar + Tauri 桌面壳
 ## 项目结构
 
 ```
-htclaw-app/
+sage/
 ├── src/                       # React 前端
 │   ├── app/                   # 页面路由
 │   │   ├── pages/             # 页面组件
@@ -284,7 +284,7 @@ htclaw-app/
 ## 生产构建
 
 ```bash
-cd htclaw-app
+cd sage
 
 # macOS ARM
 pnpm build:app:mac-arm
@@ -299,7 +299,7 @@ pnpm build:app:windows
 pnpm build:app:linux
 ```
 
-产物位于 `htclaw-app/src-tauri/target/release/bundle/`。
+产物位于 `sage/src-tauri/target/release/bundle/`。
 
 ---
 

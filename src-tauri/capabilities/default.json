@@ -30,7 +30,6 @@
     {
       "identifier": "fs:scope",
       "allow": [
-        "$HOME/.htclaw/**",
         "$HOME/.sage/**",
         "$HOME/.sage/.*",
         "$HOME/.claude/**",

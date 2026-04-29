@@ -6,10 +6,10 @@
 #
 # 例子：
 #   ./scripts/gen-latest-json.sh 1.0.3 ./artifacts \
-#     https://github.com/buuzzy/zlclaw/releases/download/v1.0.3
+#     https://github.com/buuzzy/sage/releases/download/v1.0.3
 #
 #   ./scripts/gen-latest-json.sh auto ./artifacts \
-#     https://github.com/buuzzy/zlclaw/releases/download/v1.0.3
+#     https://github.com/buuzzy/sage/releases/download/v1.0.3
 #   # ↑ version=auto 时从 src-tauri/tauri.conf.json 读
 #
 # 约定：<artifacts_dir> 下必须有如下子目录（按 rust target triple 命名）：
@@ -34,7 +34,7 @@ if [ $# -lt 3 ]; then
   echo "Usage: $0 <version|auto> <artifacts_dir> <release_base_url>" >&2
   echo "" >&2
   echo "Example:" >&2
-  echo "  $0 1.0.3 ./artifacts https://github.com/buuzzy/zlclaw/releases/download/v1.0.3" >&2
+  echo "  $0 1.0.3 ./artifacts https://github.com/buuzzy/sage/releases/download/v1.0.3" >&2
   exit 1
 fi
 

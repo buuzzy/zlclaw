@@ -88,7 +88,7 @@ jobs:
       # 约束（参考 docs/RELEASE.md §5 + scripts/gen-latest-json.sh）：
       #   - mac 两版：DMG（安装包） + .app.tar.gz{,.sig}（updater）
       #   - windows：NSIS .exe（安装包） + .nsis.zip{,.sig}（updater）
-      #   - 文件名统一 zlclaw-<ver>[-<triple>]，triple 用于区分 mac-arm / mac-intel
+      #   - 文件名统一 sage-<ver>[-<triple>]，triple 用于区分 mac-arm / mac-intel
       #   - VERSION 从 tag 去掉前缀 v 即可（tag 形如 v1.0.3 / v1.0.3-rc1）
       - name: Stage macOS artifacts
         if: runner.os == 'macOS'
@@ -109,9 +109,9 @@ jobs:
           mkdir -p "$STAGE"
 
           # 三件套重命名为 ASCII（mac-arm / mac-intel 名字里都带 triple 做区分）
-          cp "$DMG_SRC"     "${STAGE}/zlclaw-${VERSION}-${TRIPLE}.dmg"
-          cp "$APP_TGZ_SRC" "${STAGE}/zlclaw-${VERSION}-${TRIPLE}.app.tar.gz"
-          cp "$APP_SIG_SRC" "${STAGE}/zlclaw-${VERSION}-${TRIPLE}.app.tar.gz.sig"
+          cp "$DMG_SRC"     "${STAGE}/sage-${VERSION}-${TRIPLE}.dmg"
+          cp "$APP_TGZ_SRC" "${STAGE}/sage-${VERSION}-${TRIPLE}.app.tar.gz"
+          cp "$APP_SIG_SRC" "${STAGE}/sage-${VERSION}-${TRIPLE}.app.tar.gz.sig"
 
           ls -la "$STAGE"
 
@@ -132,9 +132,9 @@ jobs:
           STAGE="artifacts-${TRIPLE}"
           mkdir -p "$STAGE"
 
-          cp "$NSIS_SRC"     "${STAGE}/zlclaw-${VERSION}-${TRIPLE}-setup.exe"
-          cp "$NSIS_ZIP_SRC" "${STAGE}/zlclaw-${VERSION}-${TRIPLE}-setup.nsis.zip"
-          cp "$NSIS_SIG_SRC" "${STAGE}/zlclaw-${VERSION}-${TRIPLE}-setup.nsis.zip.sig"
+          cp "$NSIS_SRC"     "${STAGE}/sage-${VERSION}-${TRIPLE}-setup.exe"
+          cp "$NSIS_ZIP_SRC" "${STAGE}/sage-${VERSION}-${TRIPLE}-setup.nsis.zip"
+          cp "$NSIS_SIG_SRC" "${STAGE}/sage-${VERSION}-${TRIPLE}-setup.nsis.zip.sig"
 
           ls -la "$STAGE"
 

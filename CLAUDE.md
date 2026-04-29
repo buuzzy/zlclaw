@@ -10,7 +10,7 @@ Sage 是一个 AI 金融助手，支持桌面端（macOS）和移动端（iOS）
 |---|---|---|
 | 壳 | Tauri 2 (Rust) | Capacitor 8 |
 | 前端 | React 19 + Vite + TailwindCSS | 同左（共享 `src/`） |
-| 后端 | Hono sidecar (localhost:2026) | Railway 云端 (`zlclaw-production.up.railway.app`) |
+| 后端 | Hono sidecar (localhost:2026) | Railway 云端 (`sage-production.up.railway.app`) |
 | Agent SDK | `@codeany/open-agent-sdk` | 同左（后端共享） |
 | 数据库 | 本地 SQLite + Supabase | 纯 Supabase |
 | 图表 | ECharts (K线/柱/线/热力) + lightweight-charts | 同左 |
@@ -82,7 +82,7 @@ export const API_BASE_URL = isTauri
 - 未设置时 → loopback IP 检测（桌面端 sidecar）
 
 ### Railway 部署
-- URL: `https://zlclaw-production.up.railway.app`
+- URL: `https://sage-production.up.railway.app`
 - 环境变量: `SAGE_API_TOKEN`（Bearer auth）
 - Dockerfile 在项目根目录，多阶段构建（pnpm bundle → node:20-alpine）
 - Railway Hobby Plan $5/月，含 $5 credit，可设 Hard Limit 防超支
