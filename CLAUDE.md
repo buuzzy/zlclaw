@@ -102,12 +102,13 @@ export const API_BASE_URL = isTauri
 
 ```
 用户提问 →
-  ├─ isAnthropicApi && isFastChatQuery → /agent/chat (快聊，run())
-  ├─ hasImages || isOpenAiProvider     → /agent (直接 run()，跳过 plan)
-  └─ 其他                             → /agent/plan → /agent/execute (两阶段)
+  ├─ isDirectExecuteQuery (简单金融查询) → /agent (直接 run()，跳过 plan)
+  ├─ hasImages                          → /agent (直接 run()，跳过 plan)
+  └─ 其他                               → /agent/plan → /agent/execute (两阶段)
 ```
 
-- MiniMax 等 OpenAI-format provider 走 `isOpenAiProvider` 分支，直接 `run()`，不走 plan 阶段。
+- v1.0.4 起移除了 fast chat 路径，所有查询统一走 Agent + 工具链路
+- MiniMax 已切换到 Anthropic Messages 协议（`api.minimaxi.com/anthropic`），不再走 OpenAI-format
 
 ## 工具输出拦截机制（PostToolUse Hook）
 
@@ -137,22 +138,35 @@ export const API_BASE_URL = isTauri
 - 曾尝试在 `plan()` 方法中加 synthetic plan/isAnnounceOnly 等逻辑处理 MiniMax "只说不做"问题，导致前端 UI 结构混乱（raw JSON 泄漏到 UI）。最终正确方案极其简单：在 `useAgent.ts` 加一行 `isOpenAiProvider` 判断跳过 plan 阶段。
 - Artifact 空壳闪烁有两个原因：① `React.lazy()` Suspense 延迟（已改高频组件为静态 import）；② API 响应格式 ≠ 组件数据格式（需要 `transformForComponent()` 转换）。
 - API 错误响应（如 `{"code": -1, "msg": "鉴权失败"}`）也会被结构匹配误拦截，需检查 `parsed.code !== 0 && !parsed.data` 提前退出。
+- MiniMax 在 OpenAI-format 下会对简单问题泛滥调用工具（73 次 tool calls），根因是协议不匹配。切换到 Anthropic Messages 协议后彻底解决。
+- Fast chat 路径看似节省 token，但制造了能力边界问题（"没有该能力"）。移除后所有查询走 Agent + 工具，用户体验反而更好。
+- iwencai API 升级后需要 X-Claw-* 系列 Header，否则 401。注意两类端点格式不同：`/v1/query2data`（8 个数据查询技能）vs `/v1/comprehensive/search`（新闻/公告/研报 3 个搜索技能）。
+- API Key 不要硬编码在源码中。公共仓库 + 硬编码 = 立即泄露。用 `.env` + gitignore。清理 git 历史用 `git-filter-repo --replace-text`。
 
 ## 待办事项
-
-### P1 — 数据源迁移：westock API → TinyShare
-等用户提供 TinyShare 接口文档 + MCP 后启动。涉及 4 个 westock-* 技能、拦截逻辑、前端映射。
 
 ### P1 — MiniMax 不遵循 SKILL.md artifact 选择规则
 分时查询应走 `intraday-chart`，但 MiniMax 声称"没有分时图组件"。根因是 LLM reasoning 跳过 SKILL.md 检索。候选方案：提到 system prompt 顶层 / 加 few-shot / 后置 guard / 换模型。
 
 ### P2 — 意图识别驱动的执行策略分层
-当前 `useAgent.ts` 只有粗粒度的二档路由（快聊 vs plan+execute）。目标是引入三层策略：
+当前 `useAgent.ts` 有两档路由（直接执行 vs plan+execute）。目标是引入三层策略：
 - **直接执行**：意图明确的单步查询（「茅台现在多少钱」），零 plan 开销
 - **静默 plan**：多步但无歧义（「对比茅台和五粮液走势」），内部 plan 不暴露给用户
 - **显式 plan + 确认**：有副作用或高成本模糊意图（创建定时任务、批量分析）
 
-实现思路：混合方案 — 规则层先拦 90% 简单查询（扩展 `isFastChatQuery`），拦不住的再考虑 LLM 分类。工作量较大，需改 `useAgent.ts` 路由 + 后端 plan 判断逻辑 + 可能涉及前端 UI 流程。
-
 ### P3 — 恢复 Windows x64 发布
-WiX 对中文产品名有 encoding bug。NSIS 已成功，给 Windows job 加 `--bundles nsis` 即可恢复。约 15 分钟工作量。
+产品已更名为 Sage（纯英文），WiX 中文编码 bug 不再是阻碍。给 CI Windows job 加 `--bundles nsis` 即可恢复。
+
+## API Key 管理
+
+金融数据 API Key 不在源码中硬编码，通过环境变量加载：
+
+| Key | 用途 | 加载方式 |
+|-----|------|----------|
+| `IWENCAI_API_KEY` | 11 个 iwencai 技能 | `~/.sage/.env` → Tauri sidecar 注入 |
+| `WESTOCK_API_KEY` | 4 个 westock 技能 | 同上 |
+
+Tauri 启动 sidecar 时从 `~/.sage/.env` 读取并传递环境变量（`src-tauri/src/lib.rs` 中的 `load_dotenv()`）。
+Railway 部署需在环境变量中单独配置。
+
+签名密钥：`TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`，本地构建时手动 export，密钥文件存放于 `~/Documents/Projects/sage-tauri-signing-key-v2.txt`。

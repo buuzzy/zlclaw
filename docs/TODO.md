@@ -1,7 +1,7 @@
 # Sage — TODO & Feature Roadmap
 
 > 只保留进行中和待实现的条目。已完成的功能通过 git commit 历史追溯。
-> 最后更新：2026-04-29（v1.0.32）
+> 最后更新：2026-04-29（v1.0.5）
 
 ---
 
@@ -21,6 +21,12 @@
 
 ---
 
+### P1 — MiniMax artifact 选择规则
+
+分时查询应走 `intraday-chart`，但 MiniMax 声称"没有分时图组件"。根因是 LLM reasoning 跳过 SKILL.md 检索。候选方案：提到 system prompt 顶层 / 加 few-shot / 后置 guard / 换模型。
+
+---
+
 ### 工程基建
 
 | 条目 | 优先级 | 说明 |
@@ -29,8 +35,8 @@
 | 账号注销 | P3 | 正式版实现 |
 | 启动加载 UX 优化 | P3 | Logo 动画 + 阶段提示 |
 | iOS 移动端（Phase 1-3） | P3 | Phase 0 已完成，详见 `docs/ios/IOS_PLAN.md` |
-| 数据源迁移 westock → TinyShare | P3 | westock 运行稳定，TinyShare 作为 fallback 容灾备选 |
 | 隐私政策与 TOS 页面 | P3 | 正式版上架前做 |
+| 恢复 Windows x64 发布 | P3 | 产品已更名 Sage（纯英文），WiX 编码 bug 不再阻碍，加 `--bundles nsis` 即可 |
 
 ---
 
@@ -112,11 +118,10 @@
 
 **来源**: Hermes Agent 2.6
 
-**现状**: Sage 在 system prompt 中注入完整的 SKILL.md 内容（可能数千 token），即使大部分技能本次对话用不到。
+**现状**: Sage 已实现 intent predictor（`predictor.ts`），每次请求只注册匹配的 ~5 个技能。但完整 SKILL.md 内容仍会注入 context。
 
 **方案**: system prompt 只注入技能摘要列表（名称 + 一句话描述），agent 需要时通过 tool call 加载完整 SKILL.md。
 
-**收益**: 大幅减少每次 API 调用的 token 消耗（可能省 30-50%），降低成本。
+**收益**: 进一步减少每次 API 调用的 token 消耗。
 
 **工作量**: ~2 天。改 skill loader + system prompt 构建 + 新增 skill_view 工具。
-
