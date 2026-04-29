@@ -317,15 +317,9 @@ export async function installBuiltinSkills(): Promise<void> {
         continue;
       }
 
-      // Check if needs update by comparing modification times
-      let needsInstall = false;
-      try {
-        const srcStat = await fs.stat(srcSkillFile);
-        const destStat = await fs.stat(destSkillFile);
-        needsInstall = srcStat.mtimeMs > destStat.mtimeMs;
-      } catch {
-        needsInstall = true; // Destination doesn't exist
-      }
+      // Always overwrite built-in skills to ensure updates (e.g. auth header fixes)
+      // are applied. User customizations go in separate skill directories.
+      const needsInstall = true;
 
       if (needsInstall) {
         console.log(`[Skills] Installing built-in skill: ${entry.name}`);

@@ -118,7 +118,10 @@ def query_finance_data(query: str, page: str, limit: str,
     # 构造请求头
     headers = {
         "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "X-Claw-Source": "sage",
+        "X-Claw-Skill-Id": "财务数据查询",
+        "X-Claw-Skill-Version": "1.0.0",
     }
 
     # 创建请求对象

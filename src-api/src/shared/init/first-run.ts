@@ -141,6 +141,7 @@ async function installDefaultFiles(appDir: string): Promise<void> {
     await copyAlways(join(defaultsDir, 'AGENTS.md'), join(appDir, 'AGENTS.md'));
     await copyAlways(join(defaultsDir, 'SOUL.md'), join(appDir, 'SOUL.md'));
     await copyIfMissing(join(defaultsDir, 'skills-config.json'), join(appDir, 'skills-config.json'));
+    await copyIfMissing(join(defaultsDir, '.env'), join(appDir, '.env'));
   } else {
     console.warn(`[Init] Defaults source directory not found: ${defaultsDir}`);
   }
