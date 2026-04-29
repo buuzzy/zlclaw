@@ -21,7 +21,7 @@ import {
 } from '@/app/api';
 import { corsMiddleware, localOnlyMiddleware } from '@/app/middleware/index.js';
 import { loadConfig } from '@/config/loader.js';
-import { DEFAULT_IWENCAI_API_KEY } from '@/config/constants';
+import { DEFAULT_IWENCAI_API_KEY, DEFAULT_WESTOCK_API_KEY } from '@/config/constants';
 import {
   initProviderManager,
   shutdownProviderManager,
@@ -215,9 +215,12 @@ async function start() {
   // Load configuration
   await loadConfig();
 
-  // Inject default financial data API key (public key for all users)
+  // Inject default financial data API keys (public keys for all users)
   if (!process.env.IWENCAI_API_KEY) {
     process.env.IWENCAI_API_KEY = DEFAULT_IWENCAI_API_KEY;
+  }
+  if (!process.env.WESTOCK_API_KEY) {
+    process.env.WESTOCK_API_KEY = DEFAULT_WESTOCK_API_KEY;
   }
 
   // Install built-in skills to ~/.sage/skills/
