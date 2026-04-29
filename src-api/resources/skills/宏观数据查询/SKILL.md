@@ -50,7 +50,13 @@ import os
 url = "https://openapi.iwencai.com/v1/query2data"
 headers = {
     "Authorization": f"Bearer {os.environ['IWENCAI_API_KEY']}",
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "X-Claw-Call-Type": "normal",
+    "X-Claw-Skill-Id": "宏观数据查询",
+    "X-Claw-Skill-Version": "1.0.0",
+    "X-Claw-Plugin-Id": "none",
+    "X-Claw-Plugin-Version": "none",
+    "X-Claw-Trace-Id": __import__('secrets').token_hex(32),
 }
 payload = {
     "query": "改写后的查询语句",

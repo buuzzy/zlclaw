@@ -1,7 +1,7 @@
-# 问财公告搜索 API 文档
+# 公告搜索 API 文档
 
 ## 概述
-问财公告搜索 API 提供公告信息的搜索功能，通过用户问句查询相关公告信息。
+公告搜索 API 提供公告信息的搜索功能，通过用户问句查询相关公告信息。
 
 ## 基础信息
 - **Base URL**: `https://openapi.iwencai.com`
@@ -21,6 +21,12 @@ API 使用 API Key 进行认证，需要在请求头中设置：
 |--------|------|------|------|
 | Content-Type | string | 是 | 必须设置为 `application/json` |
 | Authorization | string | 是 | Bearer token 认证，格式: `Bearer {IWENCAI_API_KEY}` |
+| X-Claw-Call-Type | string | 是 | `normal`（正常请求）或 `retry`（重试） |
+| X-Claw-Skill-Id | string | 是 | `公告搜索` |
+| X-Claw-Skill-Version | string | 是 | `1.0.0` |
+| X-Claw-Plugin-Id | string | 是 | `none` |
+| X-Claw-Plugin-Version | string | 是 | `none` |
+| X-Claw-Trace-Id | string | 是 | 64 字符唯一追踪 ID |
 
 ### 请求体 (Body)
 请求体为 JSON 格式，包含以下参数：
@@ -110,6 +116,7 @@ API 使用 API Key 进行认证，需要在请求头中设置：
 ```python
 import requests
 import os
+import secrets
 
 # 从环境变量获取 API Key
 api_key = os.getenv("IWENCAI_API_KEY")
@@ -117,7 +124,13 @@ api_key = os.getenv("IWENCAI_API_KEY")
 # 请求头
 headers = {
     "Content-Type": "application/json",
-    "Authorization": f"Bearer {api_key}"
+    "Authorization": f"Bearer {api_key}",
+    "X-Claw-Call-Type": "normal",
+    "X-Claw-Skill-Id": "公告搜索",
+    "X-Claw-Skill-Version": "1.0.0",
+    "X-Claw-Plugin-Id": "none",
+    "X-Claw-Plugin-Version": "none",
+    "X-Claw-Trace-Id": secrets.token_hex(32),
 }
 
 # 请求体
@@ -154,6 +167,12 @@ curl -X POST \
   https://openapi.iwencai.com/v1/comprehensive/search \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $IWENCAI_API_KEY" \
+  -H "X-Claw-Call-Type: normal" \
+  -H "X-Claw-Skill-Id: 公告搜索" \
+  -H "X-Claw-Skill-Version: 1.0.0" \
+  -H "X-Claw-Plugin-Id: none" \
+  -H "X-Claw-Plugin-Version: none" \
+  -H "X-Claw-Trace-Id: $(openssl rand -hex 32)" \
   -d '{
     "channels": ["announcement"],
     "app_id": "AIME_SKILL",

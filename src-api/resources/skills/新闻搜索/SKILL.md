@@ -97,11 +97,49 @@ python3 ~/.sage/skills/新闻搜索/scripts/ --query "芯片行业动态" --limi
 - **认证方式**: API Key (Bearer Token)
 
 ### 认证要求
-在请求头中需要携带API Key进行认证：
+在请求头中需要携带API Key及 X-Claw 系列 Header 进行认证：
+
+| Header | 取值说明 |
+|--------|----------|
+| `Authorization` | `Bearer <API Key>`，API Key 仅从环境变量 `IWENCAI_API_KEY` 读取 |
+| `Content-Type` | `application/json` |
+| `X-Claw-Call-Type` | `normal`（正常请求）或 `retry`（失败后的重试） |
+| `X-Claw-Skill-Id` | `新闻搜索` |
+| `X-Claw-Skill-Version` | `1.0.0` |
+| `X-Claw-Plugin-Id` | `none` |
+| `X-Claw-Plugin-Version` | `none` |
+| `X-Claw-Trace-Id` | 每次请求必须新生成的 **64 字符**全局唯一追踪 ID（推荐 `secrets.token_hex(32)`） |
+
+**Python 调用示例（含 Claw Headers）：**
+```python
+import os, json, secrets, urllib.request
+
+url = "https://openapi.iwencai.com/v1/comprehensive/search"
+api_key = os.environ["IWENCAI_API_KEY"]
+trace_id = secrets.token_hex(32)
+
+headers = {
+    "Authorization": f"Bearer {api_key}",
+    "Content-Type": "application/json",
+    "X-Claw-Call-Type": "normal",
+    "X-Claw-Skill-Id": "新闻搜索",
+    "X-Claw-Skill-Version": "1.0.0",
+    "X-Claw-Plugin-Id": "none",
+    "X-Claw-Plugin-Version": "none",
+    "X-Claw-Trace-Id": trace_id,
+}
+
+payload = {
+    "channels": ["news"],
+    "app_id": "AIME_SKILL",
+    "query": "AI芯片最新动态"
+}
+
+data = json.dumps(payload).encode("utf-8")
+request = urllib.request.Request(url, data=data, headers=headers, method="POST")
+response = urllib.request.urlopen(request, timeout=30)
+result = json.loads(response.read().decode("utf-8"))
 ```
-Authorization: Bearer {IWENCAI_API_KEY}
-```
-其中 `IWENCAI_API_KEY` 是用户申请的有效API密钥，需要设置为环境变量。
 
 ### 请求参数
 ```json

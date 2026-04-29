@@ -7,6 +7,7 @@
 import json
 import time
 import logging
+import secrets
 from typing import Dict, List, Any, Optional, Tuple
 import requests
 from requests.exceptions import RequestException, Timeout, ConnectionError
@@ -40,11 +41,17 @@ class APIClient:
         self.config.setup_logging()
         self.logger = logging.getLogger(__name__)
     
-    def _get_headers(self) -> Dict[str, str]:
-        """获取请求头"""
+    def _get_headers(self, call_type: str = "normal") -> Dict[str, str]:
+        """获取请求头（含 X-Claw 追踪头）"""
         return {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
+            "Authorization": f"Bearer {self.api_key}",
+            "X-Claw-Call-Type": call_type,
+            "X-Claw-Skill-Id": "研报搜索",
+            "X-Claw-Skill-Version": "1.0.0",
+            "X-Claw-Plugin-Id": "none",
+            "X-Claw-Plugin-Version": "none",
+            "X-Claw-Trace-Id": secrets.token_hex(32),
         }
     
     def _prepare_payload(self, query: str, limit: Optional[int] = None) -> Dict[str, Any]:
@@ -64,10 +71,11 @@ class APIClient:
     
     def _make_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """发送请求（带重试机制）"""
-        headers = self._get_headers()
-        
+
         for attempt in range(self.max_retries + 1):
             try:
+                call_type = "retry" if attempt > 0 else "normal"
+                headers = self._get_headers(call_type)
                 self.logger.debug(f"发送API请求 (尝试 {attempt + 1}/{self.max_retries + 1}): {payload}")
                 
                 response = requests.post(

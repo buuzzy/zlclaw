@@ -2,6 +2,7 @@ import requests
 import json
 import time
 import logging
+import secrets
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 
@@ -15,18 +16,25 @@ class AnnouncementSearch:
         self.api_config = config.get_api_config()
         self.search_config = config.get_search_config()
         self.api_key = config.get_api_key()
-        
+
         self.base_url = self.api_config["base_url"]
         self.endpoint = self.api_config["endpoint"]
         self.timeout = self.api_config["timeout"]
         self.max_retries = self.api_config["max_retries"]
-        
+
         self.channels = self.search_config["channels"]
         self.app_id = self.search_config["app_id"]
-        
-        self.headers = {
+
+    def _build_headers(self, call_type: str = "normal") -> Dict[str, str]:
+        return {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
+            "Authorization": f"Bearer {self.api_key}",
+            "X-Claw-Call-Type": call_type,
+            "X-Claw-Skill-Id": "公告搜索",
+            "X-Claw-Skill-Version": "1.0.0",
+            "X-Claw-Plugin-Id": "none",
+            "X-Claw-Plugin-Version": "none",
+            "X-Claw-Trace-Id": secrets.token_hex(32),
         }
     
     def search(self, query: str, limit: int = 10) -> Tuple[bool, List[Dict[str, Any]], str]:
@@ -45,12 +53,14 @@ class AnnouncementSearch:
         
         for attempt in range(self.max_retries):
             try:
+                call_type = "retry" if attempt > 0 else "normal"
+                headers = self._build_headers(call_type)
                 logger.debug(f"请求URL: {url}")
                 logger.debug(f"请求参数: {payload}")
-                
+
                 response = requests.post(
                     url,
-                    headers=self.headers,
+                    headers=headers,
                     json=payload,
                     timeout=self.timeout
                 )

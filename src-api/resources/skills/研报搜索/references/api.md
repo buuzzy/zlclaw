@@ -18,9 +18,16 @@
 
 ### 请求头
 
-```
-Content-Type: application/json
-```
+| Header | 必填 | 说明 |
+|--------|------|------|
+| `Content-Type` | 是 | `application/json` |
+| `Authorization` | 是 | `Bearer {IWENCAI_API_KEY}` |
+| `X-Claw-Call-Type` | 是 | `normal`（正常请求）或 `retry`（重试） |
+| `X-Claw-Skill-Id` | 是 | `研报搜索` |
+| `X-Claw-Skill-Version` | 是 | `1.0.0` |
+| `X-Claw-Plugin-Id` | 是 | `none` |
+| `X-Claw-Plugin-Version` | 是 | `none` |
+| `X-Claw-Trace-Id` | 是 | 64 字符唯一追踪 ID（`secrets.token_hex(32)`） |
 
 ### 请求参数
 
@@ -124,6 +131,7 @@ export IWENCAI_API_KEY="your_api_key_here"
 import os
 import requests
 import json
+import secrets
 
 # API配置
 BASE_URL = "https://openapi.iwencai.com"
@@ -133,7 +141,13 @@ API_KEY = os.getenv("IWENCAI_API_KEY")
 # 请求头
 headers = {
     "Content-Type": "application/json",
-    "Authorization": f"Bearer {API_KEY}"
+    "Authorization": f"Bearer {API_KEY}",
+    "X-Claw-Call-Type": "normal",
+    "X-Claw-Skill-Id": "研报搜索",
+    "X-Claw-Skill-Version": "1.0.0",
+    "X-Claw-Plugin-Id": "none",
+    "X-Claw-Plugin-Version": "none",
+    "X-Claw-Trace-Id": secrets.token_hex(32),
 }
 
 # 请求体
@@ -178,7 +192,13 @@ const API_KEY = process.env.IWENCAI_API_KEY;
 // 请求头
 const headers = {
   'Content-Type': 'application/json',
-  'Authorization': `Bearer ${API_KEY}`
+  'Authorization': `Bearer ${API_KEY}`,
+  'X-Claw-Call-Type': 'normal',
+  'X-Claw-Skill-Id': '研报搜索',
+  'X-Claw-Skill-Version': '1.0.0',
+  'X-Claw-Plugin-Id': 'none',
+  'X-Claw-Plugin-Version': 'none',
+  'X-Claw-Trace-Id': require('crypto').randomBytes(32).toString('hex'),
 };
 
 // 请求体

@@ -1,5 +1,6 @@
 ---
 name: westock-screener
+description: 条件选股筛选（涨停/跌停/估值/技术）、指数板块成份查询、宏观经济数据（GDP/CPI/PMI/M2等）
 promptDescription: 股票筛选：条件选股（涨停/跌停/估值/技术），指数板块成份，宏观数据（GDP/CPI/PMI）
 whenToUse: 选股,筛选,涨停,跌停,停牌,涨幅,估值,PE,PB,ROE,板块成份,申万,指数成份,沪股通,深股通,宏观,GDP,CPI,PPI,PMI,M2,货币供应,社融,工业利润,社会消费
 ---

@@ -11,17 +11,19 @@
 - **认证方式**: API Key (Bearer Token)
 
 ## 认证要求
-在请求头中需要携带API Key进行认证：
-```
-Authorization: Bearer {IWENCAI_API_KEY}
-```
-其中 `IWENCAI_API_KEY` 是用户申请的有效API密钥，需要设置为环境变量。
+在请求头中需要携带API Key及 X-Claw 系列 Header 进行认证。
 
 ## 请求头
-```
-Content-Type: application/json
-Authorization: Bearer {IWENCAI_API_KEY}
-```
+| Header | 必填 | 说明 |
+|--------|------|------|
+| `Content-Type` | 是 | `application/json` |
+| `Authorization` | 是 | `Bearer {IWENCAI_API_KEY}` |
+| `X-Claw-Call-Type` | 是 | `normal`（正常请求）或 `retry`（重试） |
+| `X-Claw-Skill-Id` | 是 | `新闻搜索` |
+| `X-Claw-Skill-Version` | 是 | `1.0.0` |
+| `X-Claw-Plugin-Id` | 是 | `none` |
+| `X-Claw-Plugin-Version` | 是 | `none` |
+| `X-Claw-Trace-Id` | 是 | 64 字符唯一追踪 ID（`secrets.token_hex(32)`） |
 
 ## 请求参数
 

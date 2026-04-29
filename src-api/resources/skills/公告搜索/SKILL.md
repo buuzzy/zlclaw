@@ -66,6 +66,52 @@ whenToUse: 公告,年报,季报,半年报,分红,增发,配股,重组,回购,公
 - **固定参数**: `channels: ["announcement"]`, `app_id: "AIME_SKILL"`
 - **可变参数**: `query` (用户问句)
 
+### 请求头要求
+
+所有发往网关的请求必须严格携带以下 Header：
+
+| Header | 取值说明 |
+|--------|----------|
+| `Authorization` | `Bearer <API Key>`，API Key 仅从环境变量 `IWENCAI_API_KEY` 读取 |
+| `Content-Type` | `application/json` |
+| `X-Claw-Call-Type` | `normal`（正常请求）或 `retry`（失败后的重试） |
+| `X-Claw-Skill-Id` | `公告搜索` |
+| `X-Claw-Skill-Version` | `1.0.0` |
+| `X-Claw-Plugin-Id` | `none` |
+| `X-Claw-Plugin-Version` | `none` |
+| `X-Claw-Trace-Id` | 每次请求必须新生成的 **64 字符**全局唯一追踪 ID（推荐 `secrets.token_hex(32)`） |
+
+**Python 调用示例（含 Claw Headers）：**
+```python
+import os, json, secrets, urllib.request
+
+url = "https://openapi.iwencai.com/v1/comprehensive/search"
+api_key = os.environ["IWENCAI_API_KEY"]
+trace_id = secrets.token_hex(32)
+
+headers = {
+    "Authorization": f"Bearer {api_key}",
+    "Content-Type": "application/json",
+    "X-Claw-Call-Type": "normal",
+    "X-Claw-Skill-Id": "公告搜索",
+    "X-Claw-Skill-Version": "1.0.0",
+    "X-Claw-Plugin-Id": "none",
+    "X-Claw-Plugin-Version": "none",
+    "X-Claw-Trace-Id": trace_id,
+}
+
+payload = {
+    "channels": ["announcement"],
+    "app_id": "AIME_SKILL",
+    "query": "贵州茅台 公告"
+}
+
+data = json.dumps(payload).encode("utf-8")
+request = urllib.request.Request(url, data=data, headers=headers, method="POST")
+response = urllib.request.urlopen(request, timeout=30)
+result = json.loads(response.read().decode("utf-8"))
+```
+
 ### 响应格式
 API返回的`data`字段包含以下信息：
 - `title`: 文章标题

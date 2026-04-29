@@ -10,6 +10,7 @@ import sys
 import json
 import logging
 import argparse
+import secrets
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import csv
@@ -46,11 +47,21 @@ class NewsSearchAPI:
         self.session.headers.update({
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
-            "User-Agent": "NewsSearchSkill/1.0.0"
         })
-        
+
         logger.info("NewsSearchAPI客户端初始化完成")
-    
+
+    def _build_headers(self, call_type: str = "normal") -> Dict[str, str]:
+        """Build request headers with X-Claw trace headers."""
+        return {
+            "X-Claw-Call-Type": call_type,
+            "X-Claw-Skill-Id": "新闻搜索",
+            "X-Claw-Skill-Version": "1.0.0",
+            "X-Claw-Plugin-Id": "none",
+            "X-Claw-Plugin-Version": "none",
+            "X-Claw-Trace-Id": secrets.token_hex(32),
+        }
+
     def search(self, query: str, max_retries: int = 3) -> List[Dict[str, Any]]:
         """
         搜索财经资讯
@@ -76,8 +87,9 @@ class NewsSearchAPI:
         
         for attempt in range(max_retries):
             try:
+                call_type = "retry" if attempt > 0 else "normal"
                 logger.info(f"搜索查询: {query} (尝试 {attempt + 1}/{max_retries})")
-                response = self.session.post(url, json=payload, timeout=30)
+                response = self.session.post(url, json=payload, headers=self._build_headers(call_type), timeout=30)
                 
                 if response.status_code == 200:
                     data = response.json()
