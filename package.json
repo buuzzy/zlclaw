@@ -33,6 +33,8 @@
     "tauri:build:signed": "./scripts/build-signed.sh",
     "tauri:build:signed:mac-arm": "./scripts/build-signed.sh mac-arm",
     "tauri:build:signed:mac-intel": "./scripts/build-signed.sh mac-intel",
+    "tauri:build:mas": "pnpm build:api:binary:mac-arm && tauri build --target aarch64-apple-darwin --config src-tauri/tauri.appstore.conf.json",
+    "tauri:build:mas:universal": "pnpm build:api:binary && tauri build --target universal-apple-darwin --config src-tauri/tauri.appstore.conf.json",
     "build:app": "./scripts/build.sh",
     "build:app:with-claude": "./scripts/build.sh --with-claude",
     "build:app:mac-arm": "./scripts/build.sh mac-arm",

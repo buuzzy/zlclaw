@@ -99,6 +99,12 @@ fn get_app_data_dir() -> String {
 /// Kill any existing process on the API port before starting sidecar
 #[cfg(not(debug_assertions))]
 fn kill_existing_api_process(port: u16) {
+    // In sandbox, lsof/kill may be restricted — rely on child.kill() only
+    if is_running_in_sandbox() {
+        println!("[API] Skipping port kill in sandbox (using child.kill() only)");
+        return;
+    }
+
     use std::process::Command;
 
     println!("[API] Checking for existing process on port {}...", port);
@@ -451,8 +457,10 @@ pub fn run() {
                                 }
                             }
                         }
-                        // Also try to kill by port as a fallback
-                        kill_existing_api_process(2026);
+                        // Fallback: kill by port (only outside sandbox)
+                        if !is_running_in_sandbox() {
+                            kill_existing_api_process(2026);
+                        }
                     }
                     #[cfg(debug_assertions)]
                     {
