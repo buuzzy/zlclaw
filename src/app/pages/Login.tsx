@@ -46,13 +46,10 @@ function GoogleIcon({ className }: { className?: string }) {
 }
 
 export function LoginPage() {
-  const { status, signInWithGitHub, signInWithGoogle, signInWithEmail } = useAuth();
+  const { status, signInWithGitHub, signInWithGoogle } = useAuth();
   const [loadingProvider, setLoadingProvider] = useState<
-    'github' | 'google' | 'email' | null
+    'github' | 'google' | null
   >(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [emailError, setEmailError] = useState<string | null>(null);
 
   // 如果已经登录（例如 OAuth 回调完成后），自动跳转到主页
   if (status === 'authenticated') {
@@ -77,36 +74,25 @@ export function LoginPage() {
     }
   };
 
-  const handleEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setEmailError(null);
-    setLoadingProvider('email');
-    try {
-      await signInWithEmail(email, password);
-    } catch (err: unknown) {
-      setEmailError(err instanceof Error ? err.message : '登录失败');
-    } finally {
-      setLoadingProvider(null);
-    }
-  };
-
   return (
     <div className="bg-background flex min-h-svh flex-col items-center justify-center px-4">
       {/* Card */}
-      <div className="border-border bg-card shadow-md w-full max-w-sm rounded-2xl border p-8">
+      <div className="border-border/60 bg-card w-full max-w-xs rounded-2xl border p-8 shadow-lg">
         {/* Logo + Brand */}
-        <div className="mb-8 flex flex-col items-center gap-3">
-          <img
-            src="/logo.png"
-            alt="Sage"
-            className="size-12 rounded-xl object-contain"
-          />
+        <div className="mb-10 flex flex-col items-center gap-4">
+          <div className="rounded-2xl bg-gradient-to-b from-white to-gray-50 p-3 shadow-sm ring-1 ring-black/5 dark:from-gray-800 dark:to-gray-900 dark:ring-white/10">
+            <img
+              src="/logo.png"
+              alt="Sage"
+              className="size-20 rounded-xl object-contain"
+            />
+          </div>
           <div className="text-center">
-            <h1 className="text-foreground font-serif text-2xl font-normal tracking-tight">
+            <h1 className="text-foreground font-serif text-3xl font-normal tracking-tight">
               Sage
             </h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              登录以开始你的金融 AI 之旅
+            <p className="text-muted-foreground mt-1.5 text-sm">
+              智能金融助手
             </p>
           </div>
         </div>
@@ -120,8 +106,9 @@ export function LoginPage() {
             disabled={loadingProvider !== null}
             className={cn(
               'border-border bg-background text-foreground hover:bg-accent',
-              'inline-flex h-10 w-full items-center justify-center gap-2.5',
-              'rounded-lg border px-4 text-sm font-medium transition-colors',
+              'inline-flex h-11 w-full items-center justify-center gap-2.5',
+              'rounded-xl border px-4 text-sm font-medium transition-all',
+              'hover:shadow-sm active:scale-[0.98]',
               'disabled:cursor-not-allowed disabled:opacity-50'
             )}
           >
@@ -140,8 +127,9 @@ export function LoginPage() {
             disabled={loadingProvider !== null}
             className={cn(
               'border-border bg-background text-foreground hover:bg-accent',
-              'inline-flex h-10 w-full items-center justify-center gap-2.5',
-              'rounded-lg border px-4 text-sm font-medium transition-colors',
+              'inline-flex h-11 w-full items-center justify-center gap-2.5',
+              'rounded-xl border px-4 text-sm font-medium transition-all',
+              'hover:shadow-sm active:scale-[0.98]',
               'disabled:cursor-not-allowed disabled:opacity-50'
             )}
           >
@@ -153,71 +141,10 @@ export function LoginPage() {
             使用 Google 登录
           </button>
         </div>
-
-        {/* Divider */}
-        <div className="my-6 flex items-center gap-3">
-          <div className="bg-border h-px flex-1" />
-          <span className="text-muted-foreground text-xs">或使用邮箱登录</span>
-          <div className="bg-border h-px flex-1" />
-        </div>
-
-        {/* Email/Password Form */}
-        <form onSubmit={handleEmail} className="flex flex-col gap-3">
-          <input
-            type="email"
-            placeholder="邮箱"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className={cn(
-              'border-border bg-background text-foreground placeholder:text-muted-foreground',
-              'h-10 w-full rounded-lg border px-3 text-sm outline-none',
-              'focus:ring-ring focus:ring-2'
-            )}
-          />
-          <input
-            type="password"
-            placeholder="密码"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className={cn(
-              'border-border bg-background text-foreground placeholder:text-muted-foreground',
-              'h-10 w-full rounded-lg border px-3 text-sm outline-none',
-              'focus:ring-ring focus:ring-2'
-            )}
-          />
-          {emailError && (
-            <p className="text-xs text-red-500">{emailError}</p>
-          )}
-          <button
-            type="submit"
-            disabled={loadingProvider !== null}
-            className={cn(
-              'bg-foreground text-background hover:bg-foreground/90',
-              'inline-flex h-10 w-full items-center justify-center gap-2',
-              'rounded-lg px-4 text-sm font-medium transition-colors',
-              'disabled:cursor-not-allowed disabled:opacity-50'
-            )}
-          >
-            {loadingProvider === 'email' ? (
-              <div className="border-background/30 border-t-background size-4 animate-spin rounded-full border-2" />
-            ) : (
-              '登录'
-            )}
-          </button>
-        </form>
-
-        {/* Footer note */}
-        <p className="text-muted-foreground text-center text-xs leading-relaxed">
-          登录即表示你同意我们的服务条款和隐私政策。
-          <br />
-          你的数据仅用于提升个人使用体验。
-        </p>
       </div>
 
       {/* Bottom brand */}
-      <p className="text-muted-foreground mt-6 text-xs">
+      <p className="text-muted-foreground mt-8 text-xs tracking-wide">
         Sage · AI Financial Assistant
       </p>
     </div>

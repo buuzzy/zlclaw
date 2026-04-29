@@ -93,6 +93,13 @@ function isDirectExecuteQuery(prompt: string): boolean {
 
   const lower = trimmed.toLowerCase();
 
+  // Multi-target or comparison queries should go through plan phase
+  const complexPatterns = ['对比', '比较', '分析', 'vs', '和', '与', '跟'];
+  const hasMultipleTargets = complexPatterns.some((p) => lower.includes(p));
+  // Count commas / enumeration markers as a sign of multiple targets
+  const enumCount = (lower.match(/[、，,]/g) || []).length;
+  if (hasMultipleTargets && enumCount >= 1) return false;
+
   const directPatterns = [
     // Simple quote queries
     '行情',

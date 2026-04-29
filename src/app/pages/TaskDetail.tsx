@@ -869,7 +869,10 @@ function TaskDetailContent() {
   );
 
   const displayTitle = task?.prompt || generatedTitle || initialPrompt;
-  const displayPrompt = initialPrompt || task?.prompt || '';
+  // For the user message bubble, prefer the actual first user message from DB
+  // over task.prompt (which gets overwritten by the generated title).
+  const firstUserMsg = messages.find((m) => m.type === 'user');
+  const displayPrompt = initialPrompt || firstUserMsg?.content || '';
 
   // Get attachments for the initial user message:
   // 1. From navigation state (first navigation from home page)
@@ -901,9 +904,10 @@ function TaskDetailContent() {
   // (to avoid duplication when messages array already includes it)
   const firstMessageIsUserWithSameContent = useMemo(() => {
     const firstMessage = messages[0];
-    return (
-      firstMessage?.type === 'user' && firstMessage?.content === displayPrompt
-    );
+    if (firstMessage?.type !== 'user' || !displayPrompt) return false;
+    // Normalize both strings for comparison (trim whitespace, collapse spaces)
+    const normalize = (s: string) => s.trim().replace(/\s+/g, ' ');
+    return normalize(firstMessage.content || '') === normalize(displayPrompt);
   }, [messages, displayPrompt]);
 
   return (
