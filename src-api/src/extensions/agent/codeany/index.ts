@@ -876,7 +876,7 @@ export class CodeAnyAgent extends BaseAgent {
       cwd: sessionCwd,
       model: this.config.model,
       permissionMode: 'bypassPermissions',
-      maxTurns: 15,
+      maxTurns: 12,
       thinking: { type: 'adaptive' },
       ...extraOpts,
     };
@@ -999,6 +999,12 @@ export class CodeAnyAgent extends BaseAgent {
     // Strip reasoning tags emitted by MiniMax and other thinking models
     // (e.g. <think>...</think>) — they should never be shown to the user.
     sanitized = sanitized.replace(/<think>[\s\S]*?<\/think>\s*/g, '');
+
+    // Strip MiniMax fake tool-call text blocks that leak to UI.
+    // MiniMax sometimes "says" tool calls as text instead of using the API's
+    // tool_use mechanism, producing blocks like:
+    //   [TOOL_CALL] {tool => "Skill", args => { ... }} [/TOOL_CALL]
+    sanitized = sanitized.replace(/\[TOOL_CALL\][\s\S]*?\[\/TOOL_CALL\]\s*/g, '');
 
     const apiKeyErrorPatterns = [
       /Invalid API key/i, /invalid_api_key/i, /API key.*invalid/i,
@@ -1165,7 +1171,7 @@ export class CodeAnyAgent extends BaseAgent {
       // ------------------------------------------------------------------
       let currentPrompt = finalPrompt;
       const MAX_EMPTY_RETRIES = 1;
-      const MAX_TOOL_CALLS = 10;
+      const MAX_TOOL_CALLS = 20;
       let emptyRetries = 0;
       let totalToolCalls = 0;
 
@@ -1185,6 +1191,10 @@ export class CodeAnyAgent extends BaseAgent {
             }
             yield msg;
           }
+          // Log when tool call limit is approaching (SDK will naturally stop at maxTurns)
+          if (totalToolCalls >= MAX_TOOL_CALLS) {
+            logger.warn(`[CodeAny ${session.id}] Tool call limit (${MAX_TOOL_CALLS}) reached, SDK maxTurns will handle termination.`);
+          }
         }
 
         // If the LLM used tools or the session was aborted, we're done.
@@ -1196,12 +1206,18 @@ export class CodeAnyAgent extends BaseAgent {
           break;
         }
 
-        // No tools were called — check if this looks like an "announce-only"
-        // turn that we should silently retry.
+        // If the LLM produced substantive text (not just empty/whitespace),
+        // it answered without tools — that's a valid response, not an "empty turn".
+        const hasSubstantiveText = assistantTextParts.some(t => t.trim().length > 20);
+        if (hasSubstantiveText) break;
+
+        // No tools AND no real text — this is an "announce-only" turn
+        // (e.g. MiniMax says "我来帮你查询..." without actually calling tools).
+        // Silently retry once.
         if (emptyRetries >= MAX_EMPTY_RETRIES) break;
 
         emptyRetries++;
-        logger.info(`[CodeAny ${session.id}] Empty turn detected (no tool calls). Silent retry ${emptyRetries}/${MAX_EMPTY_RETRIES}.`);
+        logger.info(`[CodeAny ${session.id}] Empty turn detected (no tool calls, no text). Silent retry ${emptyRetries}/${MAX_EMPTY_RETRIES}.`);
         currentPrompt = '继续执行，请直接调用工具获取数据，不要重复描述你要做什么。';
       }
     } catch (error) {
