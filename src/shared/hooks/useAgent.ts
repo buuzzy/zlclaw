@@ -15,6 +15,7 @@ import {
 } from '@/shared/db';
 import { getCurrentBoundUid } from '@/shared/db/database';
 import { getSettings } from '@/shared/db/settings';
+import { getCurrentAccessToken } from '@/shared/lib/supabase';
 import {
   loadAttachments,
   saveAttachments,
@@ -2117,6 +2118,7 @@ export function useAgent(): UseAgentReturn {
               mcpConfig,
               language,
               userId: getCurrentBoundUid() ?? undefined,
+              accessToken: await getCurrentAccessToken(),
             }),
             signal: abortController.signal,
           });
@@ -2206,6 +2208,7 @@ export function useAgent(): UseAgentReturn {
               mcpConfig,
               language,
               userId: getCurrentBoundUid() ?? undefined,
+              accessToken: await getCurrentAccessToken(),
             }),
             signal: abortController.signal,
           });
@@ -2245,6 +2248,7 @@ export function useAgent(): UseAgentReturn {
               modelConfig,
               language: getPreferredLanguage(),
               userId: getCurrentBoundUid() ?? undefined,
+              accessToken: await getCurrentAccessToken(),
             }),
             signal: abortController.signal,
           }
@@ -2476,6 +2480,7 @@ export function useAgent(): UseAgentReturn {
             mcpConfig,
             language,
             userId: getCurrentBoundUid() ?? undefined,
+            accessToken: await getCurrentAccessToken(),
           }),
           signal: abortController.signal,
         }
@@ -2733,6 +2738,7 @@ export function useAgent(): UseAgentReturn {
             skillsConfig,
             mcpConfig,
             userId: getCurrentBoundUid() ?? undefined,
+            accessToken: await getCurrentAccessToken(),
           }),
           signal: abortController.signal,
         });

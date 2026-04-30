@@ -332,91 +332,95 @@ pub fn run() {
                     .ok()
                     .map(|p| p.join("resources").join("defaults").join(".env"));
 
-                // Try loading .env in priority order. User-editable locations come first
-                // so a user override always wins over the bundled defaults.
+                // .env 加载策略：merge（不再是 first-match-wins）。
+                //
+                // 顺序由低优先级到高优先级，后者覆盖前者：
+                //   1. bundled fallback（.app 内打包的 defaults/.env）
+                //      —— 由 CI 在构建期写入，含必需的公共字段（SUPABASE_URL、SUPABASE_ANON_KEY 等）。
+                //   2. system-wide ~/.env
+                //   3. ~/.sage/.env（用户主目录默认配置）
+                //   4. app data dir 下的 .env（sandbox 模式）
+                //   5. app config dir 下的 .env（OS 推荐位置，最高优先级）
+                //
+                // 用 merge 模式而非 first-match：旧版本用户的 ~/.sage/.env 通常只有
+                // 自定义 API key，缺新版本要求的 SUPABASE_* 字段。merge 让 bundle
+                // 提供的默认值打底，用户可在 ~/.sage/.env 里覆盖任何条目（包括
+                // 删掉默认 Supabase URL，换成自己的）。
                 let env_paths: Vec<std::path::PathBuf> = vec![
-                    // 1. App config directory (sandbox-aware, OS-recommended)
-                    app.path().app_config_dir().ok().map(|p| p.join(".env")),
-
-                    // 2. App data directory (for sandbox or custom deployments)
-                    if !app_data_dir.is_empty() && app_data_dir != "./.sage" {
-                        Some(std::path::PathBuf::from(format!("{}/.env", app_data_dir)))
-                    } else {
-                        None
-                    },
-
-                    // 3. Home .sage directory (default user-editable location)
-                    dirs::home_dir().map(|p| p.join(".sage").join(".env")),
-
-                    // 4. System-wide .env (skip in sandbox — inaccessible)
+                    bundled_env_path.clone(),
                     if !in_sandbox {
                         dirs::home_dir().map(|p| p.join(".env"))
                     } else {
                         None
                     },
-
-                    // 5. Bundled fallback shipped inside the .app. Guarantees fresh installs
-                    //    work without manual setup. Mirrored to (3) on first hit so subsequent
-                    //    launches use the standard path and the user can edit it.
-                    bundled_env_path.clone(),
+                    dirs::home_dir().map(|p| p.join(".sage").join(".env")),
+                    if !app_data_dir.is_empty() && app_data_dir != "./.sage" {
+                        Some(std::path::PathBuf::from(format!("{}/.env", app_data_dir)))
+                    } else {
+                        None
+                    },
+                    app.path().app_config_dir().ok().map(|p| p.join(".env")),
                 ]
                 .into_iter()
                 .flatten()
                 .collect();
 
-                println!("[API] Searching for .env files (in order):");
-                for (idx, env_path) in env_paths.iter().enumerate() {
-                    println!("[API]   {}. {}", idx + 1, env_path.display());
-                }
-
+                println!("[API] Loading .env files (low → high priority):");
+                let mut merged: std::collections::BTreeMap<String, String> =
+                    std::collections::BTreeMap::new();
+                let mut bundle_was_loaded = false;
                 for env_path in &env_paths {
                     if env_path.exists() {
-                        println!("[API] Loading .env from: {}", env_path.display());
-                        let pairs = load_dotenv(env_path);
-                        for (key, value) in &pairs {
-                            sidecar_command = sidecar_command.env(key, value);
-                            println!("[API] Injected env: {}", key);
+                        println!("[API]   - {}", env_path.display());
+                        for (key, value) in load_dotenv(env_path) {
+                            merged.insert(key, value);
                         }
+                        if let Some(b) = bundled_env_path.as_ref() {
+                            if b == env_path {
+                                bundle_was_loaded = true;
+                            }
+                        }
+                    }
+                }
 
-                        // If we fell through to the bundled fallback, mirror it to the
-                        // user-editable location so the user has a local copy they can
-                        // edit and so future launches don't depend on the bundle.
-                        let loaded_from_bundle = bundled_env_path
-                            .as_ref()
-                            .map(|p| p == env_path)
-                            .unwrap_or(false);
-                        if loaded_from_bundle {
-                            let target = if in_sandbox && !app_data_dir.is_empty() {
-                                Some(std::path::PathBuf::from(&app_data_dir).join(".env"))
-                            } else {
-                                dirs::home_dir().map(|p| p.join(".sage").join(".env"))
-                            };
-                            if let Some(target_path) = target {
-                                if !target_path.exists() {
-                                    if let Some(parent) = target_path.parent() {
-                                        if let Err(e) = std::fs::create_dir_all(parent) {
-                                            eprintln!(
-                                                "[API] Failed to create {}: {}",
-                                                parent.display(),
-                                                e
-                                            );
-                                        }
-                                    }
-                                    match std::fs::copy(env_path, &target_path) {
-                                        Ok(_) => println!(
-                                            "[API] Mirrored bundled .env → {}",
-                                            target_path.display()
-                                        ),
-                                        Err(e) => eprintln!(
-                                            "[API] Failed to mirror bundled .env to {}: {}",
-                                            target_path.display(),
+                for (key, value) in &merged {
+                    sidecar_command = sidecar_command.env(key, value);
+                    println!("[API] Injected env: {}", key);
+                }
+
+                // 把 bundle 默认 .env 镜像到用户可编辑路径（仅当目标不存在时）。
+                // 让用户拿到一份模板可以改，同时未来即便去掉 bundle 也不影响这一台机器。
+                if bundle_was_loaded {
+                    if let Some(src) = bundled_env_path.as_ref() {
+                        let target = if in_sandbox && !app_data_dir.is_empty() {
+                            Some(std::path::PathBuf::from(&app_data_dir).join(".env"))
+                        } else {
+                            dirs::home_dir().map(|p| p.join(".sage").join(".env"))
+                        };
+                        if let Some(target_path) = target {
+                            if !target_path.exists() {
+                                if let Some(parent) = target_path.parent() {
+                                    if let Err(e) = std::fs::create_dir_all(parent) {
+                                        eprintln!(
+                                            "[API] Failed to create {}: {}",
+                                            parent.display(),
                                             e
-                                        ),
+                                        );
                                     }
+                                }
+                                match std::fs::copy(src, &target_path) {
+                                    Ok(_) => println!(
+                                        "[API] Mirrored bundled .env → {}",
+                                        target_path.display()
+                                    ),
+                                    Err(e) => eprintln!(
+                                        "[API] Failed to mirror bundled .env to {}: {}",
+                                        target_path.display(),
+                                        e
+                                    ),
                                 }
                             }
                         }
-                        break; // Use first .env found
                     }
                 }
 

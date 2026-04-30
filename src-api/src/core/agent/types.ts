@@ -168,6 +168,17 @@ export interface AgentOptions {
    * the memory MCP server is simply not injected (Agent works without it).
    */
   userId?: string;
+  /**
+   * Supabase access token (JWT) of the current end-user.
+   *
+   * Forwarded to the built-in memory MCP server so it can talk to Supabase
+   * under user-scoped RLS instead of god-mode service role. The desktop
+   * sidecar relies on this — without an accessToken it cannot reach
+   * Supabase (anon-only writes/reads receive zero rows under RLS).
+   *
+   * Optional in service-role contexts (Railway etc.).
+   */
+  accessToken?: string;
 }
 
 export interface PlanOptions extends AgentOptions {

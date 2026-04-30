@@ -54,4 +54,25 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
+/**
+ * 取当前已登录用户的 supabase access_token（JWT）。
+ * 未登录或拿不到 session 时返回 undefined。
+ *
+ * 用途：useAgent 的 fetch 调用把 token 透传给 sage-api，
+ * sage-api 用它 + anon key 在 user-scoped 模式下访问 Supabase（受 RLS 保护），
+ * 避免桌面端 sidecar 持有 service-role key。
+ *
+ * 内部走 supabase 缓存的 session，绝大多数情况下零网络（命中本地存储）。
+ * 仅在 token 即将过期需要 refresh 时才会触发请求。
+ */
+export async function getCurrentAccessToken(): Promise<string | undefined> {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) return undefined;
+    return data.session?.access_token ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export type { User, Session } from '@supabase/supabase-js';

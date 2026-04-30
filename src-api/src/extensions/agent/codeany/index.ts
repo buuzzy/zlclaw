@@ -874,18 +874,29 @@ export class CodeAnyAgent extends BaseAgent {
    *
    * Currently registers `memory` MCP server (search_memory tool) when:
    *   1. options.userId is present (otherwise we can't scope queries safely)
-   *   2. SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are configured
+   *   2. Supabase is configured (URL + anon key OR URL + service role key)
    *
    * The MCP server URL is local (sage-api -> sage-api on the same process),
    * so even in cloud mode (Railway) it's a loopback fetch. When SAGE_API_TOKEN
    * is set we forward it as a Bearer header to satisfy localOnlyMiddleware.
+   *
+   * When `accessToken` is supplied (desktop sidecar mode) it is forwarded as
+   * a query-string parameter so the memory MCP can talk to Supabase under
+   * user-scoped RLS. The query string never leaves loopback.
    */
-  private buildBuiltinMcpServers(userId?: string): Record<string, McpServerConfig> {
+  private buildBuiltinMcpServers(
+    userId?: string,
+    accessToken?: string
+  ): Record<string, McpServerConfig> {
     if (!userId || !isSupabaseConfigured()) {
       return {};
     }
     const port = process.env.PORT || '2026';
-    const url = `http://127.0.0.1:${port}/mcp-memory?user_id=${encodeURIComponent(userId)}`;
+    const params = new URLSearchParams({ user_id: userId });
+    if (accessToken) {
+      params.set('access_token', accessToken);
+    }
+    const url = `http://127.0.0.1:${port}/mcp-memory?${params.toString()}`;
     const headers: Record<string, string> = {};
     if (process.env.SAGE_API_TOKEN) {
       headers.Authorization = `Bearer ${process.env.SAGE_API_TOKEN}`;
@@ -1170,7 +1181,10 @@ export class CodeAnyAgent extends BaseAgent {
 
     // Load MCP servers (user-defined from ~/.sage/mcp.json + sage built-in memory)
     const userMcpServers = await loadMcpServers(options?.mcpConfig as McpConfig | undefined);
-    const builtinMcpServers = this.buildBuiltinMcpServers(options?.userId);
+    const builtinMcpServers = this.buildBuiltinMcpServers(
+      options?.userId,
+      options?.accessToken
+    );
     // Order matters: user can shadow built-in by naming their server `memory`
     const allMcpServers = { ...builtinMcpServers, ...userMcpServers };
 
@@ -1270,7 +1284,10 @@ export class CodeAnyAgent extends BaseAgent {
     // - 必须同时注入 memory MCP server，否则工具名挂着也调不通
     // 必须 override buildSdkOptions 里的 allowedTools 默认值（line 939
     // 会用 ALLOWED_TOOLS 全集 fallback）。
-    const planMcpServers = this.buildBuiltinMcpServers(options?.userId);
+    const planMcpServers = this.buildBuiltinMcpServers(
+      options?.userId,
+      options?.accessToken
+    );
     if (Object.keys(planMcpServers).length > 0) {
       sdkOpts.mcpServers = planMcpServers;
       sdkOpts.allowedTools = ['mcp__memory__search_memory'];
@@ -1374,7 +1391,10 @@ export class CodeAnyAgent extends BaseAgent {
     const sentToolIds = new Set<string>();
 
     const userMcpServers = await loadMcpServers(options.mcpConfig as McpConfig | undefined);
-    const builtinMcpServers = this.buildBuiltinMcpServers(options.userId);
+    const builtinMcpServers = this.buildBuiltinMcpServers(
+      options.userId,
+      options.accessToken
+    );
     const allMcpServers = { ...builtinMcpServers, ...userMcpServers };
 
     const sdkOpts = this.buildSdkOptions(sessionCwd, options, {

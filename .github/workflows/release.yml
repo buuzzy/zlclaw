@@ -73,6 +73,20 @@ jobs:
       - name: Build sage-api sidecar
         run: pnpm --filter sage-api build:binary:${{ matrix.platform_name }}
 
+      # 生成 bundled defaults/.env：sidecar 启动时用作公共环境变量打底，
+      # 让全新安装的桌面端能在没有任何手动配置的情况下连上 Supabase。
+      # 严禁写入 SUPABASE_SERVICE_ROLE_KEY；server-only 凭证只放 Railway。
+      - name: Write bundled defaults/.env
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p src-api/resources/defaults
+          cat > src-api/resources/defaults/.env <<EOF
+          SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          EOF
+          echo "Bundled defaults/.env keys:" && grep -E '^[A-Z_]+=' src-api/resources/defaults/.env | cut -d= -f1
+
       - name: Tauri build
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

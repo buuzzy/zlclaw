@@ -5,28 +5,26 @@
  * 让 Agent 能按需召回用户的历史对话原文。
  *
  * 协议：MCP 2025-06-18 (Streamable HTTP, JSON-only mode)
- * 端点：POST /mcp/memory?user_id=xxx
+ * 端点：POST /mcp/memory?user_id=xxx[&access_token=xxx]
  * 工具：search_memory(query, limit?, days_back?)
  *
- * 数据流：
- *   Agent (SDK 内 LLM) → MCP client (SDK 内置)
- *     → POST /mcp/memory?user_id=xxx
- *       → JSON-RPC dispatch (initialize/tools/list/tools/call)
- *         → search_messages RPC (Supabase pgroonga)
- *           → 返回排序的 messages
+ * 鉴权与数据访问：
+ *   - 调用方（codeany 内的 SDK MCP client）通过 query string 传 user_id
+ *     和可选 access_token。
+ *   - 实际数据访问委托给 MemoryProvider，按 ctx 自适应：
+ *     * 桌面端 sidecar：access_token 必传 → user-scoped client（anon + JWT），
+ *       受 RLS 强制隔离，无 service role 暴露。
+ *     * Railway 等服务器：access_token 可选 → 退化为 service-role client，
+ *       绕 RLS 但应用层手动按 user_id 过滤。
  *
- * 安全模型：
- *   - sage-api 是 trusted backend，用 service_role key 直连 Supabase
- *   - user_id 由 sage-api 启动时（codeany/index.ts）作为 URL query 注入
- *   - 调 RPC 时显式传 user_id_filter，service_role 也只看到该用户的数据
+ * 请求只在 sage-api 进程的 loopback / Bearer-protected 范围内流动，
+ * access_token 不会出现在外部网络日志中。
  */
 
 import { Hono } from 'hono';
 
-import {
-  getServiceSupabase,
-  isSupabaseConfigured,
-} from '@/shared/supabase/client';
+import { getMemoryProvider } from '@/shared/memory';
+import { isSupabaseConfigured } from '@/shared/supabase/client';
 
 // ─── MCP Tool Definition ────────────────────────────────────────────────────
 
@@ -113,48 +111,33 @@ interface SearchMemoryArgs {
   days_back?: unknown;
 }
 
-interface SearchRow {
-  id: string;
-  task_id: string;
-  type: string;
-  content: string | null;
-  created_at: string;
-  rank: number;
-}
-
 async function callSearchMemory(
   args: SearchMemoryArgs,
-  userId: string
+  userId: string,
+  accessToken?: string
 ): Promise<{ content: { type: 'text'; text: string }[] }> {
-  const query =
-    typeof args.query === 'string' ? args.query.trim() : '';
+  const query = typeof args.query === 'string' ? args.query.trim() : '';
   if (!query) {
     throw new Error('参数 query 不能为空');
   }
 
   const limit =
     typeof args.limit === 'number' && args.limit > 0
-      ? Math.min(Math.floor(args.limit), 50)
-      : 10;
+      ? Math.floor(args.limit)
+      : undefined;
 
   const daysBack =
     typeof args.days_back === 'number' && args.days_back > 0
       ? Math.floor(args.days_back)
       : null;
 
-  const supabase = getServiceSupabase();
-  const { data, error } = await supabase.rpc('search_messages', {
-    q: query,
-    user_id_filter: userId,
-    limit_n: limit,
-    days_back: daysBack,
-  });
+  const provider = getMemoryProvider();
+  const rows = await provider.search(
+    query,
+    { userId, accessToken },
+    { limit, daysBack }
+  );
 
-  if (error) {
-    throw new Error(`Supabase RPC failed: ${error.message}`);
-  }
-
-  const rows = (data ?? []) as SearchRow[];
   if (rows.length === 0) {
     return {
       content: [
@@ -175,11 +158,13 @@ async function callSearchMemory(
     '',
   ];
   for (const r of rows) {
-    const dt = formatShanghai(r.created_at);
+    const dt = formatShanghai(r.createdAt);
     const role = r.type === 'user' ? '用户' : 'Sage';
     const content = (r.content ?? '').slice(0, 500);
     lines.push(`---`);
-    lines.push(`**[${dt}] ${role}** (task ${r.task_id.slice(0, 8)}, rank ${r.rank})`);
+    lines.push(
+      `**[${dt}] ${role}** (task ${r.taskId.slice(0, 8)}, rank ${r.rank})`
+    );
     lines.push(content || '_(空内容)_');
     lines.push('');
   }
@@ -219,18 +204,41 @@ export const mcpMemoryRoutes = new Hono();
 mcpMemoryRoutes.post('/', async (c) => {
   if (!isSupabaseConfigured()) {
     return c.json(
-      err(null, ERR_INTERNAL, 'Supabase not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing)'),
+      err(
+        null,
+        ERR_INTERNAL,
+        'Supabase not configured (need SUPABASE_URL + SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY)'
+      ),
       200
     );
   }
 
   const userId = c.req.query('user_id');
-  if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+  if (
+    !userId ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      userId
+    )
+  ) {
     return c.json(
-      err(null, ERR_INVALID_PARAMS, 'Missing or invalid ?user_id= query parameter (must be UUID)'),
+      err(
+        null,
+        ERR_INVALID_PARAMS,
+        'Missing or invalid ?user_id= query parameter (must be UUID)'
+      ),
       200
     );
   }
+
+  // access_token 可选：
+  //   - 桌面端 sidecar 模式：buildBuiltinMcpServers 会带上前端透传的 JWT
+  //   - Railway 模式：service role 已配置时不需要（provider 会 fallback）
+  // 长度上限 4096 防止日志膨胀；JWT 一般 ~1KB
+  const rawAccessToken = c.req.query('access_token');
+  const accessToken =
+    rawAccessToken && rawAccessToken.length > 0 && rawAccessToken.length <= 4096
+      ? rawAccessToken
+      : undefined;
 
   let body: JsonRpcRequest;
   try {
@@ -240,13 +248,15 @@ mcpMemoryRoutes.post('/', async (c) => {
   }
 
   if (body.jsonrpc !== '2.0' || typeof body.method !== 'string') {
-    return c.json(err(body.id, ERR_INVALID_REQUEST, 'Not a valid JSON-RPC 2.0 request'), 200);
+    return c.json(
+      err(body.id, ERR_INVALID_REQUEST, 'Not a valid JSON-RPC 2.0 request'),
+      200
+    );
   }
 
   // ── Method dispatch ─────────────────────────────────────────────────────
   switch (body.method) {
     case 'initialize': {
-      // 完整 MCP initialize handshake
       return c.json(
         ok(body.id, {
           protocolVersion: '2025-06-18',
@@ -264,7 +274,6 @@ mcpMemoryRoutes.post('/', async (c) => {
     case 'notifications/initialized':
     case 'notifications/cancelled':
     case 'notifications/progress': {
-      // 通知类（无需响应），但 JSON-RPC 服务器仍要回 200，body 给 null
       return new Response(null, { status: 202 });
     }
 
@@ -281,15 +290,13 @@ mcpMemoryRoutes.post('/', async (c) => {
         return c.json(
           ok(body.id, {
             isError: true,
-            content: [
-              { type: 'text', text: `Unknown tool: ${name}` },
-            ],
+            content: [{ type: 'text', text: `Unknown tool: ${name}` }],
           })
         );
       }
 
       try {
-        const result = await callSearchMemory(args, userId);
+        const result = await callSearchMemory(args, userId, accessToken);
         return c.json(ok(body.id, result));
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -297,7 +304,9 @@ mcpMemoryRoutes.post('/', async (c) => {
         return c.json(
           ok(body.id, {
             isError: true,
-            content: [{ type: 'text', text: `search_memory error: ${msg}` }],
+            content: [
+              { type: 'text', text: `search_memory error: ${msg}` },
+            ],
           })
         );
       }
@@ -314,13 +323,15 @@ mcpMemoryRoutes.post('/', async (c) => {
 
     default:
       return c.json(
-        err(body.id, ERR_METHOD_NOT_FOUND, `Method not found: ${body.method}`)
+        err(
+          body.id,
+          ERR_METHOD_NOT_FOUND,
+          `Method not found: ${body.method}`
+        )
       );
   }
 });
 
-// 一些 MCP client（如 Streamable HTTP spec 中的）会先做 GET 探测。
-// 我们简单返回 200 + 空 SSE 流（或拒绝），因为不支持 server-initiated 消息。
 mcpMemoryRoutes.get('/', (c) => {
   return c.text('MCP Memory server (POST JSON-RPC to this endpoint).', 200);
 });
