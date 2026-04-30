@@ -190,14 +190,23 @@ async function callSearchMemory(
  * 把 Postgres timestamptz (ISO-8601, 含时区偏移) 格式化为
  * "YYYY-MM-DD HH:mm:ss" 的上海时间字符串。
  *
- * 用 sv-SE locale 是因为它的本地化格式恰好是 ISO-like (`2026-04-30 12:29:02`)，
- * 不需要再写一堆 padStart 拼接。
+ * 实现说明：之前用 toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai' })，
+ * 但 pkg/Tauri sidecar 默认编译用 small-icu，sv-SE locale 会 fallback 成
+ * en-US 格式（"4/30/2026, 12:29:02 PM"）。手动 +8h 拼接最稳，没有 ICU
+ * 依赖，输出固定 ISO-like 格式让 LLM 直接复用。
  */
 function formatShanghai(iso: string): string {
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai' });
+    const shanghai = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+    const yyyy = shanghai.getUTCFullYear();
+    const mm = String(shanghai.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(shanghai.getUTCDate()).padStart(2, '0');
+    const hh = String(shanghai.getUTCHours()).padStart(2, '0');
+    const mi = String(shanghai.getUTCMinutes()).padStart(2, '0');
+    const ss = String(shanghai.getUTCSeconds()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
   } catch {
     return iso;
   }

@@ -135,6 +135,8 @@ export const API_BASE_URL = isTauri
 
 > **修改 Agent 行为前，先从 `useAgent.ts` 的路由入口追到 `engine.ts` 的 agentic loop，画清完整链路再动手。不要从中间层开始改。**
 
+> **不为单一弱模型加特殊路由 / 兜底**：架构应按"合理强模型"的能力标准设计，模型升级后产品自然受益。如果某个模型表现不佳（如 MiniMax 在 plan 阶段不调工具），方案是**在文档里推荐换模型**，而不是写硬编码的 `if model == 'minimax'` 兜底层。后者会变成永远删不掉的技术债。
+
 - 曾尝试在 `plan()` 方法中加 synthetic plan/isAnnounceOnly 等逻辑处理 MiniMax "只说不做"问题，导致前端 UI 结构混乱（raw JSON 泄漏到 UI）。最终正确方案极其简单：在 `useAgent.ts` 加一行 `isOpenAiProvider` 判断跳过 plan 阶段。
 - Artifact 空壳闪烁有两个原因：① `React.lazy()` Suspense 延迟（已改高频组件为静态 import）；② API 响应格式 ≠ 组件数据格式（需要 `transformForComponent()` 转换）。
 - API 错误响应（如 `{"code": -1, "msg": "鉴权失败"}`）也会被结构匹配误拦截，需检查 `parsed.code !== 0 && !parsed.data` 提前退出。
@@ -142,6 +144,8 @@ export const API_BASE_URL = isTauri
 - Fast chat 路径看似节省 token，但制造了能力边界问题（"没有该能力"）。移除后所有查询走 Agent + 工具，用户体验反而更好。
 - iwencai API 升级后需要 X-Claw-* 系列 Header，否则 401。注意两类端点格式不同：`/v1/query2data`（8 个数据查询技能）vs `/v1/comprehensive/search`（新闻/公告/研报 3 个搜索技能）。
 - API Key 不要硬编码在源码中。公共仓库 + 硬编码 = 立即泄露。用 `.env` + gitignore。清理 git 历史用 `git-filter-repo --replace-text`。
+- **Phase 2 调试**：定位「记忆工具没被调用」的根因花了多轮假设（context 污染 / sampling 抖动 / 模型 judgment）。最终对照测试 E（MiniMax，0 次工具调用）vs F+G（Sonnet，每次 3 次工具调用）才证实是模型差异而非代码问题。教训：**遇到「时灵时不灵」时，先把变量列清楚（模型/prompt/输入）做一次干净对照实验，比连续猜代码逻辑高效**。
+- **Node.js sidecar 用 small-icu 编译**，`toLocaleString` 的 locale 参数（如 sv-SE）会 fallback 到 en-US 的本地化格式。需要稳定输出 ISO-like 时间字符串时直接用 `padStart` 手动拼，不依赖 ICU。
 
 ## 待办事项
 
