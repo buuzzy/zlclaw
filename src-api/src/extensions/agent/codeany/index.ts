@@ -1133,8 +1133,6 @@ export class CodeAnyAgent extends BaseAgent {
 
     const sentTextHashes = new Set<string>();
     const sentToolIds = new Set<string>();
-    // Track whether we got substantive assistant text (used by retry heuristic)
-    const assistantTextParts: string[] = [];
 
     const sandboxOpts: SandboxOptions | undefined = options?.sandbox?.enabled
       ? { enabled: true, image: options.sandbox.image, apiEndpoint: options.sandbox.apiEndpoint || SANDBOX_API_URL }
@@ -1196,64 +1194,21 @@ export class CodeAnyAgent extends BaseAgent {
     await refreshSkillsForPrompt(prompt);
 
     try {
-      // ------------------------------------------------------------------
-      // Run the SDK query, with silent auto-retry for "announce-only" turns.
-      //
-      // MiniMax sometimes outputs only an intent statement ("我来帮你查询...")
-      // without making any tool calls, then stops. When this happens we
-      // transparently re-enter the agentic loop with a continuation prompt.
-      // Max 1 retry to prevent infinite loops.
-      // ------------------------------------------------------------------
-      let currentPrompt = finalPrompt;
-      const MAX_EMPTY_RETRIES = 1;
       const MAX_TOOL_CALLS = 20;
-      let emptyRetries = 0;
       let totalToolCalls = 0;
+      let warnedToolLimit = false;
 
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        let hadToolUse = false;
-
-        for await (const message of query({ prompt: currentPrompt, options: sdkOpts })) {
-          if (session.abortController.signal.aborted) break;
-          for (const msg of this.processMessage(message, session.id, sentTextHashes, sentToolIds)) {
-            if (msg.type === 'text' && (msg as any).content) {
-              assistantTextParts.push((msg as any).content);
-            }
-            if (msg.type === 'tool_use' || msg.type === 'tool_result') {
-              hadToolUse = true;
-              if (msg.type === 'tool_use') totalToolCalls++;
-            }
-            yield msg;
-          }
-          // Log when tool call limit is approaching (SDK will naturally stop at maxTurns)
-          if (totalToolCalls >= MAX_TOOL_CALLS) {
-            logger.warn(`[CodeAny ${session.id}] Tool call limit (${MAX_TOOL_CALLS}) reached, SDK maxTurns will handle termination.`);
-          }
+      for await (const message of query({ prompt: finalPrompt, options: sdkOpts })) {
+        if (session.abortController.signal.aborted) break;
+        for (const msg of this.processMessage(message, session.id, sentTextHashes, sentToolIds)) {
+          if (msg.type === 'tool_use') totalToolCalls++;
+          yield msg;
         }
-
-        // If the LLM used tools or the session was aborted, we're done.
-        if (hadToolUse || session.abortController.signal.aborted) break;
-
-        // Safety: stop if too many tool calls accumulated
-        if (totalToolCalls >= MAX_TOOL_CALLS) {
-          logger.warn(`[CodeAny ${session.id}] Tool call limit (${MAX_TOOL_CALLS}) reached, stopping.`);
-          break;
+        // SDK enforces termination via maxTurns; this is just an observability signal.
+        if (totalToolCalls >= MAX_TOOL_CALLS && !warnedToolLimit) {
+          warnedToolLimit = true;
+          logger.warn(`[CodeAny ${session.id}] Tool call limit (${MAX_TOOL_CALLS}) reached, SDK maxTurns will handle termination.`);
         }
-
-        // If the LLM produced substantive text (not just empty/whitespace),
-        // it answered without tools — that's a valid response, not an "empty turn".
-        const hasSubstantiveText = assistantTextParts.some(t => t.trim().length > 20);
-        if (hasSubstantiveText) break;
-
-        // No tools AND no real text — this is an "announce-only" turn
-        // (e.g. MiniMax says "我来帮你查询..." without actually calling tools).
-        // Silently retry once.
-        if (emptyRetries >= MAX_EMPTY_RETRIES) break;
-
-        emptyRetries++;
-        logger.info(`[CodeAny ${session.id}] Empty turn detected (no tool calls, no text). Silent retry ${emptyRetries}/${MAX_EMPTY_RETRIES}.`);
-        currentPrompt = '继续执行，请直接调用工具获取数据，不要重复描述你要做什么。';
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
