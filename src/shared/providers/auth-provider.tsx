@@ -6,9 +6,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { supabase, type Session, type User } from '@/shared/lib/supabase';
 import { bindUserId, unbindUser } from '@/shared/db/database';
 import { reloadSettingsForCurrentUser } from '@/shared/db/settings';
+import { supabase, type Session, type User } from '@/shared/lib/supabase';
+import {
+  startMessageSyncWorker,
+  stopMessageSyncWorker,
+} from '@/shared/sync/messages-sync';
 
 const isTauri =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -62,7 +66,8 @@ async function signInWithProvider(provider: 'github' | 'google') {
     // 1. Supabase puts tokens in hash fragments after PKCE exchange
     // 2. Browsers can't render a sage:// URL, so the tab hangs with a loading bar
     // 3. The Railway page extracts hash params, triggers deep link via JS, and auto-closes
-    const callbackUrl = 'https://zlclaw-production.up.railway.app/auth/callback';
+    const callbackUrl =
+      'https://zlclaw-production.up.railway.app/auth/callback';
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
@@ -126,7 +131,8 @@ function parseUidFromLocalSession(): string | null {
           try {
             // base64url → base64 → JSON
             const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-            const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+            const pad =
+              b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
             const payload = JSON.parse(atob(b64 + pad));
             if (typeof payload.sub === 'string') return payload.sub;
           } catch {
@@ -166,6 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (uid === null) {
         lastBoundUid = null;
+        // Phase 1: 停掉 sync worker（在 unbind 之前停，避免它读到 null uid）
+        stopMessageSyncWorker();
         try {
           await unbindUser();
         } catch (err) {
@@ -182,6 +190,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await reloadSettingsForCurrentUser();
         lastBoundUid = uid;
         if (!cancelled) setDbReady(true);
+        // Phase 1: 启动云端双写后台 worker（幂等，已运行则 no-op）
+        startMessageSyncWorker();
       } catch (err) {
         console.error('[Auth] bindUserId failed:', err);
         if (!cancelled) setDbReady(false);
@@ -271,7 +281,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   error.message
                 );
               } else {
-                console.log('[Auth] Session established for:', data.user?.email);
+                console.log(
+                  '[Auth] Session established for:',
+                  data.user?.email
+                );
               }
             } else if (accessToken && refreshToken) {
               console.log('[Auth] Token pair received, setting session...');
@@ -282,10 +295,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               if (error) {
                 console.error('[Auth] setSession failed:', error.message);
               } else {
-                console.log('[Auth] Session established for:', data.user?.email);
+                console.log(
+                  '[Auth] Session established for:',
+                  data.user?.email
+                );
               }
             } else {
-              console.warn('[Auth] No code or token in deep link URL:', callbackUrl);
+              console.warn(
+                '[Auth] No code or token in deep link URL:',
+                callbackUrl
+              );
             }
           } catch (err) {
             console.error('[Auth] Error processing deep link callback:', err);
@@ -294,28 +313,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
 
       // Cold-start: app 被 deep link 唤醒时的初始 URL
-      import('@tauri-apps/plugin-deep-link').then(({ getCurrent: getCurrentDeepLink }) => {
-        getCurrentDeepLink()
-          .then((urls) => {
-            if (urls && urls.length > 0) {
-              console.log('[Auth] Cold-start deep link:', urls);
-              void handleDeepLinkUrls(urls);
-            }
-          })
-          .catch((err: unknown) => console.error('[Auth] getCurrent failed:', err));
-      }).catch(() => {});
+      import('@tauri-apps/plugin-deep-link')
+        .then(({ getCurrent: getCurrentDeepLink }) => {
+          getCurrentDeepLink()
+            .then((urls) => {
+              if (urls && urls.length > 0) {
+                console.log('[Auth] Cold-start deep link:', urls);
+                void handleDeepLinkUrls(urls);
+              }
+            })
+            .catch((err: unknown) =>
+              console.error('[Auth] getCurrent failed:', err)
+            );
+        })
+        .catch(() => {});
 
       // Warm-start: app 已在运行时接收到新的 deep link
-      import('@tauri-apps/plugin-deep-link').then(({ onOpenUrl }) => {
-        onOpenUrl((urls) => {
-          console.log('[Auth] Warm-start deep link:', urls);
-          void handleDeepLinkUrls(urls);
-        })
-          .then((fn) => {
-            unlisten = fn;
+      import('@tauri-apps/plugin-deep-link')
+        .then(({ onOpenUrl }) => {
+          onOpenUrl((urls) => {
+            console.log('[Auth] Warm-start deep link:', urls);
+            void handleDeepLinkUrls(urls);
           })
-          .catch((err: unknown) => console.error('[Auth] onOpenUrl register failed:', err));
-      }).catch(() => {});
+            .then((fn) => {
+              unlisten = fn;
+            })
+            .catch((err: unknown) =>
+              console.error('[Auth] onOpenUrl register failed:', err)
+            );
+        })
+        .catch(() => {});
     }
 
     return () => {
@@ -334,10 +361,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithProvider('google');
   }, []);
 
-  const signInWithEmail = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-  }, []);
+  const signInWithEmail = useCallback(
+    async (email: string, password: string) => {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+    },
+    []
+  );
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();

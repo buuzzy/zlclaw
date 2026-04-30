@@ -1,3 +1,14 @@
+import {
+  ensureUserDirs,
+  getUserDbConnString,
+} from '@/shared/lib/user-scoped-paths';
+import { enqueueMessageInsert } from '@/shared/sync/messages-sync';
+import {
+  markSessionDeleted,
+  markSessionDirty,
+} from '@/shared/sync/session-dirty-queue';
+import { uuidv7 } from 'uuidv7';
+
 import type {
   CreateFileInput,
   CreateMessageInput,
@@ -9,14 +20,6 @@ import type {
   Task,
   UpdateTaskInput,
 } from './types';
-import {
-  markSessionDeleted,
-  markSessionDirty,
-} from '@/shared/sync/session-dirty-queue';
-import {
-  ensureUserDirs,
-  getUserDbConnString,
-} from '@/shared/lib/user-scoped-paths';
 
 // ─── User-scoped DB binding ──────────────────────────────────────────────────
 //
@@ -41,7 +44,10 @@ import {
 //   - getSQLiteDatabase() 在未 bind 时返回 null（与浏览器模式行为一致）。
 
 const IDB_NAME = 'sage';
-const IDB_VERSION = 2; // Bump version for sessions support
+// v3: Phase 1 - messages/files 主键从 autoIncrement 改为客户端生成的 UUID v7（跨设备唯一）
+//     已与用户达成共识：内测期数据丢弃，DROP 旧 store 重建
+// v4: Phase 1 - 新增 sync_queue store（本地→云端双写失败的重试队列）
+const IDB_VERSION = 4;
 
 // Check if running in Tauri environment synchronously
 function isTauriSync(): boolean {
@@ -79,9 +85,12 @@ async function getIndexedDB(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      console.log('[IDB] Upgrading database...');
+      const oldVersion = event.oldVersion;
+      console.log(
+        `[IDB] Upgrading database from v${oldVersion} to v${IDB_VERSION}...`
+      );
 
-      // Create sessions store (v2)
+      // sessions store (v2 起)
       if (!db.objectStoreNames.contains('sessions')) {
         const sessionsStore = db.createObjectStore('sessions', {
           keyPath: 'id',
@@ -91,29 +100,58 @@ async function getIndexedDB(): Promise<IDBDatabase> {
         });
       }
 
-      // Create tasks store
+      // tasks store
       if (!db.objectStoreNames.contains('tasks')) {
         const tasksStore = db.createObjectStore('tasks', { keyPath: 'id' });
         tasksStore.createIndex('created_at', 'created_at', { unique: false });
         tasksStore.createIndex('session_id', 'session_id', { unique: false });
       }
 
-      // Create messages store
+      // messages store
+      // v3 破坏性变更：autoIncrement INTEGER → UUID v7 字符串
+      // 老 store 的数据不兼容新主键，直接删除重建
+      if (oldVersion < 3 && db.objectStoreNames.contains('messages')) {
+        db.deleteObjectStore('messages');
+        console.log(
+          '[IDB] v3 migration: dropped old messages store (autoIncrement)'
+        );
+      }
       if (!db.objectStoreNames.contains('messages')) {
         const messagesStore = db.createObjectStore('messages', {
           keyPath: 'id',
-          autoIncrement: true,
         });
         messagesStore.createIndex('task_id', 'task_id', { unique: false });
+        messagesStore.createIndex('user_id', 'user_id', { unique: false });
+        messagesStore.createIndex('updated_at', 'updated_at', {
+          unique: false,
+        });
       }
 
-      // Create files store
+      // files store - 同 messages 处理
+      if (oldVersion < 3 && db.objectStoreNames.contains('files')) {
+        db.deleteObjectStore('files');
+        console.log(
+          '[IDB] v3 migration: dropped old files store (autoIncrement)'
+        );
+      }
       if (!db.objectStoreNames.contains('files')) {
         const filesStore = db.createObjectStore('files', {
           keyPath: 'id',
-          autoIncrement: true,
         });
         filesStore.createIndex('task_id', 'task_id', { unique: false });
+        filesStore.createIndex('user_id', 'user_id', { unique: false });
+        filesStore.createIndex('updated_at', 'updated_at', { unique: false });
+      }
+
+      // sync_queue store (v4)
+      if (!db.objectStoreNames.contains('sync_queue')) {
+        const syncQueueStore = db.createObjectStore('sync_queue', {
+          keyPath: 'id',
+        });
+        syncQueueStore.createIndex('next_retry_at', 'next_retry_at', {
+          unique: false,
+        });
+        syncQueueStore.createIndex('user_id', 'user_id', { unique: false });
       }
 
       console.log('[IDB] Database upgraded successfully');
@@ -178,6 +216,27 @@ export function getCurrentBoundUid(): string | null {
  *
  * 这个函数每次 bind 都跑一次，成本小，保证空 DB 也能用。
  */
+/**
+ * 检测某张表的某个列是否为指定类型（PRAGMA table_info）。
+ * 用于判断 messages.id / files.id 是否还是老的 INTEGER schema。
+ */
+async function columnHasType(
+  db: SqliteHandle,
+  table: string,
+  column: string,
+  expectedType: string
+): Promise<boolean> {
+  try {
+    const rows = await db.select<{ name: string; type: string }[]>(
+      `PRAGMA table_info(${table})`
+    );
+    const col = rows.find((r) => r.name === column);
+    return col?.type.toUpperCase() === expectedType.toUpperCase();
+  } catch {
+    return false;
+  }
+}
+
 async function ensureSchema(db: SqliteHandle): Promise<void> {
   // tasks（合并 v1 + v5 + v7：session_id / task_index / favorite）
   await db.execute(`
@@ -195,10 +254,19 @@ async function ensureSchema(db: SqliteHandle): Promise<void> {
     )
   `);
 
-  // messages（合并 v1 + v2 + v6：tool_output / tool_use_id / attachments）
+  // ─── Phase 1 破坏性升级：messages.id INTEGER → TEXT (UUID v7) ────────────
+  // 检测老 schema 并 DROP；内测期数据丢弃（用户已确认）
+  if (await columnHasType(db, 'messages', 'id', 'INTEGER')) {
+    console.warn(
+      '[DB] Phase 1 migration: dropping legacy messages table (autoincrement INTEGER → UUID v7)'
+    );
+    await db.execute('DROP TABLE IF EXISTS messages');
+  }
+
   await db.execute(`
     CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL,
       task_id TEXT NOT NULL,
       type TEXT NOT NULL,
       content TEXT,
@@ -206,18 +274,28 @@ async function ensureSchema(db: SqliteHandle): Promise<void> {
       tool_input TEXT,
       tool_output TEXT,
       tool_use_id TEXT,
+      tool_metadata TEXT,
       subtype TEXT,
       error_message TEXT,
       attachments TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     )
   `);
 
-  // files（v3）
+  // ─── Phase 1 破坏性升级：files.id INTEGER → TEXT (UUID v7) ────────────
+  if (await columnHasType(db, 'files', 'id', 'INTEGER')) {
+    console.warn(
+      '[DB] Phase 1 migration: dropping legacy files table (autoincrement INTEGER → UUID v7)'
+    );
+    await db.execute('DROP TABLE IF EXISTS files');
+  }
+
   await db.execute(`
     CREATE TABLE IF NOT EXISTS files (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL,
       task_id TEXT NOT NULL,
       name TEXT NOT NULL,
       type TEXT NOT NULL,
@@ -226,6 +304,7 @@ async function ensureSchema(db: SqliteHandle): Promise<void> {
       thumbnail TEXT,
       is_favorite INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     )
   `);
@@ -250,26 +329,47 @@ async function ensureSchema(db: SqliteHandle): Promise<void> {
     )
   `);
 
+  // sync_queue（Phase 1）：本地→云端双写失败时的重试队列
+  // 表设计为通用，未来扩展 tasks/files 同步无需改 schema
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS sync_queue (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL,
+      table_name TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      next_retry_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
   // Indexes
   await db.execute(
     `CREATE INDEX IF NOT EXISTS idx_messages_task_id ON messages(task_id)`
   );
   await db.execute(
+    `CREATE INDEX IF NOT EXISTS idx_messages_user_updated ON messages(user_id, updated_at DESC)`
+  );
+  await db.execute(
     `CREATE INDEX IF NOT EXISTS idx_files_task_id ON files(task_id)`
+  );
+  await db.execute(
+    `CREATE INDEX IF NOT EXISTS idx_files_user_updated ON files(user_id, updated_at DESC)`
   );
   await db.execute(
     `CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id)`
   );
+  await db.execute(
+    `CREATE INDEX IF NOT EXISTS idx_sync_queue_next_retry ON sync_queue(next_retry_at)`
+  );
 
-  // 迁移过来的旧 DB 可能缺列：逐个 ALTER，已存在就吞错
+  // 迁移过来的旧 DB 可能缺列（仅 tasks 现在还需要 ALTER；messages/files 已 DROP 重建）
   const alters = [
     'ALTER TABLE tasks ADD COLUMN session_id TEXT',
     'ALTER TABLE tasks ADD COLUMN task_index INTEGER DEFAULT 1',
     'ALTER TABLE tasks ADD COLUMN favorite INTEGER DEFAULT 0',
-    'ALTER TABLE messages ADD COLUMN tool_output TEXT',
-    'ALTER TABLE messages ADD COLUMN tool_use_id TEXT',
-    'ALTER TABLE messages ADD COLUMN attachments TEXT',
-    'ALTER TABLE messages ADD COLUMN tool_metadata TEXT',
   ];
   for (const sql of alters) {
     try {
@@ -291,7 +391,12 @@ async function ensureSchema(db: SqliteHandle): Promise<void> {
  *   - Tauri fs/sql 插件不可用
  */
 export async function bindUserId(uid: string): Promise<void> {
-  if (!isTauriSync()) return;
+  // IDB 模式（iOS / 浏览器）也要 track 当前 uid，让 createMessage 等能注入 user_id
+  if (!isTauriSync()) {
+    currentUid = uid;
+    notifyBindChange();
+    return;
+  }
 
   // 串行化：等待任何 in-flight bind/unbind 先完成
   if (bindInFlight) {
@@ -320,9 +425,8 @@ export async function bindUserId(uid: string): Promise<void> {
     // 3. 一次性迁移 legacy 数据（仅第一次绑定触发；见 user-scope-migration.ts）
     //    在打开连接之前 copy DB 文件，避免 sqlx 持有旧文件的锁
     try {
-      const { maybeMigrateLegacyData } = await import(
-        '@/shared/lib/user-scope-migration'
-      );
+      const { maybeMigrateLegacyData } =
+        await import('@/shared/lib/user-scope-migration');
       await maybeMigrateLegacyData(uid);
     } catch (err) {
       // 迁移失败不应阻塞登录 —— 用户至少能使用空 DB
@@ -355,7 +459,11 @@ export async function bindUserId(uid: string): Promise<void> {
  * 用于登出流程。
  */
 export async function unbindUser(): Promise<void> {
-  if (!isTauriSync()) return;
+  if (!isTauriSync()) {
+    currentUid = null;
+    notifyBindChange();
+    return;
+  }
 
   if (bindInFlight) {
     await bindInFlight.catch(() => {});
@@ -799,93 +907,72 @@ export async function deleteTask(id: string): Promise<boolean> {
 export async function createMessage(
   input: CreateMessageInput
 ): Promise<Message> {
+  // Phase 1: 客户端生成 UUID v7，作为本地 + 云端共用的全局唯一 id
+  // 跨设备同步时无需 ID 映射，对索引友好（时间戳前缀使 B-tree 顺序写入）
+  const id = uuidv7();
   const now = new Date().toISOString();
+
+  // user_id 必须存在 —— 双写云端时 RLS 用它隔离
+  const userId = currentUid;
+  if (!userId) {
+    throw new Error(
+      '[DB] createMessage called without bound user. AuthProvider must bindUserId() before any DB ops.'
+    );
+  }
+
+  const message: Message = {
+    id,
+    user_id: userId,
+    task_id: input.task_id,
+    type: input.type,
+    content: input.content ?? null,
+    tool_name: input.tool_name ?? null,
+    tool_input: input.tool_input ?? null,
+    tool_output: input.tool_output ?? null,
+    tool_use_id: input.tool_use_id ?? null,
+    tool_metadata: input.tool_metadata ?? null,
+    subtype: input.subtype ?? null,
+    error_message: input.error_message ?? null,
+    attachments: input.attachments ?? null,
+    created_at: now,
+    updated_at: now,
+  };
+
   const database = await getSQLiteDatabase();
 
-  let created: Message;
-
   if (database) {
-    // Try with tool_metadata column first, fallback to without
-    try {
-      const result = await database.execute(
-        `INSERT INTO messages (task_id, type, content, tool_name, tool_input, tool_output, tool_use_id, tool_metadata, subtype, error_message, attachments)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [
-          input.task_id,
-          input.type,
-          input.content || null,
-          input.tool_name || null,
-          input.tool_input || null,
-          input.tool_output || null,
-          input.tool_use_id || null,
-          input.tool_metadata || null,
-          input.subtype || null,
-          input.error_message || null,
-          input.attachments || null,
-        ]
-      );
-
-      const messages = await database.select<Message[]>(
-        'SELECT * FROM messages WHERE id = $1',
-        [result.lastInsertId]
-      );
-      created = messages[0];
-    } catch {
-      // Fallback: add attachments column if it doesn't exist
-      try {
-        await database.execute(
-          'ALTER TABLE messages ADD COLUMN tool_metadata TEXT'
-        );
-      } catch {
-        // Column may already exist
-      }
-
-      const result = await database.execute(
-        `INSERT INTO messages (task_id, type, content, tool_name, tool_input, tool_output, tool_use_id, tool_metadata, subtype, error_message, attachments)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [
-          input.task_id,
-          input.type,
-          input.content || null,
-          input.tool_name || null,
-          input.tool_input || null,
-          input.tool_output || null,
-          input.tool_use_id || null,
-          input.tool_metadata || null,
-          input.subtype || null,
-          input.error_message || null,
-          input.attachments || null,
-        ]
-      );
-
-      const messages = await database.select<Message[]>(
-        'SELECT * FROM messages WHERE id = $1',
-        [result.lastInsertId]
-      );
-      created = messages[0];
-    }
+    await database.execute(
+      `INSERT INTO messages
+       (id, user_id, task_id, type, content, tool_name, tool_input, tool_output,
+        tool_use_id, tool_metadata, subtype, error_message, attachments, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+      [
+        message.id,
+        message.user_id,
+        message.task_id,
+        message.type,
+        message.content,
+        message.tool_name,
+        message.tool_input,
+        message.tool_output,
+        message.tool_use_id,
+        message.tool_metadata,
+        message.subtype,
+        message.error_message,
+        message.attachments,
+        message.created_at,
+        message.updated_at,
+      ]
+    );
   } else {
     const db = await getIndexedDB();
-    const message: Omit<Message, 'id'> & { id?: number } = {
-      task_id: input.task_id,
-      type: input.type,
-      content: input.content || null,
-      tool_name: input.tool_name || null,
-      tool_input: input.tool_input || null,
-      tool_output: input.tool_output || null,
-      tool_use_id: input.tool_use_id || null,
-      tool_metadata: input.tool_metadata || null,
-      subtype: input.subtype || null,
-      error_message: input.error_message || null,
-      attachments: input.attachments || null,
-      created_at: now,
-    };
-
     const tx = db.transaction('messages', 'readwrite');
     const store = tx.objectStore('messages');
-    const id = await idbRequest(store.add(message));
-    created = { ...message, id: id as number } as Message;
+    await idbRequest(store.add(message));
   }
+
+  // Phase 1: 火忘式双写，不阻塞当前调用
+  enqueueMessageInsert(message);
 
   // Mark parent session dirty (preview / message_count / updated_at 都可能变)
   try {
@@ -895,7 +982,7 @@ export async function createMessage(
     /* best effort */
   }
 
-  return created;
+  return message;
 }
 
 export async function getMessagesByTaskId(taskId: string): Promise<Message[]> {
@@ -978,46 +1065,55 @@ export function isDatabaseAvailable(): boolean {
 
 // ============ Library File Operations ============
 export async function createFile(input: CreateFileInput): Promise<LibraryFile> {
+  // Phase 1: files 也用 UUID v7（跨设备唯一，与 messages 一致）
+  const id = uuidv7();
   const now = new Date().toISOString();
-  const database = await getSQLiteDatabase();
 
-  let file: LibraryFile;
+  const userId = currentUid;
+  if (!userId) {
+    throw new Error(
+      '[DB] createFile called without bound user. AuthProvider must bindUserId() before any DB ops.'
+    );
+  }
+
+  const file: LibraryFile = {
+    id,
+    user_id: userId,
+    task_id: input.task_id,
+    name: input.name,
+    type: input.type,
+    path: input.path,
+    preview: input.preview ?? null,
+    thumbnail: input.thumbnail ?? null,
+    is_favorite: false,
+    created_at: now,
+    updated_at: now,
+  };
+
+  const database = await getSQLiteDatabase();
   if (database) {
-    const result = await database.execute(
-      `INSERT INTO files (task_id, name, type, path, preview, thumbnail)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+    await database.execute(
+      `INSERT INTO files (id, user_id, task_id, name, type, path, preview, thumbnail, is_favorite, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
-        input.task_id,
-        input.name,
-        input.type,
-        input.path,
-        input.preview || null,
-        input.thumbnail || null,
+        file.id,
+        file.user_id,
+        file.task_id,
+        file.name,
+        file.type,
+        file.path,
+        file.preview,
+        file.thumbnail,
+        file.is_favorite ? 1 : 0,
+        file.created_at,
+        file.updated_at,
       ]
     );
-
-    const files = await database.select<LibraryFile[]>(
-      'SELECT * FROM files WHERE id = $1',
-      [result.lastInsertId]
-    );
-    file = files[0];
   } else {
     const db = await getIndexedDB();
-    const newFile: Omit<LibraryFile, 'id'> & { id?: number } = {
-      task_id: input.task_id,
-      name: input.name,
-      type: input.type,
-      path: input.path,
-      preview: input.preview || null,
-      thumbnail: input.thumbnail || null,
-      is_favorite: false,
-      created_at: now,
-    };
-
     const tx = db.transaction('files', 'readwrite');
     const store = tx.objectStore('files');
-    const id = await idbRequest(store.add(newFile));
-    file = { ...newFile, id: id as number } as LibraryFile;
+    await idbRequest(store.add(file));
   }
 
   // 新增 file 会让 session 的 has_artifacts 变成 true
@@ -1072,13 +1168,13 @@ export async function getAllFiles(): Promise<LibraryFile[]> {
 }
 
 export async function toggleFileFavorite(
-  fileId: number
+  fileId: string
 ): Promise<LibraryFile | null> {
   const database = await getSQLiteDatabase();
 
   if (database) {
     await database.execute(
-      'UPDATE files SET is_favorite = NOT is_favorite WHERE id = $1',
+      "UPDATE files SET is_favorite = NOT is_favorite, updated_at = datetime('now') WHERE id = $1",
       [fileId]
     );
     const files = await database.select<LibraryFile[]>(
@@ -1093,6 +1189,7 @@ export async function toggleFileFavorite(
     const file = await idbRequest(store.get(fileId));
     if (file) {
       file.is_favorite = !file.is_favorite;
+      file.updated_at = new Date().toISOString();
       await idbRequest(store.put(file));
       return file;
     }
@@ -1100,7 +1197,7 @@ export async function toggleFileFavorite(
   }
 }
 
-export async function deleteFile(fileId: number): Promise<boolean> {
+export async function deleteFile(fileId: string): Promise<boolean> {
   const database = await getSQLiteDatabase();
 
   // 删除前记下 task_id，用于刷新对应 session 的 has_artifacts

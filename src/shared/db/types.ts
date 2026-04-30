@@ -39,13 +39,14 @@ export type MessageType =
  * facilitating automatic artifact component selection.
  */
 export interface ToolMetadata {
-  skill: string;           // e.g., "westock-quote", "westock-market"
-  action: string;          // e.g., "stock_quote_snapshot", "hot_stock"
-  list_code?: string;      // Optional: for screener list queries like "macro_cpi_ppi"
+  skill: string; // e.g., "westock-quote", "westock-market"
+  action: string; // e.g., "stock_quote_snapshot", "hot_stock"
+  list_code?: string; // Optional: for screener list queries like "macro_cpi_ppi"
 }
 
 export interface Message {
-  id: number;
+  id: string; // UUID v7（客户端生成，跨设备唯一，时间序）
+  user_id: string; // Supabase auth.uid()，本地 SQLite 也存便于跨用户隔离
   task_id: string;
   type: MessageType;
   content: string | null;
@@ -53,11 +54,12 @@ export interface Message {
   tool_input: string | null;
   tool_output: string | null;
   tool_use_id: string | null;
-  tool_metadata?: string | null; // JSON string of ToolMetadata
+  tool_metadata: string | null; // JSON string of ToolMetadata
   subtype: string | null;
   error_message: string | null;
   attachments: string | null; // JSON string of MessageAttachment[]
   created_at: string;
+  updated_at: string; // 增量同步必需
 }
 
 // Input types for creating records
@@ -106,7 +108,8 @@ export type FileType =
   | 'spreadsheet';
 
 export interface LibraryFile {
-  id: number;
+  id: string; // UUID v7
+  user_id: string;
   task_id: string;
   name: string;
   type: FileType;
@@ -115,6 +118,7 @@ export interface LibraryFile {
   thumbnail: string | null;
   is_favorite: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 export interface CreateFileInput {

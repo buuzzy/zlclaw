@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@codeany/open-agent-sdk@0.2.1':
-    hash: e40ce0059d714263a724de54a81d58abe1022d4a65a4086efc6dc503d93abfa8
+    hash: 787683dd6f8866a0ea6334381fcb42e9b26c5b5aefac8f8025ae9960e1fdd9bf
     path: patches/@codeany__open-agent-sdk@0.2.1.patch
 
 importers:
@@ -145,6 +145,9 @@ importers:
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@4.1.18)
+      uuidv7:
+        specifier: ^1.2.1
+        version: 1.2.1
       xlsx:
         specifier: ^0.18.5
         version: 0.18.5
@@ -229,7 +232,7 @@ importers:
         version: 0.78.0(zod@4.3.5)
       '@codeany/open-agent-sdk':
         specifier: ^0.2.1
-        version: 0.2.1(patch_hash=e40ce0059d714263a724de54a81d58abe1022d4a65a4086efc6dc503d93abfa8)
+        version: 0.2.1(patch_hash=787683dd6f8866a0ea6334381fcb42e9b26c5b5aefac8f8025ae9960e1fdd9bf)
       '@hono/node-server':
         specifier: ^1.14.1
         version: 1.19.9(hono@4.11.4)
@@ -257,6 +260,9 @@ importers:
       react-router-dom:
         specifier: ^7.12.0
         version: 7.12.0(react-dom@19.2.3(react@19.2.4))(react@19.2.4)
+      uuidv7:
+        specifier: ^1.2.1
+        version: 1.2.1
       zod:
         specifier: ^4.3.5
         version: 4.3.5
@@ -4545,6 +4551,10 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
+  uuidv7@1.2.1:
+    resolution: {integrity: sha512-4kPkK3/XTQW9Hbm4CaqfICn+kY9LJtDVEOfgsRRra/+n2Ofg4NqzRFceAkxvQ/Ud/6BpHOPzj8cirqM7TzTN5Q==}
+    hasBin: true
+
   vary@1.1.2:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
@@ -4956,7 +4966,7 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.3.1
 
-  '@codeany/open-agent-sdk@0.2.1(patch_hash=e40ce0059d714263a724de54a81d58abe1022d4a65a4086efc6dc503d93abfa8)':
+  '@codeany/open-agent-sdk@0.2.1(patch_hash=787683dd6f8866a0ea6334381fcb42e9b26c5b5aefac8f8025ae9960e1fdd9bf)':
     dependencies:
       '@anthropic-ai/sdk': 0.52.0
       '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
@@ -9531,6 +9541,8 @@ snapshots:
       '@types/react': 19.2.8
 
   util-deprecate@1.0.2: {}
+
+  uuidv7@1.2.1: {}
 
   vary@1.1.2: {}
 
