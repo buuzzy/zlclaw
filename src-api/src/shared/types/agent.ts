@@ -100,4 +100,10 @@ export interface AgentRequest {
   sandboxConfig?: SandboxConfig;
   // Image attachments for vision capabilities
   images?: ImageAttachment[];
+  /**
+   * Supabase auth.users.id of the current end-user (UUID).
+   * Forwarded to the built-in memory MCP so search_memory can scope
+   * results to this user. If absent, memory tool is not available.
+   */
+  userId?: string;
 }

@@ -74,7 +74,6 @@ const REQUIRED_DIRS = [
   '',          // ~/.sage/ or sandbox container itself
   'skills',
   'sessions',
-  'memory',
   'logs',
   'cache',
   'cron',
@@ -150,19 +149,43 @@ async function installDefaultFiles(appDir: string): Promise<void> {
     console.warn(`[Init] Defaults source directory not found: ${defaultsDir}`);
   }
 
-  // Create skeleton files with minimal content
+  // Create skeleton files with minimal content.
+  // Phase 2 起不再创建 user.md / MEMORY.md：历史记忆全部走云端 supabase
+  // + mcp__memory__search_memory 工具，无需本地长期记忆文件。
   await writeIfMissing(
     join(appDir, 'mcp.json'),
     JSON.stringify({ mcpServers: {} }, null, 2) + '\n',
   );
-  await writeIfMissing(
+}
+
+/**
+ * Phase 2 一次性清理：删除旧的本地记忆文件（user.md / MEMORY.md /
+ * memory/ 目录 / memory-index/ 目录）。这些文件来自旧的「日 md +
+ * embedding 索引」体系，现在已被 supabase 云端记忆 + 工具召回取代。
+ *
+ * 这是 destructive 操作但安全：所有用户对话已通过 messages-sync 双写到
+ * 云端，本地 md 只是冗余拷贝。清理后 sidecar 不会再把它们注入 prompt。
+ *
+ * 幂等：文件不存在也不报错。
+ */
+async function cleanupLegacyMemoryFiles(appDir: string): Promise<void> {
+  const targets = [
     join(appDir, 'user.md'),
-    '# User Profile\n',
-  );
-  await writeIfMissing(
     join(appDir, 'MEMORY.md'),
-    '# Long-term Memory\n',
-  );
+    join(appDir, 'MEMORY.md.bak'),
+    join(appDir, 'memory'),
+    join(appDir, 'memory-index'),
+  ];
+
+  for (const path of targets) {
+    if (!existsSync(path)) continue;
+    try {
+      await fs.rm(path, { recursive: true, force: true });
+      console.log(`[Init] Removed legacy memory artifact: ${path}`);
+    } catch (err) {
+      console.warn(`[Init] Failed to remove ${path}:`, err);
+    }
+  }
 }
 
 // ============================================================================
@@ -178,6 +201,7 @@ async function installDefaultFiles(appDir: string): Promise<void> {
  *   2. Ensure all required directories exist
  *   3. Migrate user data from ~/.htclaw/ (if upgrading from HTclaw)
  *   4. Install bundled default files and create skeleton files
+ *   5. Phase 2: cleanup legacy memory artifacts (user.md / MEMORY.md / memory/ / memory-index/)
  */
 export async function ensureAppDirInitialized(): Promise<void> {
   const appDir = getAppDir();
@@ -213,8 +237,11 @@ export async function ensureAppDirInitialized(): Promise<void> {
     await migrateFromHTclaw();
 
     // 3. Install bundled default files (AGENTS.md, SOUL.md, skills-config.json)
-    //    and create skeleton files (mcp.json, user.md, MEMORY.md)
+    //    and create skeleton files (mcp.json)
     await installDefaultFiles(appDir);
+
+    // 4. Phase 2: 清理旧的本地记忆文件（如果存在）
+    await cleanupLegacyMemoryFiles(appDir);
 
     console.log('[Init] App directory initialized:', appDir);
   } catch (err) {

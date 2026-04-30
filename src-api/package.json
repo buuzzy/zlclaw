@@ -1,6 +1,6 @@
 {
   "name": "sage-api",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/patch-deps.mjs",
@@ -23,6 +23,7 @@
     "@hono/node-server": "^1.14.1",
     "@larksuiteoapi/node-sdk": "^1.60.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
+    "@supabase/supabase-js": "^2.104.0",
     "@types/node-cron": "^3.0.11",
     "color-diff-napi": "file:stubs/color-diff-napi",
     "hono": "^4.7.10",

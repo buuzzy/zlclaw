@@ -21,7 +21,6 @@ import {
   appendOrCreateConversation,
   resetChannelSession,
 } from '@/shared/services/channel-store';
-import { appendDailyMemory } from '@/shared/memory/daily-writer';
 
 /**
  * Read model config from provider manager (synced by desktop UI) or env vars.
@@ -156,7 +155,7 @@ completionsRoutes.post('/chat/completions', async (c) => {
   if (command === 'reset') {
     resetChannelSession('wechat');
     return c.json(buildCompletionResponse(
-      '✅ 已重置会话。上下文和短期记忆已清除。\n\n长期记忆（MEMORY.md）保留不变，我仍然记得你的偏好。',
+      '✅ 已重置会话。当前对话上下文已清除。\n\n云端历史记忆不受影响，需要时我会主动调取。',
       model,
     ));
   }
@@ -266,7 +265,6 @@ completionsRoutes.post('/chat/completions', async (c) => {
     const cleanText = stripArtifacts(rawText) || '处理完成';
 
     appendOrCreateConversation('wechat', lastUserMsg.content, cleanText);
-    appendDailyMemory(lastUserMsg.content, cleanText);
 
     return c.json(buildCompletionResponse(cleanText, model));
   } catch (error) {

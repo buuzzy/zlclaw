@@ -10,7 +10,6 @@ export default {
   mcp: 'MCP',
   connector: 'Channels',
   cron: 'Cron Jobs',
-  memory: 'Memory',
   about: 'About',
 
   // Account
@@ -281,7 +280,8 @@ export default {
   dataExportButton: 'Export',
   dataExporting: 'Exporting...',
   dataImport: 'Import Data',
-  dataImportDescription: 'Restore data from a previously exported JSON file (coming soon — disabled in beta).',
+  dataImportDescription:
+    'Restore data from a previously exported JSON file (coming soon — disabled in beta).',
   dataImportButton: 'Coming soon',
   dataImporting: 'Importing...',
   dataClear: 'Clear Data',

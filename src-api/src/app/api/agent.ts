@@ -91,7 +91,7 @@ agent.post('/plan', async (c) => {
 
   const session = createSession('plan');
   const readable = createSSEStream(
-    runPlanningPhase(body.prompt, session, body.modelConfig, body.language)
+    runPlanningPhase(body.prompt, session, body.modelConfig, body.language, body.userId)
   );
 
   return new Response(readable, { headers: SSE_HEADERS });
@@ -119,6 +119,7 @@ agent.post('/execute', async (c) => {
       mcpConfigPath?: string;
     };
     language?: string;
+    userId?: string;
   }>();
 
   console.log('[AgentAPI] POST /execute received:', {
@@ -155,7 +156,8 @@ agent.post('/execute', async (c) => {
       body.sandboxConfig,
       body.skillsConfig,
       body.mcpConfig,
-      body.language
+      body.language,
+      body.userId
     )
   );
 
@@ -300,7 +302,8 @@ agent.post('/', async (c) => {
       body.images,
       body.skillsConfig,
       body.mcpConfig,
-      body.language
+      body.language,
+      body.userId
     )
   );
 

@@ -127,7 +127,6 @@ export function getRequiredAppDirs(): string[] {
   return [
     'skills',      // Built-in and custom skills
     'sessions',    // Session files and context
-    'memory',      // Memory database and indices
     'logs',        // Application logs
     'cache',       // Cache files
     'cron',        // Cron jobs configuration

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL, API_PORT } from '@/config';
 import { translations, type Language } from '@/config/locale';
+import { serializeToolMetadata } from '@/shared/config/artifactMapping';
 import {
   createFile,
   createMessage,
@@ -12,9 +13,8 @@ import {
   type FileType,
   type Task,
 } from '@/shared/db';
+import { getCurrentBoundUid } from '@/shared/db/database';
 import { getSettings } from '@/shared/db/settings';
-import { extractToolMetadata } from '@/shared/lib/toolMetadataExtractor';
-import { serializeToolMetadata } from '@/shared/config/artifactMapping';
 import {
   loadAttachments,
   saveAttachments,
@@ -29,8 +29,8 @@ import {
   type BackgroundTask,
 } from '@/shared/lib/background-tasks';
 import { getAppDataDir, getFileName } from '@/shared/lib/paths';
+import { extractToolMetadata } from '@/shared/lib/toolMetadataExtractor';
 import { getUserSessionsDir } from '@/shared/lib/user-scoped-paths';
-import { getCurrentBoundUid } from '@/shared/db/database';
 
 /**
  * 清洗 backend /agent/title 的输出，防止 thinking 模型的 `<think>...</think>`
@@ -81,7 +81,6 @@ function getPreferredLanguage(): string | undefined {
   const lang = getSettings().language;
   return lang && lang.trim() !== '' ? lang : undefined;
 }
-
 
 /**
  * Detect if a prompt is a simple financial query that should skip the plan phase
@@ -1655,7 +1654,10 @@ export function useAgent(): UseAgentReturn {
                   // For tool_result messages, extract metadata for artifact mapping
                   let messageToAdd = data;
                   if (data.type === 'tool_result' && data.output && data.name) {
-                    const metadata = extractToolMetadata(data.output, data.name);
+                    const metadata = extractToolMetadata(
+                      data.output,
+                      data.name
+                    );
                     if (metadata) {
                       messageToAdd = {
                         ...data,
@@ -1784,7 +1786,10 @@ export function useAgent(): UseAgentReturn {
                   // Extract tool metadata for artifact mapping
                   let toolMetadata: string | undefined;
                   if (data.type === 'tool_result' && data.output && data.name) {
-                    const metadata = extractToolMetadata(data.output, data.name);
+                    const metadata = extractToolMetadata(
+                      data.output,
+                      data.name
+                    );
                     if (metadata) {
                       toolMetadata = serializeToolMetadata(metadata);
                     }
@@ -2073,7 +2078,6 @@ export function useAgent(): UseAgentReturn {
         // Fast chat was removed: it has no tools, so models cannot access
         // real-time data (time, weather, search) and incorrectly say "I can't".
 
-
         // Direct execute: simple financial queries skip the plan phase
         if (!hasImages && isDirectExecuteQuery(prompt)) {
           console.log(
@@ -2112,6 +2116,7 @@ export function useAgent(): UseAgentReturn {
               skillsConfig,
               mcpConfig,
               language,
+              userId: getCurrentBoundUid() ?? undefined,
             }),
             signal: abortController.signal,
           });
@@ -2134,7 +2139,9 @@ export function useAgent(): UseAgentReturn {
           if (hasImages) {
             console.log('[useAgent] Images attached, using direct execution');
           } else {
-            console.log('[useAgent] OpenAI-format provider, skipping plan phase');
+            console.log(
+              '[useAgent] OpenAI-format provider, skipping plan phase'
+            );
           }
           setPhase('executing');
 
@@ -2198,6 +2205,7 @@ export function useAgent(): UseAgentReturn {
               skillsConfig,
               mcpConfig,
               language,
+              userId: getCurrentBoundUid() ?? undefined,
             }),
             signal: abortController.signal,
           });
@@ -2236,6 +2244,7 @@ export function useAgent(): UseAgentReturn {
               prompt: augmentedPrompt,
               modelConfig,
               language: getPreferredLanguage(),
+              userId: getCurrentBoundUid() ?? undefined,
             }),
             signal: abortController.signal,
           }
@@ -2466,6 +2475,7 @@ export function useAgent(): UseAgentReturn {
             skillsConfig,
             mcpConfig,
             language,
+            userId: getCurrentBoundUid() ?? undefined,
           }),
           signal: abortController.signal,
         }
@@ -2706,7 +2716,6 @@ export function useAgent(): UseAgentReturn {
         // Fast chat detection for follow-up messages
         // Fast chat removed — all queries go through agent path (with tools).
 
-
         // Send conversation with full history (agent SDK path)
         const response = await fetchWithRetry(`${AGENT_SERVER_URL}/agent`, {
           method: 'POST',
@@ -2723,6 +2732,7 @@ export function useAgent(): UseAgentReturn {
             images: hasImages ? images : undefined,
             skillsConfig,
             mcpConfig,
+            userId: getCurrentBoundUid() ?? undefined,
           }),
           signal: abortController.signal,
         });

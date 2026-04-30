@@ -8,7 +8,7 @@
  *         └── {sessionId}/attachments/...
  *
  * 与 `src/shared/lib/paths.ts` 的关系：
- *   - paths.ts 管理**共享**目录（skills/defaults/mcp.json/logs/memory/cron/config.json），
+ *   - paths.ts 管理**共享**目录（skills/defaults/mcp.json/logs/cron/config.json），
  *     这些目录跟登录账号无关，不做隔离。
  *   - user-scoped-paths.ts 只管**用户私有**数据的路径推导，每次都要带 uid。
  *

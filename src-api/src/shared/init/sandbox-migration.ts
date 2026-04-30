@@ -241,7 +241,7 @@ export async function validateMigration(): Promise<{ valid: boolean; issues: str
   const appDir = home; // In sandbox, home is the app directory
 
   // Check for critical subdirectories
-  const requiredDirs = ['skills', 'sessions', 'memory', 'logs', 'cache', 'cron'];
+  const requiredDirs = ['skills', 'sessions', 'logs', 'cache', 'cron'];
 
   for (const subdir of requiredDirs) {
     const dirPath = path.join(appDir, '.sage', subdir);

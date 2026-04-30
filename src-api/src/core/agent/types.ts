@@ -161,6 +161,13 @@ export interface AgentOptions {
   skillsConfig?: SkillsConfig;
   /** MCP configuration */
   mcpConfig?: McpConfig;
+  /**
+   * Supabase auth.users.id (UUID) of the current end-user.
+   * Forwarded to the built-in memory MCP server so search_memory can scope
+   * results to this user. Required for any memory-aware Agent run; if absent,
+   * the memory MCP server is simply not injected (Agent works without it).
+   */
+  userId?: string;
 }
 
 export interface PlanOptions extends AgentOptions {

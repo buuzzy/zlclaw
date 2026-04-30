@@ -23,7 +23,6 @@ import {
   updateJob,
   removeJob as storeRemoveJob,
   appendRun,
-  upsertJob,
 } from './store';
 import type { CronJob, CronRun, CronSchedule, DeliveryMode } from './types';
 
@@ -146,31 +145,6 @@ async function executeJob(jobId: string): Promise<void> {
   const startedAt = new Date().toISOString();
   console.log(`[Cron] Running job: ${jobId} "${job.name}"`);
 
-  // For consolidated memory jobs that have their own implementation:
-  if (job.system && job.id === 'sys-memory-consolidation') {
-    const run: CronRun = { startedAt, status: 'running' };
-    try {
-      const { consolidateDailyMemory } = await import('@/shared/memory/consolidator');
-      const result = await consolidateDailyMemory();
-      const output = `Processed: ${result.processed.join(', ') || 'none'}, Skipped: ${result.skipped.length}, Failed: ${result.failed.join(', ') || 'none'}`;
-      run.finishedAt = new Date().toISOString();
-      // If any dates failed to consolidate, mark the run as failed rather than success
-      run.status = result.failed.length > 0 ? 'failed' : 'success';
-      run.output = output;
-      if (result.failed.length > 0) {
-        run.error = `Consolidation failed for: ${result.failed.join(', ')}`;
-      }
-      console.log(`[Cron] Job ${jobId} completed: ${output}`);
-    } catch (err) {
-      run.finishedAt = new Date().toISOString();
-      run.status = 'failed';
-      run.error = err instanceof Error ? err.message : String(err);
-      console.error(`[Cron] Job ${jobId} failed:`, err);
-    }
-    appendRun(jobId, run);
-    return;
-  }
-
   // Generic isolated agent run
   const run: CronRun = { startedAt, status: 'running' };
   try {
@@ -253,6 +227,19 @@ function unscheduleJob(jobId: string): void {
   if (handle) {
     handle.destroy();
     handles.delete(jobId);
+  }
+}
+
+/**
+ * Remove leftover sys-memory-consolidation jobs persisted by older Sage versions.
+ * Idempotent — safe to call repeatedly.
+ */
+function unscheduleLegacyMemoryConsolidationJob(): void {
+  const legacyId = 'sys-memory-consolidation';
+  unscheduleJob(legacyId);
+  const removed = storeRemoveJob(legacyId);
+  if (removed) {
+    console.log('[Cron] Removed legacy sys-memory-consolidation job (Phase 2 cleanup)');
   }
 }
 
@@ -343,16 +330,10 @@ function scheduleJob(job: CronJob): void {
 
 /** Load all persisted jobs and schedule enabled ones. Called once at startup. */
 export function initScheduler(): void {
-  // Register the F25 system job (memory consolidation)
-  upsertJob({
-    id: 'sys-memory-consolidation',
-    name: '每日记忆归纳 (F25)',
-    prompt: '', // handled by dedicated consolidateDailyMemory() call
-    schedule: { type: 'cron', expression: '0 23 * * *', timezone: 'Asia/Shanghai' },
-    delivery: 'none',
-    enabled: true,
-    system: true,
-  });
+  // Phase 2: 旧的 sys-memory-consolidation 系统任务已移除（不再有日 md 归纳需求）。
+  // 历史 cron 中如果还残留这个 id，下面的 listJobs() → scheduleJob 流程会自然
+  // 跳过它（因为我们在 unscheduleLegacy 中清理）。
+  unscheduleLegacyMemoryConsolidationJob();
 
   const jobs = listJobs();
   let scheduled = 0;

@@ -46,8 +46,8 @@ import {
   DEFAULT_WORK_DIR,
 } from '@/config/constants';
 import { getSageSystemPrompt } from '@/config/prompt-loader';
-import { appendDailyMemory } from '@/shared/memory/daily-writer';
 import { loadMcpServers, type McpServerConfig } from '@/shared/mcp/loader';
+import { isSupabaseConfigured } from '@/shared/supabase/client';
 import { createLogger, LOG_FILE_PATH } from '@/shared/utils/logger';
 import { stripHashSuffix } from '@/shared/utils/url';
 
@@ -825,6 +825,9 @@ const ALLOWED_TOOLS = [
   'TodoWrite',
   'Agent',       // 多 Agent 并行协作（AgentTool）
   'SendMessage', // 跨 Agent 消息传递
+  // 内置 memory MCP server 暴露的工具：让 Agent 能召回用户历史对话原文。
+  // SDK 给 MCP 工具的命名规则：mcp__<server-name>__<tool-name>。
+  'mcp__memory__search_memory',
 ];
 
 // ============================================================================
@@ -864,6 +867,36 @@ export class CodeAnyAgent extends BaseAgent {
       'permission denied', '401', '403', '500', '502', '503',
     ];
     return errorPatterns.some(p => lower.includes(p)) && output.length < 500;
+  }
+
+  /**
+   * Build the built-in MCP servers that sage-api always exposes.
+   *
+   * Currently registers `memory` MCP server (search_memory tool) when:
+   *   1. options.userId is present (otherwise we can't scope queries safely)
+   *   2. SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are configured
+   *
+   * The MCP server URL is local (sage-api -> sage-api on the same process),
+   * so even in cloud mode (Railway) it's a loopback fetch. When SAGE_API_TOKEN
+   * is set we forward it as a Bearer header to satisfy localOnlyMiddleware.
+   */
+  private buildBuiltinMcpServers(userId?: string): Record<string, McpServerConfig> {
+    if (!userId || !isSupabaseConfigured()) {
+      return {};
+    }
+    const port = process.env.PORT || '2026';
+    const url = `http://127.0.0.1:${port}/mcp-memory?user_id=${encodeURIComponent(userId)}`;
+    const headers: Record<string, string> = {};
+    if (process.env.SAGE_API_TOKEN) {
+      headers.Authorization = `Bearer ${process.env.SAGE_API_TOKEN}`;
+    }
+    return {
+      memory: {
+        type: 'http',
+        url,
+        ...(Object.keys(headers).length > 0 ? { headers } : {}),
+      },
+    };
   }
 
   private buildSdkOptions(
@@ -1100,7 +1133,7 @@ export class CodeAnyAgent extends BaseAgent {
 
     const sentTextHashes = new Set<string>();
     const sentToolIds = new Set<string>();
-    // Accumulates assistant reply text for daily memory write
+    // Track whether we got substantive assistant text (used by retry heuristic)
     const assistantTextParts: string[] = [];
 
     const sandboxOpts: SandboxOptions | undefined = options?.sandbox?.enabled
@@ -1121,11 +1154,11 @@ export class CodeAnyAgent extends BaseAgent {
     const contextSessionId = options?.taskId || session.id;
     const conversationContext = await this.buildConversationContext(contextSessionId, options?.conversation);
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
-    const sageSystemPrompt = await getSageSystemPrompt(prompt);
+    const sageSystemPrompt = await getSageSystemPrompt();
 
-    // System prompt (SOUL.md + AGENTS.md + memory) is injected via SDK's
-    // appendSystemPrompt so OpenAI-compatible APIs treat it as a system message.
-    // Only workspace/conversation/language context remains in the text prompt.
+    // System prompt = dateContext + SOUL.md + AGENTS.md only (Phase 2 重构后).
+    // Historical recall is exclusively via mcp__memory__search_memory tool, not
+    // injected here. Workspace/conversation/language context stays in text prompt.
     const textPrompt = getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext + languageInstruction + prompt;
 
     // Build the final prompt: always a string (images referenced by file path)
@@ -1137,17 +1170,19 @@ export class CodeAnyAgent extends BaseAgent {
       finalPrompt = textPrompt;
     }
 
-    // Load MCP servers
+    // Load MCP servers (user-defined from ~/.sage/mcp.json + sage built-in memory)
     const userMcpServers = await loadMcpServers(options?.mcpConfig as McpConfig | undefined);
+    const builtinMcpServers = this.buildBuiltinMcpServers(options?.userId);
+    // Order matters: user can shadow built-in by naming their server `memory`
+    const allMcpServers = { ...builtinMcpServers, ...userMcpServers };
 
     const sdkOpts = this.buildSdkOptions(sessionCwd, options, {
       abortController: options?.abortController || session.abortController,
     }, sageSystemPrompt);
 
-    // Add MCP servers if any
-    if (Object.keys(userMcpServers).length > 0) {
-      sdkOpts.mcpServers = userMcpServers;
-      logger.info(`[CodeAny ${session.id}] MCP servers: ${Object.keys(userMcpServers).join(', ')}`);
+    if (Object.keys(allMcpServers).length > 0) {
+      sdkOpts.mcpServers = allMcpServers;
+      logger.info(`[CodeAny ${session.id}] MCP servers: ${Object.keys(allMcpServers).join(', ')}`);
     }
 
     logger.info(`[CodeAny ${session.id}] ========== AGENT START ==========`);
@@ -1245,12 +1280,6 @@ export class CodeAnyAgent extends BaseAgent {
         yield { type: 'error', message: `__INTERNAL_ERROR__|${LOG_FILE_PATH}` };
       }
     } finally {
-      // Persist this turn to daily memory (fire-and-forget)
-      const assistantReply = assistantTextParts.join('\n').trim();
-      if (assistantReply) {
-        appendDailyMemory(typeof prompt === 'string' ? prompt : JSON.stringify(prompt), assistantReply);
-      }
-
       this.sessions.delete(session.id);
       yield { type: 'done' };
     }
@@ -1271,33 +1300,56 @@ export class CodeAnyAgent extends BaseAgent {
 
     const workspaceInstruction = `\n## CRITICAL: Output Directory\n**ALL files must be saved to: ${sessionCwd}**\n`;
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
-    const sageSystemPrompt = await getSageSystemPrompt(prompt);
+    const sageSystemPrompt = await getSageSystemPrompt();
     const planningPrompt = workspaceInstruction + PLANNING_INSTRUCTION + languageInstruction + prompt;
 
     let fullResponse = '';
 
     const sdkOpts = this.buildSdkOptions(sessionCwd, options, {
-      allowedTools: [],
       abortController: options?.abortController || session.abortController,
     }, sageSystemPrompt);
+
+    // Phase 2 关键修正：plan 阶段需要 search_memory 工具来调取历史上下文，
+    // 否则模型遇到「我之前问过 X 吗」这类问题只能凭空 direct_answer。
+    // - 仅允许 search_memory（pure read，无副作用），其他工具留给 execute
+    // - 必须同时注入 memory MCP server，否则工具名挂着也调不通
+    // 必须 override buildSdkOptions 里的 allowedTools 默认值（line 939
+    // 会用 ALLOWED_TOOLS 全集 fallback）。
+    const planMcpServers = this.buildBuiltinMcpServers(options?.userId);
+    if (Object.keys(planMcpServers).length > 0) {
+      sdkOpts.mcpServers = planMcpServers;
+      sdkOpts.allowedTools = ['mcp__memory__search_memory'];
+      logger.info(`[CodeAny ${session.id}] Planning: enabled search_memory tool`);
+    } else {
+      sdkOpts.allowedTools = [];
+    }
+
+    // dedup sets shared with processMessage
+    const sentTextHashes = new Set<string>();
+    const sentToolIds = new Set<string>();
 
     try {
       for await (const message of query({ prompt: planningPrompt, options: sdkOpts })) {
         if (session.abortController.signal.aborted) break;
 
+        // 先把 assistant.text 的原文累积到 fullResponse，给 parsePlanningResponse 用。
+        // sanitizeText 会剥掉 MiniMax 的 <think>...</think>，但原文里可能藏着 JSON
+        // 之类的内容，因此 parser 必须看原文。
         if ((message as any).type === 'assistant' && (message as any).message?.content) {
-          for (const block of (message as any).message.content) {
+          for (const block of (message as any).message.content as Array<Record<string, unknown>>) {
             if ('text' in block) {
-              // planning phase 必须和 run() 一样走 sanitizeText，
-              // 否则 MiniMax 等 thinking 模型的 <think>...</think> 原文会直接
-              // 漏到 UI / transcript 里（已见于线上 minimax 反馈日志）。
-              const sanitizedText = this.sanitizeText(block.text);
-              fullResponse += block.text; // fullResponse 给 parser 用原文
-              if (sanitizedText) {
-                yield { type: 'text', content: sanitizedText };
-              }
+              fullResponse += block.text as string;
             }
           }
+        }
+
+        // Delegate to processMessage so plan-phase tool calls (search_memory) and
+        // their results get yielded → frontend → messages-sync → supabase。
+        // 这是 Phase 2 P1 修复：之前 plan() 只 yield text，导致 mcp tool_use /
+        // tool_result 完全不可观测，回头查 supabase messages 表全是 text，看不到
+        // 工具调用了哪些 query、返回了什么。现在所有 plan 阶段的工具行为都会留痕。
+        for (const msg of this.processMessage(message, session.id, sentTextHashes, sentToolIds)) {
+          yield msg;
         }
       }
 
@@ -1330,10 +1382,6 @@ export class CodeAnyAgent extends BaseAgent {
       logger.error(`[CodeAny ${session.id}] Planning error:`, error);
       yield { type: 'error', message: error instanceof Error ? error.message : String(error) };
     } finally {
-      // Persist planning turn to daily memory (fire-and-forget)
-      if (fullResponse.trim()) {
-        appendDailyMemory(prompt, fullResponse.trim());
-      }
       yield { type: 'done' };
     }
   }
@@ -1362,24 +1410,25 @@ export class CodeAnyAgent extends BaseAgent {
       ? { enabled: true, image: options.sandbox.image, apiEndpoint: options.sandbox.apiEndpoint || SANDBOX_API_URL }
       : undefined;
 
-    const sageSystemPrompt = await getSageSystemPrompt(options.originalPrompt);
+    const sageSystemPrompt = await getSageSystemPrompt();
     const executionPrompt =
       formatPlanForExecution(plan, sessionCwd, sandboxOpts, options.language, options.originalPrompt) +
       '\n\nOriginal request: ' + options.originalPrompt;
 
     const sentTextHashes = new Set<string>();
     const sentToolIds = new Set<string>();
-    // Accumulates assistant reply text for daily memory write
-    const assistantTextParts: string[] = [];
 
     const userMcpServers = await loadMcpServers(options.mcpConfig as McpConfig | undefined);
+    const builtinMcpServers = this.buildBuiltinMcpServers(options.userId);
+    const allMcpServers = { ...builtinMcpServers, ...userMcpServers };
 
     const sdkOpts = this.buildSdkOptions(sessionCwd, options, {
       abortController: options.abortController || session.abortController,
     }, sageSystemPrompt);
 
-    if (Object.keys(userMcpServers).length > 0) {
-      sdkOpts.mcpServers = userMcpServers;
+    if (Object.keys(allMcpServers).length > 0) {
+      sdkOpts.mcpServers = allMcpServers;
+      logger.info(`[CodeAny ${session.id}] MCP servers: ${Object.keys(allMcpServers).join(', ')}`);
     }
 
     // Dynamically swap in only the skills relevant to this plan's original prompt
@@ -1391,9 +1440,6 @@ export class CodeAnyAgent extends BaseAgent {
       for await (const message of query({ prompt: executionPrompt, options: sdkOpts })) {
         if (session.abortController.signal.aborted) break;
         for (const msg of this.processMessage(message, session.id, sentTextHashes, sentToolIds)) {
-          if (msg.type === 'text' && (msg as any).content) {
-            assistantTextParts.push((msg as any).content);
-          }
           yield msg;
         }
       }
@@ -1401,12 +1447,6 @@ export class CodeAnyAgent extends BaseAgent {
       logger.error(`[CodeAny ${session.id}] Execution error:`, error);
       yield { type: 'error', message: error instanceof Error ? error.message : String(error) };
     } finally {
-      // Persist execution turn to daily memory (fire-and-forget)
-      const assistantReply = assistantTextParts.join('\n').trim();
-      if (assistantReply && options.originalPrompt) {
-        appendDailyMemory(options.originalPrompt, assistantReply);
-      }
-
       this.deletePlan(options.planId);
       this.sessions.delete(session.id);
       yield { type: 'done' };

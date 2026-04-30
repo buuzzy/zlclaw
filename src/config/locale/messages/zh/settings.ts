@@ -10,7 +10,6 @@ export default {
   mcp: 'MCP',
   connector: '渠道',
   cron: '定时任务',
-  memory: '记忆系统',
   about: '关于',
 
   // Account
@@ -270,7 +269,8 @@ export default {
   dataExportButton: '导出',
   dataExporting: '导出中...',
   dataImport: '导入数据',
-  dataImportDescription: '从之前导出的 JSON 文件恢复数据（即将支持，内测版尚未启用）。',
+  dataImportDescription:
+    '从之前导出的 JSON 文件恢复数据（即将支持，内测版尚未启用）。',
   dataImportButton: '即将支持',
   dataImporting: '导入中...',
   dataClear: '清空数据',

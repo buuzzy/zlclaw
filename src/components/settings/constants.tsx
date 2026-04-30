@@ -6,7 +6,6 @@ import {
   providerDefaultModels,
 } from '@/shared/db/settings';
 import {
-  Brain,
   Clock,
   Cpu,
   Database,
@@ -34,7 +33,6 @@ export const categoryIcons: Record<
   skills: Sparkles,
   connector: Plug,
   cron: Clock,
-  memory: Brain,
   data: Database,
   about: Info,
 };

@@ -12,7 +12,7 @@ import {
   filesRoutes,
   healthRoutes,
   mcpRoutes,
-  memoryRoutes,
+  mcpMemoryRoutes,
   previewRoutes,
   providersRoutes,
   sandboxRoutes,
@@ -45,14 +45,14 @@ app.use('/sandbox/*', localOnlyMiddleware);
 app.use('/preview/*', localOnlyMiddleware);
 app.use('/files/*', localOnlyMiddleware);
 app.use('/mcp/*', localOnlyMiddleware);
+app.use('/mcp-memory/*', localOnlyMiddleware);
 app.use('/skills/*', localOnlyMiddleware);
 
-// ── Management routes (local-only: config, memory, cron — no external access) ─
+// ── Management routes (local-only: config, cron — no external access) ─
 // These routes expose sensitive configuration and internal state.
 // In production the sidecar binds 127.0.0.1 so external access is already
 // blocked at TCP level; this is defence-in-depth for dev mode (0.0.0.0).
 app.use('/providers/*', localOnlyMiddleware);
-app.use('/memory/*', localOnlyMiddleware);
 app.use('/cron/*', localOnlyMiddleware);
 
 // Routes
@@ -63,10 +63,10 @@ app.route('/preview', previewRoutes);
 app.route('/providers', providersRoutes);
 app.route('/files', filesRoutes);
 app.route('/mcp', mcpRoutes);
+app.route('/mcp-memory', mcpMemoryRoutes);
 app.route('/channels', channelRoutes);
 app.route('/channels/wechat', wechatRoutes);
 app.route('/channels/feishu', feishuRoutes);
-app.route('/memory', memoryRoutes);
 app.route('/skills', skillsRoutes);
 app.route('/cron', cronRoutes);
 app.route('/v1', completionsRoutes);
@@ -127,8 +127,8 @@ app.get('/', (c) => {
       providers: '/providers',
       files: '/files',
       mcp: '/mcp',
+      mcpMemory: '/mcp-memory',
       channels: '/channels',
-      memory: '/memory',
       skills: '/skills',
       cron: '/cron',
       completions: '/v1/chat/completions',
@@ -288,21 +288,14 @@ async function start() {
   // Initialize provider manager
   await initProviderManager();
 
-  // Trigger memory vector indexing (async, non-blocking)
-  import('@/shared/memory/indexer').then(({ indexIfNeeded }) => {
-    indexIfNeeded().catch((err) =>
-      console.warn('[MemoryIndex] Startup index failed:', err)
-    );
-  });
-
   // Clean up old session files (async, non-blocking)
   import('@/shared/context/session-store').then(({ cleanupOldSessions }) => {
     cleanupOldSessions(7);
   });
 
-  // Initialize cron scheduler (loads persisted jobs, schedules enabled ones)
-  // The scheduler registers the built-in F25 memory consolidation job (23:00 daily)
-  // and any user-created jobs from ~/.sage/cron/jobs.json
+  // Initialize cron scheduler (loads persisted jobs, schedules enabled ones).
+  // Phase 2 移除了 sys-memory-consolidation 这个内置任务；scheduler 在启动时
+  // 会主动清理历史中可能残留的同名 job。
   const { initScheduler } = await import('@/shared/cron/scheduler');
   initScheduler();
   console.log('⏰ Cron scheduler initialized');

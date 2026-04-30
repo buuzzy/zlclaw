@@ -224,9 +224,22 @@ export const PLANNING_INSTRUCTION = `You are an AI assistant that helps with var
 - Web searching for specific information
 - Multi-step tasks that need tools
 
+## MEMORY RETRIEVAL (PRE-DECISION)
+
+If the user's question references something they expect you to remember
+(e.g. "我之前问过…吗", "上次聊到的…", "还记得我说过…", "I asked you about X
+before"), you MUST first call \`mcp__memory__search_memory\` with a concise
+query, THEN decide between direct_answer and plan based on the actual recall
+result. Never fabricate historical facts.
+
+For all other questions (greetings, capability questions, complex tasks
+without historical reference), do NOT call any tool — go straight to JSON
+output below.
+
 ## CRITICAL: OUTPUT FORMAT
 
-**IMPORTANT**: You are in PLANNING PHASE. You must ONLY output a structured JSON response.
+**IMPORTANT**: You are in PLANNING PHASE. After any required memory retrieval,
+your final output MUST be a structured JSON response — nothing else.
 - DO NOT write actual code
 - DO NOT generate file contents
 - DO NOT include implementation details

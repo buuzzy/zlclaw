@@ -1,11 +1,12 @@
 /**
  * Sage Prompt Loader
  *
- * Loads SOUL.md, AGENTS.md, and memory files from ~/.sage/
- * and provides them as system prompt fragments for the Agent runtime.
+ * Loads SOUL.md (persona) and AGENTS.md (workflow rules) from ~/.sage/
+ * and combines them with the current date context into the Agent's
+ * system prompt.
  *
- * When a vector index is available, long-term and daily memory are
- * retrieved via semantic search instead of full-text injection.
+ * Phase 2 onwards: 历史记忆**不再**通过 system prompt 注入。
+ * Agent 通过 mcp__memory__search_memory 工具按需召回 supabase 云端的对话原文。
  */
 
 import { readFile } from 'fs/promises';
@@ -13,9 +14,6 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 
 import { getAppDir } from '@/config/constants';
-import { getEmbeddingProvider } from '@/shared/memory/embedding-provider';
-import { hybridSearch } from '@/shared/memory/search';
-import { loadIndex } from '@/shared/memory/vector-store';
 
 let cachedSoulPrompt: string | null = null;
 let cachedAgentsPrompt: string | null = null;
@@ -50,16 +48,10 @@ function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function yesterdayStr(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 function buildDateContext(): string {
   const now = new Date();
   const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-  const dow = now.getDay(); // 0=Sun, 6=Sat
+  const dow = now.getDay();
   const dateStr = todayStr();
   const weekStr = weekDays[dow];
   // A/H shares trade Mon–Fri; weekend = market closed
@@ -71,118 +63,24 @@ function buildDateContext(): string {
 }
 
 /**
- * Check whether vector search is operational (config + non-empty index).
- */
-function isVectorSearchReady(): boolean {
-  const provider = getEmbeddingProvider();
-  if (!provider) return false;
-  const index = loadIndex();
-  return !!index && index.chunks.length > 0;
-}
-
-/**
- * Load memory via vector semantic search.
- * user.md is still injected in full (small, always relevant).
- */
-async function loadMemoryViaSearch(userQuery?: string): Promise<string> {
-  const parts: string[] = [];
-
-  // user.md: always full inject
-  const userProfile = await loadFile('user.md');
-  if (userProfile.trim()) {
-    parts.push(`## User Profile\n${userProfile.trim()}`);
-  }
-
-  // Semantic search for relevant memory chunks
-  if (userQuery) {
-    const provider = getEmbeddingProvider();
-    try {
-      const results = await hybridSearch(userQuery, provider, {
-        maxResults: 8,
-        minScore: 0.15,
-      });
-
-      if (results.length > 0) {
-        const snippets = results.map(
-          (r) => `- [${r.source}] (score: ${r.score.toFixed(2)})\n${r.text}`
-        );
-        parts.push(`## Relevant Memory\n${snippets.join('\n\n---\n\n')}`);
-      }
-    } catch (err) {
-      console.warn('[PromptLoader] Vector search failed, using fallback:', err);
-      return loadMemoryFullText();
-    }
-  }
-
-  return parts.length > 0 ? parts.join('\n\n---\n\n') : '';
-}
-
-/**
- * Load memory by reading full text (original behaviour, used as fallback).
- */
-async function loadMemoryFullText(): Promise<string> {
-  const appDir = getAppDir();
-  const parts: string[] = [];
-
-  const userProfile = await loadFile('user.md');
-  if (userProfile.trim()) {
-    parts.push(`## User Profile\n${userProfile.trim()}`);
-  }
-
-  const memory = await loadFile('MEMORY.md');
-  if (memory.trim()) {
-    parts.push(`## Long-term Memory\n${memory.trim()}`);
-  }
-
-  const memDir = join(appDir, 'memory');
-  if (existsSync(memDir)) {
-    const recentDates = [todayStr(), yesterdayStr()];
-    const recentNotes: string[] = [];
-
-    for (const dateStr of recentDates) {
-      const fpath = join(memDir, `${dateStr}.md`);
-      if (existsSync(fpath)) {
-        try {
-          const content = await readFile(fpath, 'utf-8');
-          if (content.trim()) {
-            recentNotes.push(`### ${dateStr}\n${content.trim()}`);
-          }
-        } catch { /* skip */ }
-      }
-    }
-
-    if (recentNotes.length > 0) {
-      parts.push(`## Recent Context\n${recentNotes.join('\n\n')}`);
-    }
-  }
-
-  return parts.length > 0 ? parts.join('\n\n---\n\n') : '';
-}
-
-/**
- * Returns the combined Sage system prompt (SOUL + AGENTS + Memory).
+ * Returns the combined Sage system prompt: dateContext + SOUL + AGENTS.
  *
- * @param userQuery - when provided and vector search is ready, memory is
- *   retrieved semantically instead of full-text injected.
+ * 注意：从 Phase 2 起本函数不再接受/使用 userQuery。所有历史记忆召回
+ * 都改走 Agent loop 中的 mcp__memory__search_memory 工具，不再走
+ * system prompt 注入。这避免了「LLM 直接 direct_answer 不走 execute、
+ * 工具永远不会被调」的死锁问题，也让所有记忆访问都可观测。
  */
-export async function getSageSystemPrompt(userQuery?: string): Promise<string> {
+export async function getSageSystemPrompt(): Promise<string> {
   const [soul, agents] = await Promise.all([
     getSoulPrompt(),
     getAgentsPrompt(),
   ]);
 
-  const memoryCtx = (userQuery && isVectorSearchReady())
-    ? await loadMemoryViaSearch(userQuery)
-    : await loadMemoryFullText();
-
-  const parts: string[] = [];
-  // Always inject current date first so the model has accurate temporal context
-  parts.push(buildDateContext());
+  const parts: string[] = [buildDateContext()];
   if (soul) parts.push(soul);
   if (agents) parts.push(agents);
-  if (memoryCtx) parts.push(memoryCtx);
 
-  return parts.length > 0 ? parts.join('\n\n---\n\n') + '\n\n---\n\n' : '';
+  return parts.join('\n\n---\n\n') + '\n\n---\n\n';
 }
 
 export function invalidateCache(): void {

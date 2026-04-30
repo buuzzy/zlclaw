@@ -264,12 +264,11 @@ sage/
 
 ### 记忆系统
 
-- **长期记忆**：`~/.sage/MEMORY.md`（投资偏好、关注标的）
-- **用户画像**：`~/.sage/user.md`
-- **每日归档**：`~/.sage/memory/YYYY-MM-DD.md`（每次回复后自动追加）
-- **自动归纳**：每日 23:00 提炼对话要点，写入长期记忆
-- **语义检索**：向量 Embedding + BM25 混合搜索，按查询相关性注入上下文
-- **三层保留**：热层（0–30天原始）→ 温层（归纳摘要，永久）→ 画像层（user.md，永久）
+- **云端原文存储**：所有对话同步到 Supabase `public.messages` 表，按 `user_id` 隔离（RLS）
+- **本地双写**：本地 SQLite 缓存当前用户消息，离线/弱网下仍可访问最近会话
+- **按需召回**：Agent 通过 `mcp__memory__search_memory` 工具检索历史，不再全量注入 system prompt
+- **可观测**：每次召回都在 `messages.tool_name` 留有痕迹，便于追溯
+- **跨端共享**：上云后桌面、iOS、Web 等所有端共享同一份记忆
 
 ### Cron 定时调度
 

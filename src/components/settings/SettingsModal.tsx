@@ -26,7 +26,6 @@ import { CronSettings } from './tabs/CronSettings';
 import { DataSettings } from './tabs/DataSettings';
 import { GeneralSettings } from './tabs/GeneralSettings';
 import { MCPSettings } from './tabs/MCPSettings';
-import { MemorySettings } from './tabs/MemorySettings';
 import { ModelSettings } from './tabs/ModelSettings';
 import { SkillsSettings } from './tabs/SkillsSettings';
 import { WorkplaceSettings } from './tabs/WorkplaceSettings';
@@ -86,7 +85,6 @@ export function SettingsModal({
     'skills',
     'connector',
     'cron',
-    'memory',
     'data',
     'about',
   ];
@@ -230,8 +228,6 @@ export function SettingsModal({
               {activeCategory === 'connector' && <ConnectorSettings />}
 
               {activeCategory === 'cron' && <CronSettings />}
-
-              {activeCategory === 'memory' && <MemorySettings />}
 
               {activeCategory === 'data' && <DataSettings />}
 

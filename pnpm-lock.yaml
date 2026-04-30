@@ -242,6 +242,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.25.2
         version: 1.29.0(zod@4.3.5)
+      '@supabase/supabase-js':
+        specifier: ^2.104.0
+        version: 2.104.0
       '@types/node-cron':
         specifier: ^3.0.11
         version: 3.0.11

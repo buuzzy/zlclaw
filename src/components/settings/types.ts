@@ -15,7 +15,6 @@ export type SettingsCategory =
   | 'skills'
   | 'connector'
   | 'cron'
-  | 'memory'
   | 'data'
   | 'about';
 
