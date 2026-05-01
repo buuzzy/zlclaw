@@ -1,6 +1,6 @@
 [package]
 name = "sage"
-version = "1.2.0"
+version = "1.2.1"
 description = "Sage - AI Financial Assistant"
 authors = ["you"]
 edition = "2021"
