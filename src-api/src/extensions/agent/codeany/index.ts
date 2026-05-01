@@ -50,6 +50,7 @@ import { loadMcpServers, type McpServerConfig } from '@/shared/mcp/loader';
 import { isSupabaseConfigured } from '@/shared/supabase/client';
 
 import { buildPersonaSection } from './persona-injector';
+import { buildActiveRecallSection } from './active-recall';
 import { createLogger, LOG_FILE_PATH } from '@/shared/utils/logger';
 import { stripHashSuffix } from '@/shared/utils/url';
 
@@ -1169,9 +1170,17 @@ export class CodeAnyAgent extends BaseAgent {
     // Phase 3: prepend「身份记忆」 — persona snapshot + recent_threads。
     // Agent 不再决策「要不要召回历史」，每次对话开始就已经认识用户。
     const personaSection = await buildPersonaSection(options?.userId, options?.accessToken);
-    const sageSystemPrompt = personaSection
-      ? baseSageSystemPrompt + '\n' + personaSection
-      : baseSageSystemPrompt;
+    // Phase 4: 仅 task 首轮（conversation 为空）做按当前 query 的主动召回。
+    // 后续 turn 已经看得到当轮上下文，无需重复注入。
+    const recallSection = await buildActiveRecallSection({
+      prompt,
+      userId: options?.userId,
+      accessToken: options?.accessToken,
+      conversation: options?.conversation,
+    });
+    const sageSystemPrompt = [baseSageSystemPrompt, personaSection, recallSection]
+      .filter((s) => s && s.length > 0)
+      .join('\n');
 
     // System prompt = dateContext + SOUL.md + AGENTS.md + persona snapshot + recent_threads.
     // 长尾历史档案（>20 回合）仍由 mcp__memory__search_memory 工具按需取。
@@ -1278,9 +1287,16 @@ export class CodeAnyAgent extends BaseAgent {
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
     const baseSageSystemPrompt = await getSageSystemPrompt();
     const planPersonaSection = await buildPersonaSection(options?.userId, options?.accessToken);
-    const sageSystemPrompt = planPersonaSection
-      ? baseSageSystemPrompt + '\n' + planPersonaSection
-      : baseSageSystemPrompt;
+    // Phase 4: plan 必首轮，强制启用主动召回
+    const planRecallSection = await buildActiveRecallSection({
+      prompt,
+      userId: options?.userId,
+      accessToken: options?.accessToken,
+      forceFirstTurn: true,
+    });
+    const sageSystemPrompt = [baseSageSystemPrompt, planPersonaSection, planRecallSection]
+      .filter((s) => s && s.length > 0)
+      .join('\n');
     const planningPrompt = workspaceInstruction + PLANNING_INSTRUCTION + languageInstruction + prompt;
 
     let fullResponse = '';
@@ -1395,9 +1411,16 @@ export class CodeAnyAgent extends BaseAgent {
 
     const baseSageSystemPrompt = await getSageSystemPrompt();
     const execPersonaSection = await buildPersonaSection(options.userId, options.accessToken);
-    const sageSystemPrompt = execPersonaSection
-      ? baseSageSystemPrompt + '\n' + execPersonaSection
-      : baseSageSystemPrompt;
+    // Phase 4: execute 跟随 plan 必首轮，用 originalPrompt 做主动召回
+    const execRecallSection = await buildActiveRecallSection({
+      prompt: options.originalPrompt,
+      userId: options.userId,
+      accessToken: options.accessToken,
+      forceFirstTurn: true,
+    });
+    const sageSystemPrompt = [baseSageSystemPrompt, execPersonaSection, execRecallSection]
+      .filter((s) => s && s.length > 0)
+      .join('\n');
     const executionPrompt =
       formatPlanForExecution(plan, sessionCwd, sandboxOpts, options.language, options.originalPrompt) +
       '\n\nOriginal request: ' + options.originalPrompt;
