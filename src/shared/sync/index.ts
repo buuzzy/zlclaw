@@ -59,3 +59,5 @@ export {
   type OverallStatus,
   type SyncStatusSnapshot,
 } from './sync-status';
+
+export { clearCloudConversations } from './cloud-cleanup';

@@ -280,13 +280,15 @@ export default {
   dataSuccess: '成功',
   dataClearConfirmTitle: '清空数据',
   dataClearConfirmDescription: '选择您要清空的数据：',
-  dataClearTasksOnly: '仅清空任务',
-  dataClearTasksOnlyDescription: '删除所有任务和消息，保留设置',
+  dataClearTasksOnly: '清空会话历史',
+  dataClearTasksOnlyDescription:
+    '删除所有对话与消息（含云端备份，影响所有已登录设备），保留登录态、偏好和 Sage 关于你的画像',
   dataClearSettingsOnly: '仅清空配置',
   dataClearSettingsOnlyDescription: '重置所有配置为默认值，保留任务',
   dataClearAll: '清空所有数据',
   dataClearAllDescription: '删除所有任务、消息和设置',
-  dataClearTasksConfirm: '确定要删除所有任务和消息吗？此操作无法撤销。',
+  dataClearTasksConfirm:
+    '即将删除所有对话与消息，包括云端备份（同步到你所有已登录的设备）。\n\n保留：登录态、设置偏好、Sage 学到的关于你的画像。\n\n此操作无法撤销，确定继续吗？',
   dataClearSettingsConfirm: '确定要将所有配置重置为默认值吗？此操作无法撤销。',
   dataClearAllConfirm:
     '确定要删除所有数据（包括任务、消息和设置）吗？此操作无法撤销。',

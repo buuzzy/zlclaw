@@ -292,15 +292,16 @@ export default {
   dataSuccess: 'Success',
   dataClearConfirmTitle: 'Clear Data',
   dataClearConfirmDescription: 'Choose what data you want to clear:',
-  dataClearTasksOnly: 'Clear Tasks Only',
-  dataClearTasksOnlyDescription: 'Delete all tasks and messages, keep settings',
+  dataClearTasksOnly: 'Clear Conversation History',
+  dataClearTasksOnlyDescription:
+    'Delete all conversations and messages (cloud + all signed-in devices). Keeps login, preferences, and the persona Sage learned about you.',
   dataClearSettingsOnly: 'Clear Settings Only',
   dataClearSettingsOnlyDescription:
     'Reset all settings to defaults, keep tasks',
   dataClearAll: 'Clear All Data',
   dataClearAllDescription: 'Delete all tasks, messages, and settings',
   dataClearTasksConfirm:
-    'Are you sure you want to delete all tasks and messages? This action cannot be undone.',
+    'You are about to permanently delete all conversations and messages, including the cloud backup (this propagates to every device you are signed in on).\n\nKept: login session, preferences, and the persona Sage learned about you.\n\nThis cannot be undone. Continue?',
   dataClearSettingsConfirm:
     'Are you sure you want to reset all settings to defaults? This action cannot be undone.',
   dataClearAllConfirm:

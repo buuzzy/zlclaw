@@ -22,6 +22,7 @@ import { getUserSessionsDir } from '@/shared/lib/user-scoped-paths';
 import { getCurrentBoundUid } from '@/shared/db/database';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
+import { clearCloudConversations } from '@/shared/sync';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -211,27 +212,26 @@ export function DataSettings() {
         // Clear settings only
         await clearAllSettings();
       } else if (type === 'tasks') {
-        // Clear workspace files first
+        // 「清空会话历史」：云端 messages/tasks + 本地 SQLite/IDB + 工作区文件。
+        // 不动 persona_memory / settings / auth session / profile。
+        // 先清云端：失败则保留本地不删，避免出现"本地空了云端没空"的不一致。
+        await clearCloudConversations();
         await clearWorkspaceFiles();
-
-        // Get all tasks and delete them with their messages
         const tasks = await getAllTasks();
         for (const task of tasks) {
           await deleteMessagesByTaskId(task.id);
           await deleteTask(task.id);
         }
       } else if (type === 'all') {
-        // Clear workspace files first
+        // 「清空所有数据」：含会话 + 设置；同样不动 auth session / persona_memory。
+        // 先清云端会话，再清本地，最后清设置。
+        await clearCloudConversations();
         await clearWorkspaceFiles();
-
-        // Get all tasks and delete them with their messages
         const tasks = await getAllTasks();
         for (const task of tasks) {
           await deleteMessagesByTaskId(task.id);
           await deleteTask(task.id);
         }
-
-        // Clear settings
         await clearAllSettings();
       }
 
