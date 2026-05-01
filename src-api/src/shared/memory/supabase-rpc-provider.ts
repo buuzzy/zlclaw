@@ -62,6 +62,19 @@ export class SupabaseRpcMemoryProvider implements MemoryProvider {
         ? Math.floor(options.daysBack)
         : null;
 
+    const timeStart =
+      typeof options.timeStart === 'string' && options.timeStart.length > 0
+        ? options.timeStart
+        : null;
+    const timeEnd =
+      typeof options.timeEnd === 'string' && options.timeEnd.length > 0
+        ? options.timeEnd
+        : null;
+    const roleFilter =
+      options.roleFilter && options.roleFilter !== 'all'
+        ? options.roleFilter
+        : null;
+
     const client = ctx.accessToken
       ? createUserScopedSupabase(ctx.accessToken)
       : getServiceSupabase();
@@ -71,6 +84,9 @@ export class SupabaseRpcMemoryProvider implements MemoryProvider {
       user_id_filter: ctx.userId,
       limit_n: limit,
       days_back: daysBack,
+      time_start: timeStart,
+      time_end: timeEnd,
+      role_filter: roleFilter,
     });
 
     if (error) {

@@ -11,6 +11,7 @@ import {
   feishuRoutes,
   filesRoutes,
   healthRoutes,
+  internalDistillRoutes,
   mcpRoutes,
   mcpMemoryRoutes,
   previewRoutes,
@@ -69,6 +70,7 @@ app.route('/channels/wechat', wechatRoutes);
 app.route('/channels/feishu', feishuRoutes);
 app.route('/skills', skillsRoutes);
 app.route('/cron', cronRoutes);
+app.route('/internal', internalDistillRoutes);
 app.route('/v1', completionsRoutes);
 
 // OAuth callback landing page — browser redirects here after Google/GitHub auth.
@@ -299,6 +301,11 @@ async function start() {
   const { initScheduler } = await import('@/shared/cron/scheduler');
   initScheduler();
   console.log('⏰ Cron scheduler initialized');
+
+  // Phase 3: register background jobs (persona distill cron) - only on Railway
+  // gated by SAGE_ENABLE_BACKGROUND_JOBS=true to avoid running on desktop sidecars.
+  const { registerBackgroundJobs } = await import('@/jobs/scheduler');
+  registerBackgroundJobs();
 
   console.log(`🚀 Server starting on http://localhost:${port}`);
 

@@ -27,6 +27,7 @@ import { DataSettings } from './tabs/DataSettings';
 import { GeneralSettings } from './tabs/GeneralSettings';
 import { MCPSettings } from './tabs/MCPSettings';
 import { ModelSettings } from './tabs/ModelSettings';
+import { PersonaSettings } from './tabs/PersonaSettings';
 import { SkillsSettings } from './tabs/SkillsSettings';
 import { WorkplaceSettings } from './tabs/WorkplaceSettings';
 import type { SettingsCategory } from './types';
@@ -85,6 +86,7 @@ export function SettingsModal({
     'skills',
     'connector',
     'cron',
+    'persona',
     'data',
     'about',
   ];
@@ -228,6 +230,8 @@ export function SettingsModal({
               {activeCategory === 'connector' && <ConnectorSettings />}
 
               {activeCategory === 'cron' && <CronSettings />}
+
+              {activeCategory === 'persona' && <PersonaSettings />}
 
               {activeCategory === 'data' && <DataSettings />}
 

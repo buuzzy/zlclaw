@@ -15,6 +15,7 @@ export type SettingsCategory =
   | 'skills'
   | 'connector'
   | 'cron'
+  | 'persona'
   | 'data'
   | 'about';
 

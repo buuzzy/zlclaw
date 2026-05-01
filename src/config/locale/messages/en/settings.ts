@@ -10,6 +10,7 @@ export default {
   mcp: 'MCP',
   connector: 'Channels',
   cron: 'Cron Jobs',
+  persona: 'Persona',
   about: 'About',
 
   // Account

@@ -10,6 +10,7 @@ export default {
   mcp: 'MCP',
   connector: '渠道',
   cron: '定时任务',
+  persona: '画像',
   about: '关于',
 
   // Account
