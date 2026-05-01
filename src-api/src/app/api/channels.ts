@@ -13,6 +13,7 @@ import { Hono } from 'hono';
 import { getChannelManager } from '@/core/channel';
 import { getMessageTraces } from '@/core/channel/manager';
 import {
+  deleteAllConversations,
   deleteConversation,
   getAllChannelConversations,
   getUnsyncedConversations,
@@ -119,6 +120,14 @@ channelRoutes.get('/conversations/debug', (c) => {
 channelRoutes.post('/conversations/synced', async (c) => {
   const body = await c.req.json<{ ids: string[] }>();
   const count = markSynced(body.ids || []);
+  return c.json({ ok: true, count });
+});
+
+// IMPORTANT: register `/conversations/all` BEFORE `/conversations/:id`,
+// otherwise Hono's `:id` would greedily match `id="all"` and leak the
+// batch path through the single-delete handler.
+channelRoutes.delete('/conversations/all', (c) => {
+  const count = deleteAllConversations();
   return c.json({ ok: true, count });
 });
 

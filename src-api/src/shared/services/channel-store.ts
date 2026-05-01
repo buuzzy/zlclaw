@@ -247,6 +247,26 @@ export function deleteConversation(id: string): boolean {
   return true;
 }
 
+/**
+ * Delete ALL channel conversations from the store.
+ *
+ * Used when user clears conversation history from the desktop UI:
+ * the in-memory channel store would otherwise be re-polled by
+ * `useChannelSync` (every 3s) and re-create local tasks for any
+ * conversations still living in sidecar memory — even after the user
+ * just deleted them. Returns the count of removed conversations.
+ */
+export function deleteAllConversations(): number {
+  const count = conversations.size;
+  conversations.clear();
+  activeConvByChannel.clear();
+  if (count > 0) {
+    schedulePersist();
+    console.log(`[ChannelStore] Deleted ALL ${count} conversations`);
+  }
+  return count;
+}
+
 export function markSynced(ids: string[]): number {
   let count = 0;
   for (const id of ids) {

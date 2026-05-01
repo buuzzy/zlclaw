@@ -47,18 +47,21 @@ const TOOLS = [
       '  · 用户问的是最近几轮对话内容 → 已在预注入的 recent_threads，直接回答\n' +
       '  · 行情/新闻/数据查询（用对应金融技能，不查历史）\n' +
       '  · 闲聊或公共常识\n\n' +
+      '## 🎯 关键词速查表（决定要带哪些过滤参数）\n' +
+      '调用时**必须**根据用户问句的关键词带上对应过滤参数，否则召回精度会大幅下降。\n\n' +
+      '| 用户问句出现 | 必带参数 |\n' +
+      '|---|---|\n' +
+      '| "我**之前/以前**问过/说过/发给你的/告诉过你的 X" | `role_filter: "user"` |\n' +
+      '| "**你**之前/以前回复/说过/给我的/给的清单是什么" | `role_filter: "assistant"` |\n' +
+      '| "**上周**/这周/最近一周" | `days_back: 7` |\n' +
+      '| "**上个月**/这个月/近一个月" | `days_back: 30` |\n' +
+      '| "**3月份**/4月初/某月某日"等具体日期 | `time_start` + `time_end`（ISO 格式）|\n\n' +
+      '示例：用户问「我之前发给你的研报链接还能找到吗？」→ 必填 `role_filter: "user"`\n' +
+      '示例：用户问「上周聊比亚迪你怎么说的？」→ `days_back: 7` + `role_filter: "assistant"`\n\n' +
       '## query 参数提取要点\n' +
       '  · pgroonga 做中文分词，给 2-6 个核心实词最佳；不要把整句原话当 query\n' +
       '  · 含指代时（"那只"），用上下文推断真正实词（如「比亚迪」）\n' +
       '  · 多个候选时优先最具识别度的（公司名 > 行业 > 通用词）\n\n' +
-      '## time_range 使用\n' +
-      '  · 用户说「3月份」→ time_start: "2026-03-01", time_end: "2026-03-31"\n' +
-      '  · 用户说「5月10日当天」→ time_start: "2026-05-10", time_end: "2026-05-10"\n' +
-      '  · 没明确时间不要传\n\n' +
-      '## role_filter 使用\n' +
-      '  · 用户问「我之前问过 X 吗」→ "user"（仅看用户当时的提问）\n' +
-      '  · 用户问「你之前怎么说的」/「你给的清单是什么」→ "assistant"（仅看 agent 回答）\n' +
-      '  · 不确定时不传（默认 all）\n\n' +
       '## 返回处理\n' +
       '  · 命中：按相关度+时间倒序的 message 列表，每条带 created_at（已转上海时间）+ role + 原文\n' +
       '  · 空召回：告诉模型「该用户没有相关历史」，正常回复即可\n' +
@@ -80,28 +83,30 @@ const TOOLS = [
         days_back: {
           type: 'number',
           description:
-            '时间窗口（天，简易模式）。不传则搜索全部历史。' +
-            '更精确的时间用 time_start / time_end。',
+            '相对时间窗口（天）。**用户说"上周"=7、"上个月"=30、"近三天"=3 时填本字段**，' +
+            '不要再填 time_start/time_end。具体日期才用 time_start/time_end。',
         },
         time_start: {
           type: 'string',
           description:
-            'ISO 时间戳（YYYY-MM-DD 或 YYYY-MM-DDTHH:mm:ssZ），开始时间（含）。' +
-            '用户提具体日期/月份时填。',
+            'ISO 时间戳（YYYY-MM-DD），绝对开始时间（含）。' +
+            '**仅当用户提具体日期/月份**（如"3月份"、"5月10日"）时使用；' +
+            '"上周"等相对时间用 days_back。',
         },
         time_end: {
           type: 'string',
           description:
-            'ISO 时间戳，结束时间（含）。与 time_start 配套使用。',
+            'ISO 时间戳（YYYY-MM-DD），绝对结束时间（含）。与 time_start 配套使用。' +
+            '用户说"3月份"→ time_start="2026-03-01"、time_end="2026-03-31"。',
         },
         role_filter: {
           type: 'string',
           enum: ['user', 'assistant', 'all'],
           description:
-            '角色筛选：' +
-            'user = 仅用户当时的提问；' +
-            'assistant = 仅 agent 当时的回答；' +
-            'all = 不筛（默认）',
+            '角色筛选——根据用户问句关键词决定，不要省略：\n' +
+            '  · "我之前问过/说过/发给你的/告诉你过 X" → **必填 "user"**\n' +
+            '  · "你之前回复/说过/给的清单是什么" → **必填 "assistant"**\n' +
+            '  · 既不指明 user 也不指明 agent 才用 "all"',
           default: 'all',
         },
       },

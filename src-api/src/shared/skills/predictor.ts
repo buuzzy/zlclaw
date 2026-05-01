@@ -1,14 +1,26 @@
 /**
- * Intent Predictor — Dynamic Skill Registry
+ * Skill Registry — Static Full-Set Injection
  *
- * Analyzes the user's prompt against each skill's `whenToUse` keywords
- * and refreshes the SDK skill registry with only the relevant skills
- * before each query turn.
+ * v1.3.1: switched from dynamic-subset to **static-full-set** registration.
  *
- * Token budget:
- *   - All skills registered (cold start): ~15 × 40 chars ≈ 600 chars (~150 tokens)
- *   - Dynamic (1-3 matched skills): ~3 × 40 chars ≈ 120 chars (~30 tokens)
- *   - Fallback cold-start set: 3 baseline skills injected when nothing matches
+ * Why the change:
+ *   The SDK's skill registry (`skills.set()` in
+ *   `@codeany/open-agent-sdk/dist/skills/registry.js`) is a **module-level
+ *   singleton**. Under concurrent requests, dynamically `clearSkills()` +
+ *   register-N caused cross-request leakage: request A would render
+ *   "Available skills: [X, Y]" in its system prompt, decide to invoke Y,
+ *   then by the time the Skill tool actually executed, request B had
+ *   replaced the registry with [Z, W] — A's invocation hit `getSkill(Y) →
+ *   undefined` and erroneously reported "Unknown skill" with B's list.
+ *
+ * Trade-off:
+ *   System prompt grows from ~150 tokens (3 selected) to ~850 tokens
+ *   (~17 skills × 50 chars). Acceptable because:
+ *     · Eliminates the entire class of concurrent-mutation bugs.
+ *     · Improves model selection accuracy (sees full skill list, not a
+ *       keyword-filtered subset that often misses the right tool).
+ *     · Makes `refreshSkillsForPrompt()` idempotent — same registry
+ *       state regardless of call order or interleaving.
  */
 
 import {
@@ -42,17 +54,6 @@ let cachedSkills: CachedSkill[] = [];
 
 /** Whether the cache has been populated */
 let cacheReady = false;
-
-/**
- * Cold-start skills: always include these when nothing else matches.
- * Covers the three most frequently needed domains so the model always
- * has useful tools on turn 1 even with an ambiguous prompt.
- */
-const COLD_START_SKILL_NAMES = [
-  '行情数据查询',  // stock quote — most common query type
-  '新闻搜索',      // news search — second most common
-  'westock-quote', // quote snapshot — covers price/chart intent
-];
 
 // ============================================================================
 // Cache population
@@ -102,95 +103,74 @@ export async function loadAndCacheSkills(force = false): Promise<void> {
 }
 
 // ============================================================================
-// Scoring
-// ============================================================================
-
-/**
- * Score a skill against a prompt.
- * Returns an integer hit count (0 = no match).
- */
-function scoreSkill(skill: CachedSkill, normalizedPrompt: string): number {
-  let score = 0;
-  for (const kw of skill.whenToUseKeywords) {
-    if (normalizedPrompt.includes(kw)) {
-      score += 1;
-    }
-  }
-  return score;
-}
-
-/**
- * Select skills relevant to the given prompt.
- *
- * Strategy:
- * 1. Score every skill by keyword overlap with the prompt.
- * 2. Return all skills with score > 0, sorted by score descending, capped at `maxSkills`.
- * 3. If nothing matches, return the cold-start baseline set.
- */
-function selectRelevantSkills(
-  prompt: string,
-  maxSkills = 5
-): CachedSkill[] {
-  const normalized = prompt.toLowerCase();
-
-  const scored = cachedSkills
-    .map((skill) => ({ skill, score: scoreSkill(skill, normalized) }))
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxSkills)
-    .map(({ skill }) => skill);
-
-  if (scored.length > 0) {
-    return scored;
-  }
-
-  // No matches — return cold-start baseline
-  const baseline = COLD_START_SKILL_NAMES
-    .map((name) => cachedSkills.find((s) => s.name === name))
-    .filter((s): s is CachedSkill => s !== undefined);
-
-  // If cold-start names aren't available (e.g., different skill set), return first 3
-  return baseline.length > 0 ? baseline : cachedSkills.slice(0, 3);
-}
-
-// ============================================================================
 // SDK registry refresh
 // ============================================================================
 
 /**
- * Re-register the SDK skill registry with only the skills relevant to `prompt`.
+ * Track whether the registry has already been populated with the full
+ * skill set. Once true, subsequent calls to `refreshSkillsForPrompt`
+ * are no-ops — avoids unnecessary `clearSkills()`/re-register churn
+ * that could leak between concurrent requests.
+ */
+let registryPopulated = false;
+
+/**
+ * Populate the SDK skill registry with **all** cached user-invocable skills.
  *
- * Call this immediately before each `query()` invocation.
- * Thread-safety note: this function is synchronous after the async loadAndCacheSkills()
- * setup — safe for single-threaded Node.js event loop.
+ * This used to be a dynamic per-prompt selector that registered a small
+ * subset; see file-level docstring for why we now register the full set.
+ *
+ * Call this immediately before each `query()` invocation. After the first
+ * successful registration the function becomes a no-op, since the registry
+ * state is already what we want for every prompt.
  */
 export async function refreshSkillsForPrompt(prompt: string): Promise<void> {
-  // Ensure cache is ready (no-op after first call)
   await loadAndCacheSkills();
 
   if (cachedSkills.length === 0) return;
 
-  const selected = selectRelevantSkills(prompt);
+  if (registryPopulated) return;
 
-  // Swap out the registry
+  // First-time registration. We still call clearSkills() to evict any
+  // SDK-bundled skills (`simplify`, `commit`, `review`, …) that may have
+  // been auto-registered by other code paths — those are dev-tooling
+  // skills irrelevant to the financial-assistant use case.
   clearSkills();
 
-  for (const skill of selected) {
+  for (const skill of cachedSkills) {
     registerSkill({
       name: skill.name,
       description: skill.description,
       whenToUse: skill.whenToUse,
       argumentHint: skill.argumentHint,
       userInvocable: true,
-      allowedTools: ['Bash', 'Read', 'Write', 'Grep', 'Glob', 'WebFetch', 'WebSearch'],
+      allowedTools: [
+        'Bash',
+        'Read',
+        'Write',
+        'Grep',
+        'Glob',
+        'WebFetch',
+        'WebSearch',
+      ],
       getPrompt: skill.getPrompt,
     });
   }
 
-  const names = selected.map((s) => s.name).join(', ');
+  registryPopulated = true;
+
   console.log(
-    `[Skills/Predictor] Injected ${selected.length}/${cachedSkills.length} skill(s) for prompt: "${prompt.slice(0, 60)}..." → [${names}]`
+    `[Skills/Predictor] Registered all ${cachedSkills.length} skill(s) (static full-set mode). First prompt: "${prompt.slice(0, 60)}..."`
   );
+}
+
+/**
+ * Force a re-population on the next `refreshSkillsForPrompt` call.
+ * Useful when skills config changes at runtime (e.g. user toggles
+ * a skill on/off).
+ */
+export function invalidateSkillRegistry(): void {
+  registryPopulated = false;
 }
 
 /**

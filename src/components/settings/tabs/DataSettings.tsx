@@ -3,6 +3,7 @@
  */
 
 import { useState } from 'react';
+import { API_BASE_URL } from '@/config';
 import {
   deleteMessagesByTaskId,
   deleteTask,
@@ -169,6 +170,49 @@ export function DataSettings() {
     }
   };
 
+  // Clear sidecar's in-memory channel conversation store.
+  //
+  // Without this, `useChannelSync` (polling every 3s) would re-fetch any
+  // channel-originated conversation still living in the sidecar's memory
+  // *after* the user wiped local DB — re-creating tasks for the very
+  // messages we just deleted. Especially noticeable for the most recent
+  // user message, since it sits at the top of the polling response.
+  // Best-effort: never throw, never block the rest of the cleanup chain.
+  const clearSidecarChannels = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/channels/conversations/all`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        console.warn(
+          '[DataSettings] Sidecar channel clear non-OK:',
+          res.status
+        );
+      } else {
+        const body = (await res.json().catch(() => null)) as {
+          ok?: boolean;
+          count?: number;
+        } | null;
+        console.log(
+          '[DataSettings] Cleared sidecar channels:',
+          body?.count ?? 0
+        );
+      }
+    } catch (err) {
+      console.warn('[DataSettings] Failed to clear sidecar channels:', err);
+    }
+
+    // Also drop the local "tombstone" set used by useChannelSync — it tracks
+    // IDs the user previously deleted to suppress re-creation. After a full
+    // wipe the set is no longer needed and risks growing unboundedly across
+    // the user's lifetime.
+    try {
+      localStorage.removeItem('channelSync:deletedIds');
+    } catch {
+      /* ignore */
+    }
+  };
+
   // Clear workspace files (sessions directory for the CURRENT user only).
   //
   // M1 隔离后 sessions 目录按账号独立：`~/.sage/users/{uid}/sessions`。
@@ -212,9 +256,12 @@ export function DataSettings() {
         // Clear settings only
         await clearAllSettings();
       } else if (type === 'tasks') {
-        // 「清空会话历史」：云端 messages/tasks + 本地 SQLite/IDB + 工作区文件。
+        // 「清空会话历史」：云端 messages/tasks + 本地 SQLite/IDB + 工作区文件 +
+        // sidecar 内存中的 channel store。
         // 不动 persona_memory / settings / auth session / profile。
+        // 先清 sidecar channel store：否则 useChannelSync poll 会把它拉回来重建 task。
         // 先清云端：失败则保留本地不删，避免出现"本地空了云端没空"的不一致。
+        await clearSidecarChannels();
         await clearCloudConversations();
         await clearWorkspaceFiles();
         const tasks = await getAllTasks();
@@ -224,7 +271,8 @@ export function DataSettings() {
         }
       } else if (type === 'all') {
         // 「清空所有数据」：含会话 + 设置；同样不动 auth session / persona_memory。
-        // 先清云端会话，再清本地，最后清设置。
+        // 先清 sidecar channel store + 云端会话，再清本地，最后清设置。
+        await clearSidecarChannels();
         await clearCloudConversations();
         await clearWorkspaceFiles();
         const tasks = await getAllTasks();

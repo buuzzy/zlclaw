@@ -289,11 +289,11 @@ export function PersonaSettings() {
           </div>
         ) : (
           <div className="space-y-3">
-            {hardRules.length > 0 && (
-              <div>
-                <div className="mb-1.5 text-xs font-medium text-muted-foreground">
-                  {lang === 'zh' ? '硬规则' : 'Hard rules'}
-                </div>
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-muted-foreground">
+                {lang === 'zh' ? '硬规则' : 'Hard rules'}
+              </div>
+              {hardRules.length > 0 ? (
                 <ul className="space-y-1">
                   {hardRules.map((r: HardRule) => (
                     <li
@@ -312,14 +312,20 @@ export function PersonaSettings() {
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
-
-            {declared.length > 0 && (
-              <div>
-                <div className="mb-1.5 text-xs font-medium text-muted-foreground">
-                  {lang === 'zh' ? '主动关注' : 'Focused on'}
+              ) : (
+                <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                  {lang === 'zh'
+                    ? '暂无硬规则'
+                    : 'No hard rules yet'}
                 </div>
+              )}
+            </div>
+
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-muted-foreground">
+                {lang === 'zh' ? '主动关注' : 'Focused on'}
+              </div>
+              {declared.length > 0 ? (
                 <ul className="space-y-1">
                   {declared.map((d: FocusUniverseDeclared, idx) => (
                     <li
@@ -345,14 +351,20 @@ export function PersonaSettings() {
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
-
-            {exclusions.length > 0 && (
-              <div>
-                <div className="mb-1.5 text-xs font-medium text-muted-foreground">
-                  {lang === 'zh' ? '主动排除' : 'Excluded from focus'}
+              ) : (
+                <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                  {lang === 'zh'
+                    ? '暂无主动关注的对象'
+                    : 'No declared focus yet'}
                 </div>
+              )}
+            </div>
+
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-muted-foreground">
+                {lang === 'zh' ? '主动排除' : 'Excluded from focus'}
+              </div>
+              {exclusions.length > 0 ? (
                 <ul className="space-y-1">
                   {exclusions.map((e: FocusUniverseExclusion, idx) => (
                     <li
@@ -371,8 +383,14 @@ export function PersonaSettings() {
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
+              ) : (
+                <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                  {lang === 'zh'
+                    ? '暂无主动排除的对象'
+                    : 'No exclusions yet'}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </section>
@@ -423,6 +441,14 @@ export function PersonaSettings() {
                     {capLabels[profile.implicit.capability_level] ??
                       profile.implicit.capability_level}
                   </div>
+                </div>
+              )}
+              {prefs.language && (
+                <div>
+                  <div className="text-xs text-muted-foreground">
+                    {lang === 'zh' ? '语言偏好' : 'Language preference'}
+                  </div>
+                  <div className="text-sm">{prefs.language}</div>
                 </div>
               )}
               {prefs.explanation_style && (
