@@ -32,39 +32,47 @@ const TOOLS = [
   {
     name: 'search_memory',
     description:
-      '检索本用户与 Sage 在任意设备、任意时间的历史对话原文。\n' +
-      '本工具是你访问长期记忆的唯一通道——当前对话之外的一切，必须通过它取回。\n\n' +
-      '## 何时应当调用\n' +
-      '原则：在生成回复之前，先问自己「如果我有过这个用户的完整对话档案，里面是否会有对当前回复有帮助的内容？」\n' +
-      '若答案不是明确的「否」，就先调一次。空召回成本极低（一次 RPC，~50ms），错过相关历史的成本很高（用户感觉你不记得他）。\n\n' +
-      '典型符合的场景：\n' +
-      '  · 用户提到具体标的（公司名/股票代码/基金/指数），可能他之前讨论过\n' +
-      '  · 用户使用指代或省略（"那只"、"上次说的"、"还记得吗"、"我之前是不是…"）\n' +
-      '  · 用户的提问暗示存在偏好或规则（"按我惯常的风格"、"和我之前的策略对齐"）\n' +
-      '  · 用户语气透露情绪转折（焦虑/犹豫/重新评估），可能延续此前讨论\n' +
-      '  · 用户问跨时间的对比或追踪（"涨了多少"、"现在怎么样"，但没说参照点）\n\n' +
-      '## 何时不应调用\n' +
-      '  · 纯实时数据查询（行情、新闻、宏观数据）——用对应的金融技能\n' +
-      '  · 用户当前消息已自带完整上下文，无任何历史指代\n' +
-      '  · 用户问的是公共常识、闲聊、与个人历史无关的客观知识\n\n' +
-      '## 返回结果如何使用\n' +
-      '  · 命中：按相关度+时间倒序排列的 message 列表，每条带 created_at（已转上海时间）和原文\n' +
-      '  · 空召回：明确告诉模型「该用户没有相关历史」——这本身就是有价值的信号，正常回复即可\n' +
-      '  · 不要在回复中说「我刚才检索了记忆…」之类的过程描述，自然引用即可（"你之前提到 X…"）',
+      '检索本用户在 Sage 上的历史对话原文（长尾档案查询，非常规召回工具）。\n\n' +
+      '## ⚠️ 你已经认识这位用户\n' +
+      '系统在每次对话开始前，已经把用户画像（硬规则、偏好、关注标的）和\n' +
+      '最近 20 个对话回合预注入进了你的 system prompt。绝大多数问题应当直接\n' +
+      '基于预注入回答，不要调本工具。\n\n' +
+      '## 应当调用的场景\n' +
+      '只在以下情形调用——用户在「主动追问」具体历史细节：\n' +
+      '  · 用户要求查找具体历史原文（"我之前对比亚迪怎么看的？"、"那篇研报链接是什么"）\n' +
+      '  · 用户提到的事件/标的明显在 20 个回合之外（"3月份"、"我去年清仓的那只票"）\n' +
+      '  · 用户索取 agent 当时给出的具体内容（清单、地址、观点原文）\n\n' +
+      '## 不应调用的场景\n' +
+      '  · 用户问的是已在 persona 中的规则/偏好（"我设定过几条投资原则吗"）→ 直接基于预注入回答\n' +
+      '  · 用户问的是最近几轮对话内容 → 已在预注入的 recent_threads，直接回答\n' +
+      '  · 行情/新闻/数据查询（用对应金融技能，不查历史）\n' +
+      '  · 闲聊或公共常识\n\n' +
+      '## query 参数提取要点\n' +
+      '  · pgroonga 做中文分词，给 2-6 个核心实词最佳；不要把整句原话当 query\n' +
+      '  · 含指代时（"那只"），用上下文推断真正实词（如「比亚迪」）\n' +
+      '  · 多个候选时优先最具识别度的（公司名 > 行业 > 通用词）\n\n' +
+      '## time_range 使用\n' +
+      '  · 用户说「3月份」→ time_start: "2026-03-01", time_end: "2026-03-31"\n' +
+      '  · 用户说「5月10日当天」→ time_start: "2026-05-10", time_end: "2026-05-10"\n' +
+      '  · 没明确时间不要传\n\n' +
+      '## role_filter 使用\n' +
+      '  · 用户问「我之前问过 X 吗」→ "user"（仅看用户当时的提问）\n' +
+      '  · 用户问「你之前怎么说的」/「你给的清单是什么」→ "assistant"（仅看 agent 回答）\n' +
+      '  · 不确定时不传（默认 all）\n\n' +
+      '## 返回处理\n' +
+      '  · 命中：按相关度+时间倒序的 message 列表，每条带 created_at（已转上海时间）+ role + 原文\n' +
+      '  · 空召回：告诉模型「该用户没有相关历史」，正常回复即可\n' +
+      '  · 自然引用即可（"你之前提到 X…"），不要描述检索过程',
     inputSchema: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description:
-            '搜索关键词。pgroonga 会做中文分词，给 2-6 个核心实词最佳。\n' +
-            '· 直接拿用户原话当 query 通常不准（含太多虚词），先抽核心实词\n' +
-            '· 含指代时（"那只"），用上下文推断真正的实词（"茅台"）作为 query\n' +
-            '· 多个候选时优先选最具识别度的（公司名 > 行业 > 通用词）',
+          description: '搜索关键词。2-6 个核心实词最佳。',
         },
         limit: {
           type: 'number',
-          description: '返回条数（默认 10，上限 50）。一般 10 足够，特别需要全景时可调到 30-50。',
+          description: '返回条数（默认 10，上限 50）',
           default: 10,
           minimum: 1,
           maximum: 50,
@@ -72,10 +80,29 @@ const TOOLS = [
         days_back: {
           type: 'number',
           description:
-            '时间窗口（天）。不传则搜索全部历史。\n' +
-            '· 用户说「最近」/「这两天」→ 7\n' +
-            '· 用户说「这个月」/「最近一个月」→ 30\n' +
-            '· 没有时间方位词时不要传，让全部历史参与排序',
+            '时间窗口（天，简易模式）。不传则搜索全部历史。' +
+            '更精确的时间用 time_start / time_end。',
+        },
+        time_start: {
+          type: 'string',
+          description:
+            'ISO 时间戳（YYYY-MM-DD 或 YYYY-MM-DDTHH:mm:ssZ），开始时间（含）。' +
+            '用户提具体日期/月份时填。',
+        },
+        time_end: {
+          type: 'string',
+          description:
+            'ISO 时间戳，结束时间（含）。与 time_start 配套使用。',
+        },
+        role_filter: {
+          type: 'string',
+          enum: ['user', 'assistant', 'all'],
+          description:
+            '角色筛选：' +
+            'user = 仅用户当时的提问；' +
+            'assistant = 仅 agent 当时的回答；' +
+            'all = 不筛（默认）',
+          default: 'all',
         },
       },
       required: ['query'],
@@ -124,6 +151,9 @@ interface SearchMemoryArgs {
   query?: unknown;
   limit?: unknown;
   days_back?: unknown;
+  time_start?: unknown;
+  time_end?: unknown;
+  role_filter?: unknown;
 }
 
 async function callSearchMemory(
@@ -146,11 +176,28 @@ async function callSearchMemory(
       ? Math.floor(args.days_back)
       : null;
 
+  const timeStart =
+    typeof args.time_start === 'string' && args.time_start.length > 0
+      ? args.time_start
+      : null;
+  const timeEnd =
+    typeof args.time_end === 'string' && args.time_end.length > 0
+      ? args.time_end
+      : null;
+  const rawRoleFilter =
+    typeof args.role_filter === 'string'
+      ? args.role_filter.toLowerCase().trim()
+      : '';
+  const roleFilter: 'user' | 'assistant' | 'all' | null =
+    rawRoleFilter === 'user' || rawRoleFilter === 'assistant'
+      ? rawRoleFilter
+      : null;
+
   const provider = getMemoryProvider();
   const rows = await provider.search(
     query,
     { userId, accessToken },
-    { limit, daysBack }
+    { limit, daysBack, timeStart, timeEnd, roleFilter }
   );
 
   if (rows.length === 0) {

@@ -25,6 +25,12 @@ export interface MemoryRecord {
 export interface SearchOptions {
   limit?: number;
   daysBack?: number | null;
+  /** ISO timestamp，开始时间（含） */
+  timeStart?: string | null;
+  /** ISO timestamp，结束时间（含） */
+  timeEnd?: string | null;
+  /** 角色筛选：'user' | 'assistant' | 'all'。'all' / null = 不筛 */
+  roleFilter?: 'user' | 'assistant' | 'all' | null;
 }
 
 export interface MemoryRequestContext {

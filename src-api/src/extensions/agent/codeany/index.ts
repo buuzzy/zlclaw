@@ -48,6 +48,8 @@ import {
 import { getSageSystemPrompt } from '@/config/prompt-loader';
 import { loadMcpServers, type McpServerConfig } from '@/shared/mcp/loader';
 import { isSupabaseConfigured } from '@/shared/supabase/client';
+
+import { buildPersonaSection } from './persona-injector';
 import { createLogger, LOG_FILE_PATH } from '@/shared/utils/logger';
 import { stripHashSuffix } from '@/shared/utils/url';
 
@@ -1163,11 +1165,16 @@ export class CodeAnyAgent extends BaseAgent {
     const contextSessionId = options?.taskId || session.id;
     const conversationContext = await this.buildConversationContext(contextSessionId, options?.conversation);
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
-    const sageSystemPrompt = await getSageSystemPrompt();
+    const baseSageSystemPrompt = await getSageSystemPrompt();
+    // Phase 3: prepend「身份记忆」 — persona snapshot + recent_threads。
+    // Agent 不再决策「要不要召回历史」，每次对话开始就已经认识用户。
+    const personaSection = await buildPersonaSection(options?.userId, options?.accessToken);
+    const sageSystemPrompt = personaSection
+      ? baseSageSystemPrompt + '\n' + personaSection
+      : baseSageSystemPrompt;
 
-    // System prompt = dateContext + SOUL.md + AGENTS.md only (Phase 2 重构后).
-    // Historical recall is exclusively via mcp__memory__search_memory tool, not
-    // injected here. Workspace/conversation/language context stays in text prompt.
+    // System prompt = dateContext + SOUL.md + AGENTS.md + persona snapshot + recent_threads.
+    // 长尾历史档案（>20 回合）仍由 mcp__memory__search_memory 工具按需取。
     const textPrompt = getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext + languageInstruction + prompt;
 
     // Build the final prompt: always a string (images referenced by file path)
@@ -1269,7 +1276,11 @@ export class CodeAnyAgent extends BaseAgent {
 
     const workspaceInstruction = `\n## CRITICAL: Output Directory\n**ALL files must be saved to: ${sessionCwd}**\n`;
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
-    const sageSystemPrompt = await getSageSystemPrompt();
+    const baseSageSystemPrompt = await getSageSystemPrompt();
+    const planPersonaSection = await buildPersonaSection(options?.userId, options?.accessToken);
+    const sageSystemPrompt = planPersonaSection
+      ? baseSageSystemPrompt + '\n' + planPersonaSection
+      : baseSageSystemPrompt;
     const planningPrompt = workspaceInstruction + PLANNING_INSTRUCTION + languageInstruction + prompt;
 
     let fullResponse = '';
@@ -1382,7 +1393,11 @@ export class CodeAnyAgent extends BaseAgent {
       ? { enabled: true, image: options.sandbox.image, apiEndpoint: options.sandbox.apiEndpoint || SANDBOX_API_URL }
       : undefined;
 
-    const sageSystemPrompt = await getSageSystemPrompt();
+    const baseSageSystemPrompt = await getSageSystemPrompt();
+    const execPersonaSection = await buildPersonaSection(options.userId, options.accessToken);
+    const sageSystemPrompt = execPersonaSection
+      ? baseSageSystemPrompt + '\n' + execPersonaSection
+      : baseSageSystemPrompt;
     const executionPrompt =
       formatPlanForExecution(plan, sessionCwd, sandboxOpts, options.language, options.originalPrompt) +
       '\n\nOriginal request: ' + options.originalPrompt;
