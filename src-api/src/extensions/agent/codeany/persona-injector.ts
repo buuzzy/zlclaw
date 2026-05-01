@@ -107,11 +107,15 @@ function renderProfile(profile: PersonaProfile): string {
   const lines: string[] = [];
 
   // ── 显式字段（用户主动声明区） ─────────────────────────────────────
+  // 注意：所有标题都刻意避开"硬规则"、"声明"、"排除"等技术术语，
+  // 因为这些字段最终会被 LLM 引用到回答里——用更口语化的过渡语，
+  // 让 LLM 更容易模仿出印象式语气（详见 SOUL.md 原则一）。
   const ex = profile.explicit;
   const explicitLines: string[] = [];
 
   if (ex.hard_rules && ex.hard_rules.length > 0) {
-    explicitLines.push('### 硬规则（用户明确表态过的不可违反项）');
+    explicitLines.push('用户曾明确立过这些规则——他自己定的底线，违反时你应该让他自己看见矛盾，而非替他做决定（参见 SOUL.md 原则二，教练模式）：');
+    explicitLines.push('');
     for (const r of ex.hard_rules) {
       explicitLines.push(`- ${r.content}`);
     }
@@ -119,8 +123,9 @@ function renderProfile(profile: PersonaProfile): string {
 
   const declared = ex.focus_universe?.declared ?? [];
   if (declared.length > 0) {
+    if (explicitLines.length > 0) explicitLines.push('');
+    explicitLines.push('用户主动告诉过你他在关注：');
     explicitLines.push('');
-    explicitLines.push('### 用户主动声明关注的对象');
     for (const d of declared) {
       const code = d.code ? `（${d.code}）` : '';
       explicitLines.push(`- ${d.name}${code}`);
@@ -129,15 +134,16 @@ function renderProfile(profile: PersonaProfile): string {
 
   const exclusions = ex.focus_universe?.exclusions ?? [];
   if (exclusions.length > 0) {
+    if (explicitLines.length > 0) explicitLines.push('');
+    explicitLines.push('用户主动告诉过你他不想碰的方向：');
     explicitLines.push('');
-    explicitLines.push('### 用户主动排除的对象');
     for (const e of exclusions) {
       explicitLines.push(`- ${e.value}`);
     }
   }
 
   if (explicitLines.length > 0) {
-    lines.push('## 用户的明确声明');
+    lines.push('## 用户曾经明确告诉过你的');
     lines.push('');
     lines.push(...explicitLines);
     lines.push('');
@@ -153,35 +159,36 @@ function renderProfile(profile: PersonaProfile): string {
     const items = top
       .map((a) => (a.code ? `${a.name}(${a.code})` : a.name))
       .join('、');
-    implicitLines.push(`- 近期对话中常聊到：${items}`);
+    implicitLines.push(`- 近期对话里他常聊到：${items}`);
   }
 
   if (im.risk_tolerance && RISK_LABELS[im.risk_tolerance]) {
-    implicitLines.push(`- 风险偏好：${RISK_LABELS[im.risk_tolerance]}`);
+    implicitLines.push(`- 你感觉他的风格偏${RISK_LABELS[im.risk_tolerance]}`);
   }
 
   if (im.capability_level && CAP_LABELS[im.capability_level]) {
-    implicitLines.push(`- 能力水平：${CAP_LABELS[im.capability_level]}`);
+    implicitLines.push(`- 他在金融上的水平大致是${CAP_LABELS[im.capability_level]}水平`);
   }
 
   const prefs = im.preferences ?? {};
   const prefBits: string[] = [];
+  if (prefs.language) prefBits.push(`语言偏好「${prefs.language}」`);
   if (prefs.explanation_style) prefBits.push(`解释风格偏好「${prefs.explanation_style}」`);
   if (prefs.response_length) prefBits.push(`回应详略偏好「${prefs.response_length}」`);
   if (prefBits.length > 0) {
-    implicitLines.push(`- 沟通偏好：${prefBits.join('；')}`);
+    implicitLines.push(`- 沟通上：${prefBits.join('；')}`);
   }
 
   const views = im.recent_views ?? [];
   if (views.length > 0) {
-    implicitLines.push('- 近期观点（用户当前持有的看法，可能会变）：');
+    implicitLines.push('- 你印象中他近期持有的观点（可能会变）：');
     for (const v of views.slice(0, 5)) {
       implicitLines.push(`    · 关于 ${v.topic}：${v.stance}`);
     }
   }
 
   if (implicitLines.length > 0) {
-    lines.push('## Sage 对你的观察（基于以往对话推断）');
+    lines.push('## 你对他的印象（从过去对话里慢慢形成的，不是档案）');
     lines.push('');
     lines.push(...implicitLines);
     lines.push('');
@@ -249,8 +256,25 @@ export async function buildPersonaSection(
       '在每次对话开始前已经预装载。基于这个本体回答用户当前的问题，',
       '让用户感觉到你认识他，而不是「刚刚查了一下他」。',
       '',
-      '若用户当前问题与以下任一条产生矛盾（例如违反硬规则），',
-      '把矛盾摆出来让他自己看见，而非替他做决定（这是教练，不是守门员）。',
+      '## 引用这些信息时的两条铁律（违反任何一条都会让用户出戏）',
+      '',
+      '**铁律 1 — 用印象式语言，不照搬术语。**',
+      '',
+      '✅ "印象里你提过不太碰高估值科技股…"  /  "记得你在跟踪宁德时代…"',
+      '❌ "根据你的硬规则…"  /  "你的 user profile 显示…"  /  "系统记录显示…"',
+      '',
+      '上面 markdown 块里的"用户曾明确立过这些规则"是给你看的元数据，',
+      '不是要让你原文搬到回答里。你引用它们时要说得像老朋友突然想起来，',
+      '而不是档案管理员翻档案。',
+      '',
+      '**铁律 2 — 用户当前行为违反硬规则时，反问动机而非阻挡决策。**',
+      '',
+      '✅ 教练："你想这么做没问题。但是你之前定过 X，现在想突破是怎么考虑的？"',
+      '❌ 守门员："你定过 X，所以不行。"',
+      '❌ 建议者："考虑到你的 X，建议你 Y。"',
+      '',
+      '决策权 100% 留给用户。把矛盾摆出来 = 帮他自我觉察；替他做决定 = 越权。',
+      '详见 SOUL.md「记忆使用的两条根本原则」。',
       '',
     ].join('\n');
 
