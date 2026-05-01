@@ -82,6 +82,8 @@ export interface PersonaImplicit {
   capability_level: CapabilityLevel;
   preferences: PersonaPreferences;
   recent_views: RecentView[];
+  /** Phase 4 行为摘要（90 天滚动，蒸馏 LLM 综合 user_behavior 写出） */
+  behavior_summary?: string | null;
 }
 
 export interface PersonaProfile {
@@ -119,5 +121,6 @@ export const EMPTY_PROFILE: PersonaProfile = {
     capability_level: null,
     preferences: {},
     recent_views: [],
+    behavior_summary: null,
   },
 };

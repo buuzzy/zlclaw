@@ -229,6 +229,7 @@ export function PersonaSettings() {
   const active = profile.implicit?.focus_universe?.active ?? [];
   const views = profile.implicit?.recent_views ?? [];
   const prefs = profile.implicit?.preferences ?? {};
+  const behaviorSummary = (profile.implicit?.behavior_summary ?? '').trim();
   const riskLabels = lang === 'zh' ? RISK_LABELS_ZH : RISK_LABELS_EN;
   const capLabels = lang === 'zh' ? CAP_LABELS_ZH : CAP_LABELS_EN;
 
@@ -239,7 +240,8 @@ export function PersonaSettings() {
     !profile.implicit?.risk_tolerance &&
     !profile.implicit?.capability_level &&
     Object.keys(prefs).length === 0 &&
-    views.length === 0;
+    views.length === 0 &&
+    !behaviorSummary;
 
   return (
     <div className="space-y-6">
@@ -491,6 +493,20 @@ export function PersonaSettings() {
                       ) : null}
                     </span>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Phase 4 / L4-light 行为摘要 */}
+            {behaviorSummary && (
+              <div>
+                <div className="mb-1.5 text-xs text-muted-foreground">
+                  {lang === 'zh'
+                    ? '最近这阵子整体印象（90 天行为聚合）'
+                    : 'Recent activity summary (90-day rollup)'}
+                </div>
+                <div className="rounded-md bg-muted/40 p-2.5 text-xs leading-relaxed">
+                  {behaviorSummary}
                 </div>
               </div>
             )}

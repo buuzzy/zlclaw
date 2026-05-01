@@ -98,6 +98,14 @@ async function processQueueRow(row: SyncQueueRow): Promise<void> {
     return;
   }
 
+  if (row.table_name === 'user_behavior' && row.operation === 'insert') {
+    // 行为日志用纯 INSERT（无 id 唯一约束 / 无去重需求；蒸馏 cron 自己负责
+    // 按 query_hash 聚合）
+    const { error } = await supabase.from('user_behavior').insert(payload);
+    if (error) throw error;
+    return;
+  }
+
   // 未知组合 → 标记为已完成（避免无限重试），但 log warn
   console.warn(
     `[messages-sync] unknown queue item: ${row.table_name}/${row.operation}, marking done`

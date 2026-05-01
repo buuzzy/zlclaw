@@ -3,6 +3,7 @@ import {
   getUserDbConnString,
 } from '@/shared/lib/user-scoped-paths';
 import { enqueueMessageInsert } from '@/shared/sync/messages-sync';
+import { enqueueUserBehavior } from '@/shared/sync/behavior-sync';
 import {
   markSessionDeleted,
   markSessionDirty,
@@ -973,6 +974,8 @@ export async function createMessage(
 
   // Phase 1: 火忘式双写，不阻塞当前调用
   enqueueMessageInsert(message);
+  // Phase 4 / L4-light: user message 同步打点到 user_behavior（非 user 自动跳过）
+  enqueueUserBehavior(message);
 
   // Mark parent session dirty (preview / message_count / updated_at 都可能变)
   try {

@@ -4,7 +4,11 @@
  * 设计意图：
  *   "会话历史"是隐私敏感度最高的一类数据（含具体投资讨论、金额、判断逻辑）；
  *   "用户偏好 / 分身画像 / 登录态"敏感度较低，不属于这次清除范围。
- *   因此本 helper 严格只动两张表：messages、tasks。
+ *   因此本 helper 严格只动三张表：messages、tasks、user_behavior。
+ *
+ *   user_behavior 也清：行为日志保留了 query_preview 明文，与 messages 同
+ *   等敏感（甚至更脱敏：只是 200 字摘要 + 标的 mention），用户清会话时
+ *   一并清掉是符合直觉的。
  *
  *   不动：
  *     - persona_memory（蒸馏画像，清掉 = 用户得重新训练分身）
@@ -67,6 +71,16 @@ export async function clearCloudConversations(): Promise<void> {
       .eq('user_id', uid);
     if (taskErr) {
       throw new Error(`删除云端 tasks 失败：${taskErr.message}`);
+    }
+
+    // 5. 删云端 user_behavior（与 messages 同等敏感，一并清掉）
+    const { error: behErr } = await supabase
+      .from('user_behavior')
+      .delete()
+      .eq('user_id', uid);
+    if (behErr) {
+      // user_behavior 是 v1.4.0 才上的，旧账号可能没有任何行；不致命
+      console.warn(`[cloud-cleanup] 删除 user_behavior 失败（忽略）：${behErr.message}`);
     }
   } finally {
     // 5. 重启 worker（即使中途失败也要恢复，否则后续新对话同步会停摆）

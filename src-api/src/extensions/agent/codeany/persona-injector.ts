@@ -187,6 +187,13 @@ function renderProfile(profile: PersonaProfile): string {
     }
   }
 
+  // Phase 4 / L4-light: 行为摘要——蒸馏 cron 从 90 天行为日志聚合的一段叙述
+  const behaviorSummary = (im.behavior_summary ?? '').trim();
+  if (behaviorSummary) {
+    implicitLines.push('- 你对他最近这阵子在做什么的整体印象：');
+    implicitLines.push(`    ${behaviorSummary}`);
+  }
+
   if (implicitLines.length > 0) {
     lines.push('## 你对他的印象（从过去对话里慢慢形成的，不是档案）');
     lines.push('');

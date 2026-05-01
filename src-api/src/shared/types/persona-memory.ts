@@ -99,6 +99,15 @@ export interface PersonaImplicit {
   capability_level: CapabilityLevel;
   preferences: PersonaPreferences;
   recent_views: RecentView[];
+  /**
+   * Phase 4 / L4-light 行为摘要：蒸馏 cron 从 user_behavior 表 90 天滚动
+   * 数据中聚合出的「最近这位用户在做什么」一段话。例如：
+   *   "最近 30 天高频问消费板块（茅台/泸州老窖），偶尔触科技（英伟达），
+   *    几乎不再问医药；周末提问频率明显高于工作日。"
+   * 由蒸馏 LLM 综合 behavior_stats 自然语言写出，最多 500 字。
+   * null = 数据不足或刚启用，不渲染到 system prompt。
+   */
+  behavior_summary?: string | null;
 }
 
 /** 完整 profile JSONB schema */
@@ -143,5 +152,6 @@ export const EMPTY_PROFILE: PersonaProfile = {
     capability_level: null,
     preferences: {},
     recent_views: [],
+    behavior_summary: null,
   },
 };
