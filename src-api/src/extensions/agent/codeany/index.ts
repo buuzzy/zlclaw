@@ -302,8 +302,21 @@ function transformForComponent(artifactType: string, meta: ToolOutputMetadata, p
         if (!Array.isArray(stocks) || stocks.length === 0) return null;
         const s = stocks[0];
         const d = s.data || {};
+        const code: string = s.code || '';
+        // 按 westock 代码前缀推断市场和货币：us → 美股 USD，hk → 港股 HKD，
+        // 其余（sh/sz）默认 A 股 CNY。v1.4.0 用例 L 暴露：原写死 CN/CNY，
+        // 美股英伟达渲染出 currency=CNY/mkt=CN 的错误数据。
+        let mkt: string = 'CN';
+        let currency: string = 'CNY';
+        if (code.startsWith('us')) {
+          mkt = 'US';
+          currency = 'USD';
+        } else if (code.startsWith('hk')) {
+          mkt = 'HK';
+          currency = 'HKD';
+        }
         return {
-          code: s.code || '',
+          code,
           name: s.name || '',
           price: parseFloat(d.ClosePrice || d.LastestTradedPrice || '0'),
           chgVal: parseFloat(d.Change || '0'),
@@ -315,8 +328,8 @@ function transformForComponent(artifactType: string, meta: ToolOutputMetadata, p
           vol: parseInt(d.TurnoverVolume || '0', 10),
           turnover: parseFloat(d.TurnoverAmount || '0'),
           mktCap: parseFloat(d.TotalMV || '0'),
-          currency: 'CNY',
-          mkt: s.code?.startsWith('hk') ? 'HK' : 'CN',
+          currency,
+          mkt,
         };
       }
 
