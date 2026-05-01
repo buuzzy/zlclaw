@@ -20,7 +20,6 @@ src-cli/dist/
 # Tauri
 src-tauri/target/
 src-tauri/WixTools/
-src-tauri/Cargo.lock
 src-tauri/gen/
 
 # Database (local development)
