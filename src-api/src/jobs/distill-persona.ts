@@ -24,8 +24,14 @@ import {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-/** 蒸馏 LLM 使用的 MiMo 模型（flash 足够用，省钱） */
-const DISTILL_MODEL = 'mimo-v2-flash' as const;
+/**
+ * 蒸馏 LLM 使用的 MiMo 模型。
+ * 通过 MIMO_MODEL 环境变量切换，便于在不同套餐 / base_url 下选用对应型号：
+ *   · 官方 API:    mimo-v2-flash / mimo-v2-pro / mimo-v2-omni
+ *   · Coding Plan: MiMo-V2.5-Pro / MiMo-V2.5 / MiMo-V2-Pro / MiMo-V2-Omni
+ * 默认 mimo-v2-flash（官方 API 入门级，结构化 JSON 已足够）。
+ */
+const DISTILL_MODEL = process.env.MIMO_MODEL?.trim() || 'mimo-v2-flash';
 
 /** 单次蒸馏拉取消息上限（防止用户消息暴增时拖垮蒸馏） */
 const MAX_NEW_MESSAGES_PER_RUN = 500;

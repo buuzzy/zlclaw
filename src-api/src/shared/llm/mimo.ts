@@ -7,19 +7,31 @@
  *   · 蒸馏 cron 只需要 chat/completions 这一条接口，原生 fetch 已足够
  *   · 错误信息直接拿原始 response 更利于排障
  *
- * 用法：
- *   const res = await mimoChat({
- *     model: 'mimo-v2-flash',
- *     messages: [{ role: 'system', ... }, { role: 'user', ... }],
- *     response_format: { type: 'json_object' },
- *   });
+ * 环境变量：
+ *   · MIMO_API_KEY (必填)
+ *   · MIMO_BASE_URL (可选)
+ *       - 官方 API:  https://api.xiaomimimo.com/v1 (默认)
+ *       - Coding Plan: https://token-plan-sgp.xiaomimimo.com/v1
+ *
+ * 常见模型：
+ *   · 官方 API: mimo-v2-flash / mimo-v2-pro / mimo-v2-omni
+ *   · Coding Plan: MiMo-V2.5-Pro / MiMo-V2.5 / MiMo-V2-Pro / MiMo-V2-Omni
  *
  * 参考：https://platform.xiaomimimo.com/docs/zh-CN/quick-start/first-api-call
  */
 
-const MIMO_BASE_URL = 'https://api.xiaomimimo.com/v1';
+const DEFAULT_MIMO_BASE_URL = 'https://api.xiaomimimo.com/v1';
 
-export type MimoModel = 'mimo-v2-flash' | 'mimo-v2-pro' | 'mimo-v2-omni';
+function getBaseUrl(): string {
+  const url = process.env.MIMO_BASE_URL?.trim();
+  return url && url.length > 0 ? url.replace(/\/+$/, '') : DEFAULT_MIMO_BASE_URL;
+}
+
+/**
+ * 模型名设计为开放字符串：不同套餐 / 协议入口提供不同模型集，强约束 union 反而限制可扩展性。
+ * 调用方负责传入对应入口可用的型号。
+ */
+export type MimoModel = string;
 
 export interface MimoMessage {
   role: 'system' | 'user' | 'assistant';
@@ -80,7 +92,7 @@ export async function mimoChat(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(`${MIMO_BASE_URL}/chat/completions`, {
+    const res = await fetch(`${getBaseUrl()}/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
