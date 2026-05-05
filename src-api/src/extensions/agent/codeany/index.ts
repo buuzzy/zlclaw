@@ -936,7 +936,7 @@ export class CodeAnyAgent extends BaseAgent {
       cwd: sessionCwd,
       model: this.config.model,
       permissionMode: 'bypassPermissions',
-      maxTurns: 12,
+      maxTurns: 100,
       thinking: { type: 'adaptive' },
       ...extraOpts,
     };
